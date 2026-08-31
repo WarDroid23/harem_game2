@@ -121,7 +121,9 @@ data class DomainLocation(
     val bannerDrawableRes: Int = 0,
     val accentColor: Long = 0xFF9C27B0,
     val mapX: Float = 0.5f,
-    val mapY: Float = 0.5f
+    val mapY: Float = 0.5f,
+    val npcTrader: Boolean = false,
+    val npcName: String? = null
 )
 
 @Serializable
@@ -257,6 +259,20 @@ data class CombatSession(
 )
 
 @Serializable
+data class DailyMission(
+    val id: String,
+    val type: String, // e.g., "HUNT", "GIFT", "INTERACT", "EXPLORE"
+    val description: String,
+    val targetCount: Int,
+    var currentProgress: Int = 0,
+    var isCompleted: Boolean = false,
+    var isClaimed: Boolean = false,
+    val rewardGold: Int = 0,
+    val rewardDarkEnergy: Int = 0,
+    val rewardSexEnergy: Int = 0
+)
+
+@Serializable
 data class GameSave(
     val version: String = "22.1-dark",
     val saveDate: String,
@@ -273,5 +289,7 @@ data class GameSave(
     val defeatedBosses: List<String> = emptyList(),
     val currentTheme: String = "Temné dominium",
     val completedQuests: List<String> = emptyList(),
+    val dailyMissions: List<DailyMission> = emptyList(),
+    val lastMissionUpdateDay: Int = 0,
     val gameLog: List<String> = emptyList()
 )

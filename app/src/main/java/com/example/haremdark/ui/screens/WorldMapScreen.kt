@@ -67,10 +67,10 @@ fun WorldMapScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(130.dp)
+                        .height(180.dp)
                 ) {
                     Image(
-                        painter = painterResource(id = R.drawable.img_dark_banner),
+                        painter = painterResource(id = R.drawable.img_fantasy_map),
                         contentDescription = "Mapa svatyní a dominií",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -271,6 +271,45 @@ fun WorldMapScreen(
                     }
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+
+                    // NPC Display
+                    if (selectedDomain.npcTrader && selectedDomain.npcName != null) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFF3E2723),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.3f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.img_sexy_trader),
+                                    contentDescription = "Obchodnice",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .border(2.dp, Color(0xFFFFD700), CircleShape)
+                                )
+                                Column {
+                                    Text(
+                                        text = "Tajemná obchodnice: ${selectedDomain.npcName}",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = Color(0xFFFFD700)
+                                    )
+                                    Text(
+                                        text = "Nabízí vzácné předměty a úkoly výměnou za zlaťáky.",
+                                        fontSize = 11.sp,
+                                        color = Color.White.copy(alpha = 0.8f)
+                                    )
+                                }
+                            }
+                        }
+                    }
 
                     // Resource Drops
                     Row(

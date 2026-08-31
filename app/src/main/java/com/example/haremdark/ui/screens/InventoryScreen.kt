@@ -203,6 +203,39 @@ fun InventoryScreen(
                 }
             }
         }
+        
+        if (player.items.filter { it.count > 0 }.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(bottom = 60.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.padding(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.WorkOff,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                        modifier = Modifier.size(80.dp)
+                    )
+                    Text(
+                        text = "Tvoje brašna je prázdná.",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "Zatím nevlastníš žádné předměty. Získáš je bojem, nákupem na tržnici nebo vařením v alchymistické laboratoři.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        } else {
 
         // --- CATEGORY SELECTOR TABS ---
         Row(
@@ -384,6 +417,7 @@ fun InventoryScreen(
                     )
                 }
             }
+        }
         }
     }
 

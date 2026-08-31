@@ -113,6 +113,48 @@ fun HaremScreen(
                 }
             }
 
+            if (gameState.concubines.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(bottom = 60.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.padding(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SentimentDissatisfied,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                            modifier = Modifier.size(80.dp)
+                        )
+                        Text(
+                            text = "Tvoje komnaty jsou prázdné.",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Text(
+                            text = "Zatím jsi neulovil žádnou otrokyni do svého harému. Vydej se na průzkum dominií a ulov si první krásky, které budou sloužit tvým temným tužbám.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = onNavigateToHunt,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.height(50.dp)
+                        ) {
+                            Icon(Icons.Default.TrackChanges, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Vyrazit na Lov", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            } else {
             when (selectedHaremTab) {
                 0 -> {
                     // --- TAB 0: DEDICATED HAREM GRID SCREEN ---
@@ -418,10 +460,11 @@ fun HaremScreen(
                     GalleryScreen(gameState = gameState)
                 }
             }
+            }
         }
 
         // Floating Action Button for Hunt (when on Grid or Chambers tab)
-        if (selectedHaremTab == 0 || selectedHaremTab == 1) {
+        if (!gameState.concubines.isEmpty() && (selectedHaremTab == 0 || selectedHaremTab == 1)) {
             FloatingActionButton(
                 onClick = onNavigateToHunt,
                 modifier = Modifier

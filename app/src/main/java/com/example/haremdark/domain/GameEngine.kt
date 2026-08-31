@@ -35,6 +35,18 @@ class GameEngine(private val context: Context) {
 
     init {
         _currentTheme.value = _gameState.value.currentTheme
+        if (_gameState.value.dailyMissions.isEmpty() || _gameState.value.lastMissionUpdateDay != _gameState.value.player.day) {
+            val day = _gameState.value.player.day
+            val initMissions = listOf(
+                DailyMission(id = "m1_$day", type = "INTERACT", description = "Provést interakce s dívkami", targetCount = 3, rewardGold = 50, rewardSexEnergy = 20),
+                DailyMission(id = "m2_$day", type = "EXPLORE", description = "Vyrazit na výpravu", targetCount = 1, rewardGold = 100, rewardDarkEnergy = 15),
+                DailyMission(id = "m3_$day", type = "GIFT", description = "Darovat předmět z brašny", targetCount = 1, rewardGold = 75)
+            )
+            _gameState.value = _gameState.value.copy(
+                dailyMissions = initMissions,
+                lastMissionUpdateDay = day
+            )
+        }
     }
 
     private fun loadInitialState(): GameSave {
@@ -394,14 +406,68 @@ class GameEngine(private val context: Context) {
 
             val logEntry = "🌅 Den $newDay svítá. Energie plně obnovena (${p.sexEnergy}/${p.darkEnergy}). Příjem: +${totalPassive + rentalIncome} zlatých."
             val logs = (listOf(logEntry) + current.gameLog).take(30)
+            
+            val newMissions = listOf(
+                DailyMission(id = "m1_$newDay", type = "INTERACT", description = "Provést interakce s dívkami", targetCount = 3, rewardGold = 50, rewardSexEnergy = 20),
+                DailyMission(id = "m2_$newDay", type = "EXPLORE", description = "Vyrazit na výpravu", targetCount = 1, rewardGold = 100, rewardDarkEnergy = 15),
+                DailyMission(id = "m3_$newDay", type = "GIFT", description = "Darovat předmět z brašny", targetCount = 1, rewardGold = 75)
+            )
 
             current.copy(
                 player = p,
                 concubines = updatedConcubines,
-                gameLog = logs
+                gameLog = logs,
+                dailyMissions = newMissions,
+                lastMissionUpdateDay = newDay
             )
         }
         autoSave()
+    }
+
+    // --- MISSIONS ---
+    fun progressMission(type: String, amount: Int = 1) {
+        updateState { current ->
+            var updatedMissions = false
+            val newMissions = current.dailyMissions.map { mission ->
+                if (mission.type == type && !mission.isCompleted) {
+                    val newProgress = (mission.currentProgress + amount).coerceAtMost(mission.targetCount)
+                    if (newProgress > mission.currentProgress) {
+                        updatedMissions = true
+                        val completed = newProgress >= mission.targetCount
+                        mission.copy(currentProgress = newProgress, isCompleted = completed)
+                    } else mission
+                } else mission
+            }
+            if (updatedMissions) {
+                current.copy(dailyMissions = newMissions)
+            } else current
+        }
+    }
+
+    fun claimMissionReward(missionId: String): Pair<Boolean, String> {
+        var result = Pair(false, "Chyba při vyzvednutí.")
+        updateState { current ->
+            val mission = current.dailyMissions.find { it.id == missionId }
+            if (mission != null && mission.isCompleted && !mission.isClaimed) {
+                val p = current.player
+                p.gold += mission.rewardGold
+                p.darkEnergy = (p.darkEnergy + mission.rewardDarkEnergy).coerceAtMost(p.maxDarkEnergy)
+                p.sexEnergy = (p.sexEnergy + mission.rewardSexEnergy).coerceAtMost(p.maxSexEnergy)
+                
+                val newMissions = current.dailyMissions.map { 
+                    if (it.id == missionId) it.copy(isClaimed = true) else it 
+                }
+                
+                addLog("Odměna vyzvednuta za úkol '${mission.description}': ${mission.rewardGold} zl.")
+                result = Pair(true, "Odměna vyzvednuta!")
+                current.copy(dailyMissions = newMissions, player = p)
+            } else {
+                result = Pair(false, "Odměnu nelze vybrat.")
+                current
+            }
+        }
+        autoSave()
+        return result
     }
 
     // --- CONCUBINE INTERACTIONS ---
@@ -460,6 +526,7 @@ class GameEngine(private val context: Context) {
         // Add player XP & harem EXP
         addPlayerXp(12)
         addHaremExp(8)
+        progressMission("INTERACT", 1)
 
         addLog(message)
         updateState { it.copy() }
@@ -725,6 +792,7 @@ class GameEngine(private val context: Context) {
         }
         addHaremExp(25 + domain.difficultyStars * 10)
         addPlayerXp(30 + domain.difficultyStars * 15)
+        progressMission("EXPLORE", 1)
         return Pair(newGirl, message)
     }
 
@@ -1004,6 +1072,7 @@ class GameEngine(private val context: Context) {
             )
         }
         addPlayerXp(12)
+        progressMission("GIFT", 1)
         return Pair(true, msg)
     }
 
@@ -1113,6 +1182,7 @@ class GameEngine(private val context: Context) {
             )
         }
         addPlayerXp(12)
+        progressMission("GIFT", 1)
         return Pair(true, msg)
     }
 

@@ -151,6 +151,54 @@ object DomainData {
             accentColor = 0xFFE91E63,
             mapX = 0.50f,
             mapY = 0.88f
+        ),
+        DomainLocation(
+            id = "hostinec_u_krvave_panny",
+            name = "Hostinec U Krvavé Panny",
+            title = "Místo setkání lůzy a potěšení",
+            region = "Křižovatka obchodních cest",
+            difficulty = "Snadná",
+            difficultyStars = 1,
+            minPlayerLevel = 1,
+            travelCostEnergy = 5,
+            travelCostGold = 10,
+            description = "Známý hostinec, kde se schází pochybné existence i zámožní kupci. Místní prsaté barmanky občas hledají víc než jen zlaťáky, a tajemná obchodnice tu nabízí vzácné zboží.",
+            potentialArchetypes = listOf("subka", "nymfomanka", "odvazna"),
+            potentialRewards = listOf(
+                CharacterReward("subka", "Poslušná služebná", "Běžná", 45, "Zvyklá sloužit hostům, rychle si osvojí tvé příkazy."),
+                CharacterReward("nymfomanka", "Nenasytná barmanka", "Vzácná", 35, "Vnadná kráska, jejíž chtíč nezná mezí. Rychle generuje energii.")
+            ),
+            resourceDrops = listOf("Kvalitní víno", "Informace z podsvětí", "Zlato (10-30)", "Hojivý balzám"),
+            bossId = "vyberci_dani",
+            bannerDrawableRes = R.drawable.img_tavern_sexy,
+            accentColor = 0xFFD84315,
+            mapX = 0.35f,
+            mapY = 0.35f,
+            npcTrader = true,
+            npcName = "Krvavá Mary"
+        ),
+        DomainLocation(
+            id = "tabor_zoldnerek",
+            name = "Tábor Černých Růží",
+            title = "Divoké žoldnéřky a bojovnice",
+            region = "Kamenná pustina",
+            difficulty = "Těžká",
+            difficultyStars = 3,
+            minPlayerLevel = 4,
+            travelCostEnergy = 15,
+            travelCostGold = 45,
+            description = "Tábor nemilosrdných žoldnéřek, které neuznávají žádného pána. Jen ten, kdo je porazí v boji, si může nárokovat jejich těla i oddanost.",
+            potentialArchetypes = listOf("odvazna", "vzdorna", "chladna"),
+            potentialRewards = listOf(
+                CharacterReward("odvazna", "Zjizvená veteránka", "Epická", 30, "Zkušená bojovnice. Její podrobení z ní dělá nejvěrnějšího bodyguarda."),
+                CharacterReward("vzdorna", "Mladá rekrutka", "Vzácná", 40, "Divoká a nezkrotná. Zlomení její vůle je extrémně vzrušující.")
+            ),
+            resourceDrops = listOf("Zbraně a zbroj", "Kořist z nájezdů", "Zlato (50-100)", "Sérum poslušnosti"),
+            bossId = "velitelka_cernych_ruzi",
+            bannerDrawableRes = R.drawable.img_mercenary_camp,
+            accentColor = 0xFF424242,
+            mapX = 0.85f,
+            mapY = 0.45f
         )
     )
 

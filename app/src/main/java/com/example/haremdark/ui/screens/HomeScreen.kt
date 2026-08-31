@@ -16,6 +16,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -40,6 +42,7 @@ fun HomeScreen(
     onNavigateToMap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val player = gameState.player
     val favorite = gameState.concubines.firstOrNull { it.oblibena }
 
@@ -121,19 +124,22 @@ fun HomeScreen(
                             icon = Icons.Default.MonetizationOn, 
                             color = Color(0xFFFFD700),
                             label = "Zlato",
-                            value = "${player.gold}"
+                            value = "${player.gold}",
+                            progress = null
                         )
                         ResourceItem(
                             icon = Icons.Default.Bolt, 
                             color = Color(0xFFE91E63),
                             label = "Sex Energie",
-                            value = "${player.sexEnergy} / ${player.maxSexEnergy}"
+                            value = "${player.sexEnergy} / ${player.maxSexEnergy}",
+                            progress = player.sexEnergy.toFloat() / player.maxSexEnergy.toFloat().coerceAtLeast(1f)
                         )
                         ResourceItem(
                             icon = Icons.Default.DarkMode, 
                             color = Color(0xFF9C27B0),
                             label = "Temná Síla",
-                            value = "${player.darkEnergy} / ${player.maxDarkEnergy}"
+                            value = "${player.darkEnergy} / ${player.maxDarkEnergy}",
+                            progress = player.darkEnergy.toFloat() / player.maxDarkEnergy.toFloat().coerceAtLeast(1f)
                         )
                     }
                     
@@ -147,13 +153,15 @@ fun HomeScreen(
                             icon = Icons.Default.Groups, 
                             color = Color(0xFF2196F3),
                             label = "Harém",
-                            value = "${gameState.concubines.size} Dívek"
+                            value = "${gameState.concubines.size} Dívek",
+                            progress = null
                         )
                         ResourceItem(
                             icon = Icons.Default.LocationCity, 
                             color = Color(0xFF00E5FF),
                             label = "Území",
-                            value = "${gameState.territories.count { it.level > 0 }}/5 Zón"
+                            value = "${gameState.territories.count { it.level > 0 }}/5 Zón",
+                            progress = gameState.territories.count { it.level > 0 }.toFloat() / 5f
                         )
                     }
                 }
@@ -195,6 +203,73 @@ fun HomeScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                             )
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- DAILY MISSIONS ---
+        if (gameState.dailyMissions.isNotEmpty()) {
+            item {
+                Text(
+                    text = "Denní úkoly",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(bottom = 4.dp, top = 8.dp)
+                )
+            }
+            items(gameState.dailyMissions, key = { it.id }) { mission ->
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text(mission.description, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text("${mission.currentProgress} / ${mission.targetCount}", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                        }
+                        
+                        LinearProgressIndicator(
+                            progress = { (mission.currentProgress.toFloat() / mission.targetCount.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                            drawStopIndicator = {}
+                        )
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                if (mission.rewardGold > 0) {
+                                    Text("💰 ${mission.rewardGold}", fontSize = 12.sp, color = Color(0xFFFFD700))
+                                }
+                                if (mission.rewardDarkEnergy > 0) {
+                                    Text("🌙 ${mission.rewardDarkEnergy}", fontSize = 12.sp, color = Color(0xFF9C27B0))
+                                }
+                                if (mission.rewardSexEnergy > 0) {
+                                    Text("⚡ ${mission.rewardSexEnergy}", fontSize = 12.sp, color = Color(0xFFE91E63))
+                                }
+                            }
+                            
+                            if (mission.isCompleted) {
+                                if (mission.isClaimed) {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = "Hotovo", tint = Color.Green, modifier = Modifier.size(24.dp))
+                                } else {
+                                    Button(
+                                        onClick = { 
+                                            val (success, msg) = engine.claimMissionReward(mission.id)
+                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                        modifier = Modifier.height(30.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700), contentColor = Color.Black)
+                                    ) {
+                                        Text("Vyzvednout", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -291,11 +366,25 @@ fun HomeScreen(
 }
 
 @Composable
-fun ResourceItem(icon: ImageVector, color: Color, label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+fun ResourceItem(icon: ImageVector, color: Color, label: String, value: String, progress: Float? = null) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(90.dp)) {
         Icon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.height(4.dp))
         Text(text = value, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        if (progress != null) {
+            Spacer(modifier = Modifier.height(4.dp))
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp)),
+                color = color,
+                trackColor = color.copy(alpha = 0.2f),
+                drawStopIndicator = {}
+            )
+        }
+        Spacer(modifier = Modifier.height(2.dp))
         Text(text = label, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
     }
 }
