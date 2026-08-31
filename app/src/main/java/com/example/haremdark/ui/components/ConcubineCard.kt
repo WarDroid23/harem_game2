@@ -1,7 +1,9 @@
 package com.example.haremdark.ui.components
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.haremdark.data.AffinityData
 import com.example.haremdark.data.StaticData
 import com.example.haremdark.models.Concubine
 
@@ -31,6 +34,7 @@ fun ConcubineCard(
     val loyaltyTier = StaticData.getLoyaltyTier(concubine.loajalita)
     val archetype = StaticData.ARCHETYPES[concubine.archetypeId]
     val phase = StaticData.DEGRADATION_PHASES[concubine.fazeZkazenosti]
+    val affinityTier = AffinityData.getTierForPoints(concubine.affinityPoints)
 
     Card(
         modifier = modifier
@@ -230,6 +234,37 @@ fun ConcubineCard(
                 }
             }
 
+            // Affinity Tier & Passive Thought Snippet
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(affinityTier.colorHex).copy(alpha = 0.1f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(affinityTier.colorHex).copy(alpha = 0.25f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(affinityTier.icon, fontSize = 13.sp)
+                    Text(
+                        text = "Úr. ${affinityTier.level} ${affinityTier.title}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(affinityTier.colorHex)
+                    )
+                    Text(
+                        text = "• „${AffinityData.getRandomActiveDialogue(concubine.affinityPoints, concubine.archetypeId)}“",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
             // Rental Status Banner if on rental
             if (concubine.naNajmu) {
                 Surface(
@@ -294,6 +329,234 @@ fun ConcubineCard(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Interakce", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ConcubineGridCard(
+    concubine: Concubine,
+    onClick: () -> Unit,
+    onFavoriteClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val loyaltyTier = StaticData.getLoyaltyTier(concubine.loajalita)
+    val archetype = StaticData.ARCHETYPES[concubine.archetypeId]
+    val portraitRes = StaticData.getPortraitForArchetype(concubine.archetypeId)
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(245.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Character Portrait Image
+            Image(
+                painter = androidx.compose.ui.res.painterResource(id = portraitRes),
+                contentDescription = concubine.name,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // Dynamic Gradient Scrim
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0x66000000),
+                                Color.Transparent,
+                                Color(0xD90E0514),
+                                Color(0xFB14081E)
+                            ),
+                            startY = 0f
+                        )
+                    )
+            )
+
+            // Top Badges & Favorite Star
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                // Status Badges Column
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (concubine.jeManzelkou) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFFE040FB).copy(alpha = 0.9f)
+                        ) {
+                            Text(
+                                text = "💍 Manželka",
+                                color = Color.White,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+                    } else if (concubine.partnerka) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFFFF4081).copy(alpha = 0.9f)
+                        ) {
+                            Text(
+                                text = "♥ Partnerka",
+                                color = Color.White,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    if (concubine.tehotna) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFFFF80AB).copy(alpha = 0.9f)
+                        ) {
+                            Text(
+                                text = "🤰 Březí (${concubine.dnyTehotenstvi}d)",
+                                color = Color.Black,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    if (concubine.naNajmu) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFFFFB74D).copy(alpha = 0.95f)
+                        ) {
+                            Text(
+                                text = "💰 Nájem (${concubine.najemZbyvaDni}d)",
+                                color = Color.Black,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Favorite Toggle Button
+                IconButton(
+                    onClick = onFavoriteClick,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(Color(0x88000000), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = if (concubine.oblibena) Icons.Default.Star else Icons.Default.StarBorder,
+                        contentDescription = "Oblíbená",
+                        tint = if (concubine.oblibena) Color(0xFFFFD700) else Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            // Bottom Profile Info
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = concubine.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "${archetype?.name ?: "Dívka"} • ${concubine.age} let",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFE0E0E0),
+                            fontSize = 10.sp
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(loyaltyTier.colorHex).copy(alpha = 0.25f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(loyaltyTier.colorHex))
+                    ) {
+                        Text(
+                            text = "${concubine.loajalita}% loajal.",
+                            color = Color(loyaltyTier.colorHex),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+                }
+
+                // Mini Health & Desire Bars
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    LinearProgressIndicator(
+                        progress = { (concubine.hp.toFloat() / concubine.maxHp.toFloat()).coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                        color = Color(0xFF4CAF50),
+                        trackColor = Color(0x44FFFFFF)
+                    )
+                    LinearProgressIndicator(
+                        progress = { (concubine.touha / 100f).coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                        color = Color(0xFFE91E63),
+                        trackColor = Color(0x44FFFFFF)
+                    )
+                }
+
+                // Quick Tap Hint
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Fáze ${concubine.fazeZkazenosti}/15",
+                        fontSize = 9.sp,
+                        color = Color(0xFFCE93D8),
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Profil & dary ▸",
+                        fontSize = 9.sp,
+                        color = Color(0xFFFFB74D),
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }

@@ -53,10 +53,12 @@ class MainActivity : ComponentActivity() {
                             val items = listOf(
                                 NavigationDestination("Dominium", Icons.Default.Castle, 0),
                                 NavigationDestination("Harém", Icons.Default.Favorite, 1),
-                                NavigationDestination("Pevnost", Icons.Default.LocationCity, 2),
-                                NavigationDestination("Aktivity", Icons.Default.Explore, 3),
-                                NavigationDestination("Pán", Icons.Default.Person, 4),
-                                NavigationDestination("Nastavení", Icons.Default.Settings, 5)
+                                NavigationDestination("Mapa", Icons.Default.Map, 2),
+                                NavigationDestination("Galerie", Icons.Default.Collections, 3),
+                                NavigationDestination("Pevnost", Icons.Default.LocationCity, 4),
+                                NavigationDestination("Aktivity", Icons.Default.Explore, 5),
+                                NavigationDestination("Pán", Icons.Default.Person, 6),
+                                NavigationDestination("Nastavení", Icons.Default.Settings, 7)
                             )
 
                             items.forEach { dest ->
@@ -64,7 +66,7 @@ class MainActivity : ComponentActivity() {
                                     selected = currentNavIndex == dest.index,
                                     onClick = { currentNavIndex = dest.index },
                                     icon = { Icon(dest.icon, contentDescription = dest.title) },
-                                    label = { Text(dest.title, fontSize = 10.sp) },
+                                    label = { Text(dest.title, fontSize = 8.sp, maxLines = 1) },
                                     colors = NavigationBarItemDefaults.colors(
                                         selectedIconColor = MaterialTheme.colorScheme.onPrimary,
                                         selectedTextColor = MaterialTheme.colorScheme.primary,
@@ -85,29 +87,38 @@ class MainActivity : ComponentActivity() {
                                 gameState = gameState,
                                 engine = engine,
                                 onNavigateToHarem = { currentNavIndex = 1 },
-                                onNavigateToActivities = { currentNavIndex = 3 },
-                                onNavigateToEmpire = { currentNavIndex = 2 },
-                                onNavigateToProgression = { currentNavIndex = 4 }
+                                onNavigateToActivities = { currentNavIndex = 5 },
+                                onNavigateToEmpire = { currentNavIndex = 4 },
+                                onNavigateToProgression = { currentNavIndex = 6 },
+                                onNavigateToMap = { currentNavIndex = 2 }
                             )
                             1 -> HaremScreen(
                                 gameState = gameState,
                                 engine = engine,
-                                onNavigateToHunt = { currentNavIndex = 3 }
+                                onNavigateToHunt = { currentNavIndex = 5 }
                             )
-                            2 -> EmpireScreen(
+                            2 -> WorldMapScreen(
                                 gameState = gameState,
                                 engine = engine
                             )
-                            3 -> ActivitiesScreen(
+                            3 -> GalleryScreen(
+                                gameState = gameState,
+                                onNavigateToHarem = { currentNavIndex = 1 }
+                            )
+                            4 -> EmpireScreen(
+                                gameState = gameState,
+                                engine = engine
+                            )
+                            5 -> ActivitiesScreen(
                                 gameState = gameState,
                                 combatSession = combatSession,
                                 engine = engine
                             )
-                            4 -> ProgressionScreen(
+                            6 -> ProgressionScreen(
                                 gameState = gameState,
                                 engine = engine
                             )
-                            5 -> SaveSettingsScreen(
+                            7 -> SaveSettingsScreen(
                                 gameState = gameState,
                                 currentTheme = currentTheme,
                                 engine = engine

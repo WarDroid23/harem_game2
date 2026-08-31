@@ -1,6 +1,7 @@
 package com.example.haremdark.ui.screens
 
 import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,15 +14,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.haremdark.R
 import com.example.haremdark.data.GameContent
 import com.example.haremdark.data.StaticData
-import com.example.haremdark.domain.CombatSession
 import com.example.haremdark.domain.GameEngine
+import com.example.haremdark.models.CombatSession
 import com.example.haremdark.models.GameSave
 
 @Composable
@@ -32,7 +37,7 @@ fun ActivitiesScreen(
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("🏹 Lov", "🏛️ Dražba", "⚔️ Souboje", "🧪 Alchymie", "📜 Úkoly")
+    val tabs = listOf("🗺️ Mapa dominií", "🏹 Lov", "🏛️ Dražba", "⚔️ Souboje", "🧪 Alchymie", "📜 Úkoly")
 
     Column(
         modifier = modifier
@@ -59,11 +64,12 @@ fun ActivitiesScreen(
         }
 
         when (selectedTab) {
-            0 -> HuntingTab(gameState, engine)
-            1 -> AuctionTab(gameState, engine)
-            2 -> CombatTab(gameState, combatSession, engine)
-            3 -> AlchemyTab(gameState, engine)
-            4 -> QuestsTab(gameState, engine)
+            0 -> WorldMapScreen(gameState, engine)
+            1 -> HuntingTab(gameState, engine)
+            2 -> AuctionTab(gameState, engine)
+            3 -> CombatTab(gameState, combatSession, engine)
+            4 -> AlchemyTab(gameState, engine)
+            5 -> QuestsTab(gameState, engine)
         }
     }
 }
@@ -208,172 +214,11 @@ fun AuctionTab(gameState: GameSave, engine: GameEngine) {
 
 @Composable
 fun CombatTab(gameState: GameSave, session: CombatSession?, engine: GameEngine) {
-    if (session != null) {
-        // Active Combat View
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = 90.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            // Boss status card
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(session.boss.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                        Text("${session.bossHp}/${session.bossMaxHp} HP", color = Color(0xFFE53935), fontWeight = FontWeight.Bold)
-                    }
-                    val bossProgress = (session.bossHp.toFloat() / session.bossMaxHp.toFloat()).coerceIn(0f, 1f)
-                    LinearProgressIndicator(
-                        progress = { bossProgress },
-                        modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
-                        color = Color(0xFFE53935)
-                    )
-                    Text("Fáze: ${session.boss.phaseName}", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
-                }
-            }
-
-            // Player HP in combat
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Pán dominia (${gameState.player.name})", fontWeight = FontWeight.Bold)
-                        Text("${session.playerHp}/${session.playerMaxHp} HP", color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
-                    }
-                    val playerProgress = (session.playerHp.toFloat() / session.playerMaxHp.toFloat()).coerceIn(0f, 1f)
-                    LinearProgressIndicator(
-                        progress = { playerProgress },
-                        modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
-                        color = Color(0xFF4CAF50)
-                    )
-                }
-            }
-
-            // Combat Actions
-            if (!session.isOver) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Button(
-                        onClick = { engine.executeCombatTurn("attack") },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
-                    ) {
-                        Text("🗡️ Útok", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Button(
-                        onClick = { engine.executeCombatTurn("dark_burst") },
-                        modifier = Modifier.weight(1.2f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7B1FA2)),
-                        enabled = gameState.player.darkEnergy >= 10
-                    ) {
-                        Text("🔮 Temný výboj", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedButton(
-                        onClick = { engine.executeCombatTurn("heal") },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("🧪 Hojivý balzám", fontSize = 11.sp)
-                    }
-                    OutlinedButton(
-                        onClick = { engine.executeCombatTurn("flee") },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("🏃 Útěk", fontSize = 11.sp)
-                    }
-                }
-            } else {
-                Button(
-                    onClick = { engine.endCombat() },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Ukončit souboj & Zpět do arény", fontWeight = FontWeight.Bold)
-                }
-            }
-
-            // Combat Log
-            Text("Průběh souboje:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(session.log) { line ->
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(6.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    ) {
-                        Text(line, fontSize = 11.sp, modifier = Modifier.padding(6.dp))
-                    }
-                }
-            }
-        }
-    } else {
-        // Boss Selection List
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(bottom = 90.dp)
-        ) {
-            item {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("Aréna a Bossové dominia", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                        Text("Vyzvi na souboj mocné nepřátele pro zisk obrovského množství zlata, zkušeností a reputace.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
-                    }
-                }
-            }
-
-            items(GameContent.BOSSES) { boss ->
-                val defeated = gameState.defeatedBosses.contains(boss.id)
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (defeated) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
-                    ),
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(boss.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                            if (defeated) {
-                                Surface(shape = RoundedCornerShape(6.dp), color = Color(0xFF4CAF50).copy(alpha = 0.2f)) {
-                                    Text("✓ Poražen", fontSize = 11.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                                }
-                            } else {
-                                Text("${boss.hp} HP", color = Color(0xFFE53935), fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                            }
-                        }
-                        Text(boss.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
-                        Text("Odměna: ${boss.rewardGold} zlata • ${boss.rewardXp} XP", fontSize = 11.sp, color = Color(0xFFFFD700), fontWeight = FontWeight.SemiBold)
-
-                        Button(
-                            onClick = { engine.startBossCombat(boss) },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = !defeated
-                        ) {
-                            Text(if (defeated) "Již poražen" else "Vyzvat na souboj", fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-        }
-    }
+    com.example.haremdark.ui.components.TurnBasedCombatModule(
+        gameState = gameState,
+        session = session,
+        engine = engine
+    )
 }
 
 @Composable
@@ -389,9 +234,32 @@ fun AlchemyTab(gameState: GameSave, engine: GameEngine) {
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 shape = RoundedCornerShape(14.dp)
             ) {
-                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Alchymistická laboratoř", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                    Text("Míchej esence a temnou energii pro výrobu lektvarů pro harém a souboje.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
+                Column {
+                    Box(modifier = Modifier.fillMaxWidth().height(115.dp)) {
+                        Image(
+                            painter = painterResource(id = R.drawable.img_alchemy_lab),
+                            contentDescription = "Alchymie",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color.Transparent, Color(0xDD120B1B))
+                                    )
+                                )
+                        )
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(10.dp)
+                        ) {
+                            Text("Alchymistická laboratoř", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = Color.White)
+                            Text("Míchej esence a temnou energii pro výrobu lektvarů pro harém a souboje.", fontSize = 11.sp, color = Color(0xFFCE93D8))
+                        }
+                    }
                 }
             }
         }

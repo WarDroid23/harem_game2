@@ -1,8 +1,23 @@
 package com.example.haremdark.data
 
+import com.example.haremdark.R
 import com.example.haremdark.models.CharacterArchetype
 import com.example.haremdark.models.DegradationPhase
 import com.example.haremdark.models.LoyaltyTier
+
+data class GalleryArchetypeEntry(
+    val archetypeId: String,
+    val title: String,
+    val subtitle: String,
+    val drawableRes: Int,
+    val accentColor: Long,
+    val loreDescription: String,
+    val favoriteGifts: List<String>,
+    val quote: String,
+    val recruitmentHint: String,
+    val difficulty: String,
+    val perk: String
+)
 
 object StaticData {
 
@@ -28,6 +43,201 @@ object StaticData {
         "ticha_panenka" to CharacterArchetype("ticha_panenka", "Tichá panenka", "Mluví málo. Dokonalá, tichá hračka v rukou pána.", 1.2f, 1.15f, 0.9f, 1.1f, 1.0f, 1.0f, 1.0f, 1.0f, 1.2f, 1.0f, 1.15f, 1.1f, 0.03f),
         "krvava_subka" to CharacterArchetype("krvava_subka", "Krvavá subka", "Bolest ji vzrušuje. Čím víc ran, tím víc se otevírá.", 1.25f, 1.0f, 1.0f, 0.6f, 1.15f, 1.0f, 1.0f, 1.5f, 1.0f, 1.2f, 1.4f, 0.9f, 0.02f),
         "posedla" to CharacterArchetype("posedla", "Posedlá", "Něco v ní se zlomilo. Hledá pána, který ji dokončí.", 1.3f, 1.2f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.25f, 1.0f, 1.35f, 1.2f, 0.01f)
+    )
+
+    fun getPortraitForArchetype(archetypeId: String): Int {
+        return when (archetypeId) {
+            "subka", "ustrasena", "ticha_panenka" -> R.drawable.portrait_submissive
+            "slechticna", "manipulativni", "chladna" -> R.drawable.portrait_noble
+            "touha", "nymfomanka", "posedla", "hysterialni" -> R.drawable.portrait_sorceress
+            "odvazna", "vzdorna", "krvava_subka", "zlomena" -> R.drawable.portrait_warrior
+            else -> R.drawable.portrait_submissive
+        }
+    }
+
+    val GALLERY_ENTRIES = listOf(
+        GalleryArchetypeEntry(
+            archetypeId = "subka",
+            title = "Submisivní dívka",
+            subtitle = "Křehká služka toužící po pevném objetí pána",
+            drawableRes = R.drawable.portrait_submissive,
+            accentColor = 0xFFEC407A,
+            loreDescription = "Vychována k absolutní poslušnosti. Její duše rozkvétá pod pánovým dohledem a nalézá bezpečí v podřízenosti.",
+            favoriteGifts = listOf("Zlatý obojek", "Hedvábné prádlo", "Kytice nočních růží"),
+            quote = "„Můj pane, tvoje vůle je mým jediným zákonem...“",
+            recruitmentHint = "Lov v Mlžném hvozdu nebo nákup na dražbě",
+            difficulty = "Lehká",
+            perk = "+20% zisk loajality z odměn"
+        ),
+        GalleryArchetypeEntry(
+            archetypeId = "slechticna",
+            title = "Zlomená šlechtična",
+            subtitle = "Bývalá princezna zvrhnutého rodu",
+            drawableRes = R.drawable.portrait_noble,
+            accentColor = 0xFFFFD700,
+            loreDescription = "Zvyklá na zlaté sály a dvořany. Její pýcha byla sražena do prachu, ale její vznešené způsoby dodávají harému prestiž.",
+            favoriteGifts = listOf("Diamantový prsten", "Rubínový přívěsek", "Vzácné víno"),
+            quote = "„Nemysli si, že mé šlechtické srdce bude snadné zkrotit...“",
+            recruitmentHint = "Dražba v Černé tržnici (Vysoká cena) nebo dobytí šlechtického sídla",
+            difficulty = "Střední",
+            perk = "+15% pasivní příjem z prestiže harému"
+        ),
+        GalleryArchetypeEntry(
+            archetypeId = "touha",
+            title = "Toužící čarodějka",
+            subtitle = "Mistryně temné magie poháněná nenasytnou vášní",
+            drawableRes = R.drawable.portrait_sorceress,
+            accentColor = 0xFFAB47BC,
+            loreDescription = "Její tělo pulzuje magickou energií a neuhasitelným žárem. Čím více se noří do rozkoše, tím silnější kouzla dokáže sesílat.",
+            favoriteGifts = listOf("Elixír touhy", "Noční parfém", "Rubínový přívěsek"),
+            quote = "„Cítím tvou temnou sílu... dotkni se mě a nech mě hořet.“",
+            recruitmentHint = "Průzkum v Ruinách starého chrámu",
+            difficulty = "Střední",
+            perk = "+25% regenerace temné energie"
+        ),
+        GalleryArchetypeEntry(
+            archetypeId = "odvazna",
+            title = "Bojovná gladiátorka",
+            subtitle = "Nepoddajná válečnice se zbraní v ruce",
+            drawableRes = R.drawable.portrait_warrior,
+            accentColor = 0xFFEF5350,
+            loreDescription = "Zocelená arénou a krvavými souboji. Pohrdá slabostí, ale jakmile uzná tvou nadřazenost, bude bojovat do posledního dechu.",
+            favoriteGifts = listOf("Hojivý balzám", "Ocelový náramek", "Silné víno"),
+            quote = "„Musíš mi dokázat svou sílu, než ti dovolím vládnout mému tělu.“",
+            recruitmentHint = "Vítězství v Krvavé aréně nebo lov v Drsných horách",
+            difficulty = "Těžká",
+            perk = "+10 Útočné síly v soubojích s bossy"
+        ),
+        GalleryArchetypeEntry(
+            archetypeId = "ustrasena",
+            title = "Ustrašená panenka",
+            subtitle = "Zranitelná dívka hledající ochranu před světem",
+            drawableRes = R.drawable.portrait_submissive,
+            accentColor = 0xFF29B6F6,
+            loreDescription = "Bojí se stínů a tvrdých slov. Jemné zacházení ji však promění v nejoddanější bytost v celém paláci.",
+            favoriteGifts = listOf("Kytice nočních růží", "Hojivý balzám", "Teplá deka"),
+            quote = "„Prosím... neubližuj mi. Budu dělat všechno, co si budeš přát...“",
+            recruitmentHint = "Záchrana při přepadení karavany",
+            difficulty = "Lehká",
+            perk = "Minimální riziko vzpoury"
+        ),
+        GalleryArchetypeEntry(
+            archetypeId = "vzdorna",
+            title = "Vzdorná rebelka",
+            subtitle = "Zbojnice, která odmítá sklonit hlavu",
+            drawableRes = R.drawable.portrait_warrior,
+            accentColor = 0xFFFF7043,
+            loreDescription = "Plná hněvu a ohně. Bude zkoušet tvé hranice a vyžaduje nekompromisní autoritu, aby pochopila své místo.",
+            favoriteGifts = listOf("Zlatý obojek", "Sérum poslušnosti", "Pouta ze stříbra"),
+            quote = "„Můžeš mě spoutat, ale mou duši nikdy neovládneš!“",
+            recruitmentHint = "Přepadení lupičského tábora v Černém lese",
+            difficulty = "Velmi těžká",
+            perk = "Dvojnásobná odměna při úspěšném podmanění"
+        ),
+        GalleryArchetypeEntry(
+            archetypeId = "manipulativni",
+            title = "Dvorní intrikánka",
+            subtitle = "Krásná svůdnice hrající vysokou politickou hru",
+            drawableRes = R.drawable.portrait_noble,
+            accentColor = 0xFF7E57C2,
+            loreDescription = "Každý její úsměv skrývá plán a každý pohled měří tvé slabiny. Skvělá pro správu paláce a vyjednávání.",
+            favoriteGifts = listOf("Diamantový prsten", "Noční parfém", "Hedvábné prádlo"),
+            quote = "„Můžeme vládnout společně, můj drahý... pokud mi budeš naslouchat.“",
+            recruitmentHint = "Diplomatická intrika nebo vyjednávání s mafií",
+            difficulty = "Střední",
+            perk = "+20% zisk z nájmů a obchodu"
+        ),
+        GalleryArchetypeEntry(
+            archetypeId = "nymfomanka",
+            title = "Nenasytná nymfa",
+            subtitle = "Dívka zcela pohlcená tělesnou extází",
+            drawableRes = R.drawable.portrait_sorceress,
+            accentColor = 0xFFF06292,
+            loreDescription = "Její tělo reaguje na sebemenší dotek. Žádná noc pro ni není dost dlouhá a žádný dotek dost hluboký.",
+            favoriteGifts = listOf("Elixír touhy", "Hedvábné prádlo", "Masážní oleje"),
+            quote = "„Nenechávej mě čekat... mé tělo tě potřebuje hned teď!“",
+            recruitmentHint = "Lázně rozkoše v metropoli",
+            difficulty = "Lehká",
+            perk = "+50% vzrušivost a obnova sexuální energie"
+        ),
+        GalleryArchetypeEntry(
+            archetypeId = "zlomena",
+            title = "Zlomená stínová dívka",
+            subtitle = "Dívka, jejíž minulost pohltila temnota",
+            drawableRes = R.drawable.portrait_warrior,
+            accentColor = 0xFF78909C,
+            loreDescription = "Prošla krutým utrpením a nemá kam jít. V pánově přísnosti vidí jediný smysl své existence.",
+            favoriteGifts = listOf("Hojivý balzám", "Zlatý obojek", "Kytice nočních růží"),
+            quote = "„Jsem jen stín... dělej se mnou, co uznáš za vhodné.“",
+            recruitmentHint = "Temné kobky nebo Dražba sirotků",
+            difficulty = "Lehká",
+            perk = "Okamžitá poslušnost bez odporu"
+        ),
+        GalleryArchetypeEntry(
+            archetypeId = "chladna",
+            title = "Ledová kněžka",
+            subtitle = "Kněžka zapomenutého kultu s chladným pohledem",
+            drawableRes = R.drawable.portrait_noble,
+            accentColor = 0xFF26A69A,
+            loreDescription = "Emoce drží pod pevnou ledovou maskou. Rozpustit její chlad vyžaduje trpělivost, dary a neutuchající vášeň.",
+            favoriteGifts = listOf("Klenot stínů", "Rubínový přívěsek", "Kytice nočních růží"),
+            quote = "„Můj dech je studený jako zima, zkus mě zahřát, pokud se odvážíš.“",
+            recruitmentHint = "Zamrzlý oltář v severních horách",
+            difficulty = "Těžká",
+            perk = "Odolnost proti kletbám v dominium"
+        ),
+        GalleryArchetypeEntry(
+            archetypeId = "ticha_panenka",
+            title = "Tichá porcelánová panenka",
+            subtitle = "Křehká a němá kráska s hypnotickým pohledem",
+            drawableRes = R.drawable.portrait_submissive,
+            accentColor = 0xFF80CBC4,
+            loreDescription = "Nepromluví ani slovo, ale její oči vyjadřují absolutní odevzdanost. Nechává se oblékat, česat a hýčkat.",
+            favoriteGifts = listOf("Hedvábné roucho", "Diamantový prsten", "Noční parfém"),
+            quote = "„... (tiše přivírá oči a pokládá ti hlavu na hruď) ...“",
+            recruitmentHint = "Tajemný kabinet kuriozit v přístavu",
+            difficulty = "Lehká",
+            perk = "Ideální pro luxusní garderóbu a výstavy"
+        ),
+        GalleryArchetypeEntry(
+            archetypeId = "krvava_subka",
+            title = "Krvavá oddaná",
+            subtitle = "Dívka nacházející extázi v trestech a jizvách",
+            drawableRes = R.drawable.portrait_warrior,
+            accentColor = 0xFFC62828,
+            loreDescription = "Fyzický trest vnímá jako nejsladší pohlazení. Jizvy na těle nosí jako klenoty pánovy pozornosti.",
+            favoriteGifts = listOf("Kožený bič pána", "Sérum bolesti", "Zlatý obojek"),
+            quote = "„Potrestej mě znovu, můj pane... tvá bolest je mým rájem.“",
+            recruitmentHint = "Podzemní mučírny kacířů",
+            difficulty = "Střední",
+            perk = "Tresty u ní zvyšují touhu namísto strachu"
+        ),
+        GalleryArchetypeEntry(
+            archetypeId = "posedla",
+            title = "Posedlá stínová kněžka",
+            subtitle = "Dívka spojená s entitou z temných dimenzí",
+            drawableRes = R.drawable.portrait_sorceress,
+            accentColor = 0xFF8E24AA,
+            loreDescription = "V jejích žilách proudí temná krev. Hledá silného pána, který dokáže zkrotit jak ji, tak démona v jejím nitru.",
+            favoriteGifts = listOf("Klenot stínů", "Elixír touhy", "Zlatý obojek"),
+            quote = "„Jsme dvě v jednom těle... a obě prahneme po tvé síle.“",
+            recruitmentHint = "Trhlina nicoty v hlubokých dolech",
+            difficulty = "Legendární",
+            perk = "+50 Temné energie a bonus k poškození kletbou"
+        ),
+        GalleryArchetypeEntry(
+            archetypeId = "hysterialni",
+            title = "Vášnivá bouře",
+            subtitle = "Excentrická a divoká dívka plná nezkrotných emocí",
+            drawableRes = R.drawable.portrait_sorceress,
+            accentColor = 0xFFFFB300,
+            loreDescription = "V jedné minutě tě zahrne polibky a v další hází vázy. Vyžaduje pevnou ruku, která ji uklidní v pevném sevření.",
+            favoriteGifts = listOf("Kytice nočních růží", "Lahvička vína", "Diamantový prsten"),
+            quote = "„Nenávidím tě a zároveň bez tebe nemohu dýchat!“",
+            recruitmentHint = "Taverna v přístavní čtvrti",
+            difficulty = "Střední",
+            perk = "Vysoké skoky v touze a rozkoši"
+        )
     )
 
     val LOYALTY_TIERS = listOf(
@@ -96,3 +306,4 @@ object StaticData {
         return highest
     }
 }
+

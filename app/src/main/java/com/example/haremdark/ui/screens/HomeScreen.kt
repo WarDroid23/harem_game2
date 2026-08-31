@@ -33,6 +33,7 @@ fun HomeScreen(
     onNavigateToActivities: () -> Unit,
     onNavigateToEmpire: () -> Unit,
     onNavigateToProgression: () -> Unit,
+    onNavigateToMap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val player = gameState.player
@@ -54,7 +55,7 @@ fun HomeScreen(
                     .clip(RoundedCornerShape(18.dp))
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.hero_dark_dominion),
+                    painter = painterResource(id = R.drawable.img_dark_banner),
                     contentDescription = "Pevnost dominia",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
@@ -204,6 +205,21 @@ fun HomeScreen(
                     onClick = onNavigateToEmpire,
                     modifier = Modifier.weight(1f)
                 )
+                ActionCard(
+                    title = "Mapa dominií",
+                    subtitle = "Cestování a průzkum",
+                    icon = Icons.Default.Map,
+                    onClick = onNavigateToMap,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 ActionCard(
                     title = "Trénink výdrže",
                     subtitle = "Zvýšit max energii",

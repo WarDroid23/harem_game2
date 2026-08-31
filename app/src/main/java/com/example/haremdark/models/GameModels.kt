@@ -60,7 +60,10 @@ data class InventoryItem(
     val description: String,
     var count: Int = 1,
     val price: Int = 10,
-    val category: String = "potion" // "potion", "gift", "tool", "alchemy"
+    val category: String = "potion", // "gift", "combat", "potion", "consumable", "quest", "artifact", "key", "alchemy"
+    val icon: String = "📦",
+    val rarity: String = "Běžný", // "Běžný", "Vzácný", "Epický", "Legendární"
+    val effectDescription: String = ""
 )
 
 @Serializable
@@ -88,6 +91,37 @@ data class Agent(
     var loyalty: Int = 60,
     val specialty: String = "inkasista",
     var tired: Int = 0
+)
+
+@Serializable
+data class CharacterReward(
+    val archetypeId: String,
+    val name: String,
+    val rarity: String, // "Běžná", "Vzácná", "Epická", "Legendární"
+    val dropRatePercent: Int,
+    val traitDescription: String
+)
+
+@Serializable
+data class DomainLocation(
+    val id: String,
+    val name: String,
+    val title: String,
+    val region: String,
+    val difficulty: String, // "Snadná", "Střední", "Těžká", "Smrtící", "Královská"
+    val difficultyStars: Int = 1,
+    val minPlayerLevel: Int = 1,
+    val travelCostEnergy: Int = 5,
+    val travelCostGold: Int = 0,
+    val description: String,
+    val potentialArchetypes: List<String> = emptyList(),
+    val potentialRewards: List<CharacterReward> = emptyList(),
+    val resourceDrops: List<String> = emptyList(),
+    val bossId: String? = null,
+    val bannerDrawableRes: Int = 0,
+    val accentColor: Long = 0xFF9C27B0,
+    val mapX: Float = 0.5f,
+    val mapY: Float = 0.5f
 )
 
 @Serializable
@@ -126,6 +160,8 @@ data class Concubine(
     var jeManzelkou: Boolean = false,
     var oblibena: Boolean = false,
     var romanceBody: Int = 0,
+    var affinityPoints: Int = 15,
+    var affinityLevel: Int = 1,
     var osudId: String = "",
     var osudKrok: Int = 0,
     var naNajmu: Boolean = false,
@@ -173,14 +209,49 @@ data class Player(
         Weapon("Bič z dračí kůže", "bic", 25, 250)
     ),
     var items: MutableList<InventoryItem> = mutableListOf(
-        InventoryItem("elixir_touhy", "Elixír touhy", "Okamžitě probouzí v těle nespoutanou vášeň.", 2, 40),
-        InventoryItem("hojivy_balzam", "Hojivý balzám", "Uzdravuje 35 HP otrokyni nebo pánovi.", 3, 25),
-        InventoryItem("drahy_obojek", "Zlatý obojek pána", "Připomínka absolutního vlastnictví.", 1, 150, "gift")
+        // Combat Consumables
+        InventoryItem("hojivy_balzam", "Hojivý balzám", "Okamžitě uzdravuje 45 HP pánovi nebo dívce.", 3, 25, "combat", "🧪", "Běžný", "+45 HP"),
+        InventoryItem("elixir_touhy", "Elixír touhy", "Okamžitě probouzí v těle nespoutanou vášeň a doplňuje energii.", 2, 40, "combat", "🔮", "Vzácný", "+35 TE & +35 SE"),
+        InventoryItem("serum_poslusnost", "Sérum poslušnosti", "Koncentrovaná alchymie podlamující vzdor a strach.", 1, 90, "combat", "💉", "Epický", "+15 Poslušnost & Loajalita"),
+        // Gifts
+        InventoryItem("gift_roses", "Kytice nočních růží", "Voňavé temné růže, které vyvolávají příjemné chvění a něhu.", 2, 25, "gift", "🌹", "Běžný", "+8 Loajalita, +6 Touha, +10 Náklonnost"),
+        InventoryItem("drahy_obojek", "Zlatý obojek pána", "Symbol absolutního vlastnictví a věrnosti vyrytý rodovým erbem.", 1, 150, "gift", "👑", "Legendární", "+25 Loajalita, +25 Poslušnost"),
+        InventoryItem("gift_perfume", "Noční parfém", "Omamná afrodiziakální esence z půlnočních květů.", 1, 70, "gift", "🌸", "Vzácný", "+12 Loajalita, +14 Touha"),
+        // Quest Items
+        InventoryItem("cerna_pecet", "Pečeť Černého syndikátu", "Vzácná vosková pečeť potvrzující autoritu v podsvětí města.", 1, 200, "quest", "📜", "Vzácný", "Odemknutí vlivu u pašeráků"),
+        InventoryItem("temny_klic", "Klíč ke starým kobkám", "Prastarý železný klíč nalezený v podzemních ruinách chrámu.", 1, 120, "quest", "🗝️", "Epický", "Přístup k tajné kryptě"),
+        InventoryItem("kralovska_listina", "Královská výsadní listina", "Listina s puncem královského rodu pro jednání s inkvizicí.", 1, 350, "quest", "⚜️", "Legendární", "+25 Reputace v metropoli")
     ),
     var bankGold: Int = 0,
     var agents: MutableList<Agent> = mutableListOf(
         Agent("Vesper, Noční stín", 1, 75, "vymahač")
     )
+)
+
+@Serializable
+data class CombatLogEntry(
+    val turn: Int,
+    val type: String, // "player_attack", "player_spell", "player_heal", "player_defend", "player_support", "enemy_attack", "enemy_special", "system", "victory", "defeat"
+    val message: String
+)
+
+@Serializable
+data class CombatSession(
+    val boss: Boss,
+    var bossHp: Int,
+    val bossMaxHp: Int,
+    var playerHp: Int,
+    val playerMaxHp: Int,
+    var turnCount: Int = 1,
+    var isDefending: Boolean = false,
+    var enemyBleedTurns: Int = 0,
+    var enemyStunned: Boolean = false,
+    var activeBuff: String? = null,
+    val logEntries: List<CombatLogEntry> = emptyList(),
+    val log: List<String> = emptyList(),
+    var isOver: Boolean = false,
+    var victory: Boolean = false,
+    var lootGained: String? = null
 )
 
 @Serializable
@@ -195,6 +266,8 @@ data class GameSave(
     val haremMaxExp: Int = 100,
     val buildings: List<Building>,
     val territories: List<MafiaTerritory>,
+    val currentDomainId: String = "temny_hvozd",
+    val unlockedDomains: List<String> = listOf("temny_hvozd", "ruiny_chramu"),
     val defeatedBosses: List<String> = emptyList(),
     val currentTheme: String = "Temné dominium",
     val completedQuests: List<String> = emptyList(),

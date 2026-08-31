@@ -2,6 +2,20 @@ package com.example.haremdark.data
 
 import com.example.haremdark.models.*
 
+data class DirectGiftItem(
+    val id: String,
+    val name: String,
+    val icon: String,
+    val goldCost: Int,
+    val loyaltyBoost: Int,
+    val desireBoost: Int,
+    val obedienceBoost: Int,
+    val trustBoost: Int,
+    val romanceBoost: Int,
+    val description: String,
+    val flavorMessage: String
+)
+
 data class GameInteraction(
     val id: String,
     val name: String,
@@ -19,6 +33,100 @@ data class GameInteraction(
 )
 
 object GameContent {
+
+    val DIRECT_GIFTS = listOf(
+        DirectGiftItem(
+            id = "gift_roses",
+            name = "Kytice nočních růží",
+            icon = "🌹",
+            goldCost = 25,
+            loyaltyBoost = 8,
+            desireBoost = 6,
+            obedienceBoost = 4,
+            trustBoost = 6,
+            romanceBoost = 6,
+            description = "Voňavé temné růže, které vyvolávají příjemné chvění a něhu.",
+            flavorMessage = "přijala kytici nočních růží. Její oči zjihly a jemně přivoněla k okvětním lístkům."
+        ),
+        DirectGiftItem(
+            id = "gift_lingerie",
+            name = "Hedvábné prádlo",
+            icon = "👘",
+            goldCost = 55,
+            loyaltyBoost = 12,
+            desireBoost = 15,
+            obedienceBoost = 8,
+            trustBoost = 6,
+            romanceBoost = 10,
+            description = "Průsvitné černé hedvábí zvýrazňující křivky těla.",
+            flavorMessage = "si oblékla hedvábné prádlo a předvedla své půvaby v tlumeném světle komnat."
+        ),
+        DirectGiftItem(
+            id = "gift_perfume",
+            name = "Lahvička nočního parfému",
+            icon = "🌸",
+            goldCost = 70,
+            loyaltyBoost = 12,
+            desireBoost = 14,
+            obedienceBoost = 6,
+            trustBoost = 10,
+            romanceBoost = 10,
+            description = "Omamná esence z půlnočních květů s afrodiziakálním účinkem.",
+            flavorMessage = "nanesla pár kapek parfému na krk a zápěstí. Vzduch naplnila sladká, vzrušující vůně."
+        ),
+        DirectGiftItem(
+            id = "gift_pendant",
+            name = "Rubínový přívěsek",
+            icon = "💎",
+            goldCost = 95,
+            loyaltyBoost = 16,
+            desireBoost = 10,
+            obedienceBoost = 10,
+            trustBoost = 14,
+            romanceBoost = 12,
+            description = "Blyštivý drahokam v temně stříbrném lůžku.",
+            flavorMessage = "se rozzářila radostí, když jsi jí zapnul rubínový přívěsek kolem krku."
+        ),
+        DirectGiftItem(
+            id = "gift_collar",
+            name = "Zlatý obojek pána",
+            icon = "👑",
+            goldCost = 160,
+            loyaltyBoost = 25,
+            desireBoost = 18,
+            obedienceBoost = 25,
+            trustBoost = 12,
+            romanceBoost = 14,
+            description = "Symbol absolutní oddanosti vyrytý pánovým rodovým erbem.",
+            flavorMessage = "poklekla a s hrdostí i posvátnou bázní přijala zlatý obojek svého pána."
+        ),
+        DirectGiftItem(
+            id = "gift_ring",
+            name = "Diamantový prsten oddanosti",
+            icon = "💍",
+            goldCost = 220,
+            loyaltyBoost = 25,
+            desireBoost = 15,
+            obedienceBoost = 15,
+            trustBoost = 25,
+            romanceBoost = 25,
+            description = "Skvostný prsten pečetící hluboké romantické pouto.",
+            flavorMessage = "se se slzami dojetí v očích přitiskla k tvé hrudi po navléknutí diamantového prstenu."
+        ),
+        DirectGiftItem(
+            id = "gift_elixir",
+            name = "Vzácný elixír touhy",
+            icon = "🧪",
+            goldCost = 130,
+            loyaltyBoost = 15,
+            desireBoost = 35,
+            obedienceBoost = 12,
+            trustBoost = 8,
+            romanceBoost = 15,
+            description = "Alchymistický lektvar okamžitě rozproudí horkou krev a touhu po pánovi.",
+            flavorMessage = "vypila lektvar do dna. Její tváře zrudly a dech se zrychlil nezadržitelnou touhou."
+        )
+    )
 
     val REWARDS = listOf(
         GameInteraction(
@@ -58,8 +166,7 @@ object GameContent {
             description = "Šperk, jemné hedvábí či parfém podtrhující její postavení v harému.",
             goldCost = 40,
             effectDescription = "+9 Loajalita, +7 Důvěra, +6 Srdce, +5 Touha, -5 Strach",
-            applyEffect = { c, p ->
-                p.gold = (p.gold - 40).coerceAtLeast(0)
+            applyEffect = { c, _ ->
                 c.loajalita = (c.loajalita + 9).coerceAtMost(100)
                 c.duvera = (c.duvera + 7).coerceAtMost(100)
                 c.srdce = (c.srdce + 6).coerceAtMost(100)
@@ -94,8 +201,7 @@ object GameContent {
             energyCost = 20,
             minPhase = 2,
             effectDescription = "+20 Loajalita, +16 Důvěra, +14 Srdce, +12 Touha, +6 Submisivita",
-            applyEffect = { c, p ->
-                p.gold = (p.gold - 80).coerceAtLeast(0)
+            applyEffect = { c, _ ->
                 c.loajalita = (c.loajalita + 20).coerceAtMost(100)
                 c.duvera = (c.duvera + 16).coerceAtMost(100)
                 c.srdce = (c.srdce + 14).coerceAtMost(100)
@@ -113,8 +219,7 @@ object GameContent {
             energyCost = 10,
             minPhase = 1,
             effectDescription = "+14 Důvěra, +10 Srdce, +9 Loajalita, +6 Touha, -10 Strach",
-            applyEffect = { c, p ->
-                p.gold = (p.gold - 25).coerceAtLeast(0)
+            applyEffect = { c, _ ->
                 c.duvera = (c.duvera + 14).coerceAtMost(100)
                 c.srdce = (c.srdce + 10).coerceAtMost(100)
                 c.loajalita = (c.loajalita + 9).coerceAtMost(100)
@@ -132,8 +237,7 @@ object GameContent {
             goldCost = 25,
             requiresFavorite = true,
             effectDescription = "+16 Loajalita, +12 Důvěra, +10 Touha, +8 Srdce",
-            applyEffect = { c, p ->
-                p.gold = (p.gold - 25).coerceAtLeast(0)
+            applyEffect = { c, _ ->
                 c.loajalita = (c.loajalita + 16).coerceAtMost(100)
                 c.duvera = (c.duvera + 12).coerceAtMost(100)
                 c.touha = (c.touha + 10).coerceAtMost(100)
@@ -295,6 +399,32 @@ object GameContent {
 
     val BOSSES = listOf(
         Boss(
+            id = "bandita_ze_stok",
+            name = "Vůdce banditů ze stok",
+            location = "Podzemní kanály",
+            hp = 70,
+            maxHp = 70,
+            attack = 9,
+            defense = 4,
+            rewardGold = 120,
+            rewardXp = 45,
+            phaseName = "Zákeřná dýka",
+            description = "Otrhaný šéf lupičů z podzemí města terorizující obchodníky a unášející měšťanky."
+        ),
+        Boss(
+            id = "otrokarska_hlidka",
+            name = "Velitel otrokářské hlídky",
+            location = "Východní karavanní stezka",
+            hp = 105,
+            maxHp = 105,
+            attack = 12,
+            defense = 7,
+            rewardGold = 220,
+            rewardXp = 80,
+            phaseName = "Těžké okovy a bič",
+            description = "Nemilosrdný žoldák střežící tranzitní tábor a zásilky exotického zboží."
+        ),
+        Boss(
             id = "strazce_hvezdne_brany",
             name = "Strážce hvězdné brány",
             location = "Observatoř",
@@ -321,17 +451,43 @@ object GameContent {
             description = "Otrlý námořní velitel kontrolující pašerácké trasy a přepravu vzácných zajatkyň."
         ),
         Boss(
+            id = "kralovna_stinu",
+            name = "Královna nočních stínů",
+            location = "Krypta zapomnění",
+            hp = 210,
+            maxHp = 210,
+            attack = 23,
+            defense = 14,
+            rewardGold = 680,
+            rewardXp = 230,
+            phaseName = "Přízračná iluze & Jed",
+            description = "Starobylá vládkyně stínových vrahů vládnoucí temnou magií a iluzemi."
+        ),
+        Boss(
             id = "inkvizitor_cerne_peceti",
             name = "Inkvizitor Černé pečeti",
             location = "Severní hranice dominia",
-            hp = 220,
-            maxHp = 220,
-            attack = 24,
-            defense = 16,
-            rewardGold = 750,
-            rewardXp = 250,
+            hp = 250,
+            maxHp = 250,
+            attack = 27,
+            defense = 18,
+            rewardGold = 850,
+            rewardXp = 300,
             phaseName = "Svatý oheň a černá pečeť",
             description = "Fanatický vysoký inkvizitor pověřený vyhlazením tvého temného kultu a osvobozením otrokyň."
+        ),
+        Boss(
+            id = "arcidemon_behemoth",
+            name = "Arcidémon Behemoth",
+            location = "Trhlina v propasti",
+            hp = 320,
+            maxHp = 320,
+            attack = 34,
+            defense = 22,
+            rewardGold = 1400,
+            rewardXp = 500,
+            phaseName = "Démonické běsnění & Láva",
+            description = "Prastarý pán pekel probuzený tvými temnými rituály. Jeho porážka potvrdí tvou absolutní nadvládu."
         )
     )
 

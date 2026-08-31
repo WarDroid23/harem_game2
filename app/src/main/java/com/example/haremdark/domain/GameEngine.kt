@@ -1,6 +1,8 @@
 package com.example.haremdark.domain
 
 import android.content.Context
+import com.example.haremdark.data.AffinityData
+import com.example.haremdark.data.DomainData
 import com.example.haremdark.data.GameContent
 import com.example.haremdark.data.GameInteraction
 import com.example.haremdark.data.StaticData
@@ -49,10 +51,219 @@ class GameEngine(private val context: Context) {
         return GameContent.createInitialSave()
     }
 
-    private fun updateState(transform: (GameSave) -> GameSave) {
+    fun updateState(transform: (GameSave) -> GameSave) {
         val current = _gameState.value
-        val newState = transform(current)
-        _gameState.value = newState
+        val transformed = transform(current)
+        // Ensure Player and collections have distinct references so StateFlow and Compose always re-render in real-time
+        val p = transformed.player
+        val finalState = transformed.copy(
+            player = p.copy(
+                skills = p.skills.toMutableMap(),
+                weapons = p.weapons.map { it.copy() }.toMutableList(),
+                items = p.items.map { it.copy() }.toMutableList(),
+                agents = p.agents.map { it.copy() }.toMutableList()
+            ),
+            concubines = transformed.concubines.map { it.copy() },
+            buildings = transformed.buildings.map { it.copy() },
+            territories = transformed.territories.map { it.copy() }
+        )
+        _gameState.value = finalState
+    }
+
+    fun spendGold(amount: Int, reason: String? = null): Boolean {
+        val current = _gameState.value
+        if (current.player.gold < amount) return false
+        updateState { state ->
+            val p = state.player.copy(gold = (state.player.gold - amount).coerceAtLeast(0))
+            if (!reason.isNullOrBlank()) {
+                val logs = (listOf(reason) + state.gameLog).take(30)
+                state.copy(player = p, gameLog = logs)
+            } else {
+                state.copy(player = p)
+            }
+        }
+        return true
+    }
+
+    fun earnGold(amount: Int, reason: String? = null) {
+        updateState { state ->
+            val p = state.player.copy(gold = state.player.gold + amount)
+            if (!reason.isNullOrBlank()) {
+                val logs = (listOf(reason) + state.gameLog).take(30)
+                state.copy(player = p, gameLog = logs)
+            } else {
+                state.copy(player = p)
+            }
+        }
+    }
+
+    fun buyWardrobeItem(name: String, desc: String, price: Int): Pair<Boolean, String> {
+        val current = _gameState.value
+        if (current.player.gold < price) {
+            return Pair(false, "Nemáš dostatek zlata ($price zl.)!")
+        }
+        val msg = "✨ Zakoupeno: $name! Harém září novým luxusem."
+        spendGold(price, msg)
+        addHaremExp(15)
+        return Pair(true, msg)
+    }
+
+    fun investDynastyTraining(cost: Int = 100): Pair<Boolean, String> {
+        val current = _gameState.value
+        if (current.player.gold < cost) {
+            return Pair(false, "Nemáš dostatek zlata ($cost zl.)!")
+        }
+        val msg = "📚 Učitelé byli najati! Následníci dominia získávají nové vědomosti."
+        spendGold(cost, msg)
+        addPlayerXp(20)
+        return Pair(true, msg)
+    }
+
+    fun buyAndGiveDirectGift(
+        concubineId: String,
+        giftName: String,
+        goldCost: Int,
+        loyaltyBoost: Int,
+        desireBoost: Int,
+        obedienceBoost: Int,
+        trustBoost: Int,
+        flavorText: String
+    ): Pair<Boolean, String> {
+        val current = _gameState.value
+        val concubine = current.concubines.firstOrNull { it.id == concubineId }
+            ?: return Pair(false, "Dívka nebyla nalezena.")
+
+        if (current.player.gold < goldCost) {
+            return Pair(false, "Nemáš dostatek zlata ($goldCost zl.)!")
+        }
+
+        val affinityGain = (loyaltyBoost + trustBoost) / 2 + 12
+        val successMsg = "🎁 Předal jsi dar '$giftName' dívce ${concubine.name}. $flavorText"
+        updateState { state ->
+            val p = state.player.copy(gold = (state.player.gold - goldCost).coerceAtLeast(0))
+            val updatedConcubines = state.concubines.map { c ->
+                if (c.id == concubineId) {
+                    val copy = c.copy()
+                    copy.loajalita = (copy.loajalita + loyaltyBoost).coerceAtMost(100)
+                    copy.touha = (copy.touha + desireBoost).coerceAtMost(100)
+                    copy.poslusnost = (copy.poslusnost + obedienceBoost).coerceAtMost(100)
+                    copy.duvera = (copy.duvera + trustBoost).coerceAtMost(100)
+                    copy.strach = (copy.strach - 5).coerceAtLeast(0)
+                    copy.srdce = (copy.srdce + 8).coerceAtMost(100)
+                    copy.affinityPoints = copy.affinityPoints + affinityGain
+                    copy.affinityLevel = AffinityData.getLevelForPoints(copy.affinityPoints)
+                    val newPhase = StaticData.calculatePhase(
+                        broken = copy.broken,
+                        mindbreak = copy.mindbreak,
+                        poslusnost = copy.poslusnost,
+                        loajalita = copy.loajalita,
+                        painAddiction = copy.painAddiction,
+                        scarred = copy.scarred,
+                        touha = copy.touha,
+                        humiliation = copy.humiliation,
+                        zavislost = copy.zavislost,
+                        age = copy.age,
+                        pregnant = copy.tehotna
+                    )
+                    if (newPhase > copy.fazeZkazenosti) {
+                        copy.fazeZkazenosti = newPhase
+                    }
+                    copy
+                } else c
+            }
+            val logs = (listOf(successMsg) + state.gameLog).take(30)
+            state.copy(player = p, concubines = updatedConcubines, gameLog = logs)
+        }
+        addHaremExp(10)
+        return Pair(true, successMsg)
+    }
+
+    fun giveInventoryGift(concubineId: String, itemId: String): Pair<Boolean, String> {
+        val current = _gameState.value
+        val item = current.player.items.firstOrNull { it.id == itemId && it.count > 0 }
+            ?: return Pair(false, "Předmět není v tvém inventáři.")
+        val concubine = current.concubines.firstOrNull { it.id == concubineId }
+            ?: return Pair(false, "Dívka nebyla nalezena.")
+
+        var resultMsg = ""
+        val affinityGain = when (itemId) {
+            "drahy_obojek" -> 35
+            "serum_poslusnost" -> 25
+            "elixir_touhy" -> 20
+            "hojivy_balzam" -> 15
+            else -> 12
+        }
+        updateState { state ->
+            val p = state.player.copy()
+            val itemInInv = p.items.firstOrNull { it.id == itemId }
+            if (itemInInv != null) {
+                itemInInv.count -= 1
+                if (itemInInv.count <= 0) {
+                    p.items.remove(itemInInv)
+                }
+            }
+
+            val updatedConcubines = state.concubines.map { c ->
+                if (c.id == concubineId) {
+                    val copy = c.copy()
+                    copy.affinityPoints = copy.affinityPoints + affinityGain
+                    copy.affinityLevel = AffinityData.getLevelForPoints(copy.affinityPoints)
+                    when (itemId) {
+                        "elixir_touhy" -> {
+                            copy.touha = (copy.touha + 30).coerceAtMost(100)
+                            copy.vlhkost = (copy.vlhkost + 25).coerceAtMost(100)
+                            copy.loajalita = (copy.loajalita + 5).coerceAtMost(100)
+                            resultMsg = "🧪 ${copy.name} vypila Elixír touhy. Její tělo sálá nekontrolovatelnou vášní."
+                        }
+                        "hojivy_balzam" -> {
+                            copy.hp = (copy.hp + 35).coerceAtMost(copy.maxHp)
+                            copy.duvera = (copy.duvera + 10).coerceAtMost(100)
+                            resultMsg = "🩹 Aplikoval jsi Hojivý balzám. Zranění ${copy.name} se zacelila (+35 HP)."
+                        }
+                        "serum_poslusnost" -> {
+                            copy.poslusnost = (copy.poslusnost + 25).coerceAtMost(100)
+                            copy.submisivita = (copy.submisivita + 20).coerceAtMost(100)
+                            copy.loajalita = (copy.loajalita + 15).coerceAtMost(100)
+                            resultMsg = "🧪 ${copy.name} pozřela Sérum poslušnosti. Její odpor byl zcela utlumen."
+                        }
+                        "drahy_obojek" -> {
+                            copy.loajalita = (copy.loajalita + 25).coerceAtMost(100)
+                            copy.submisivita = (copy.submisivita + 20).coerceAtMost(100)
+                            copy.poslusnost = (copy.poslusnost + 15).coerceAtMost(100)
+                            copy.ownedMark = true
+                            resultMsg = "👑 Připnul jsi ${copy.name} Zlatý obojek pána. Znak absolutního vlastnictví září na jejím krku."
+                        }
+                        else -> {
+                            copy.loajalita = (copy.loajalita + 12).coerceAtMost(100)
+                            copy.duvera = (copy.duvera + 8).coerceAtMost(100)
+                            resultMsg = "🎁 Daroval jsi ${item.name} dívce ${copy.name}. Její loajalita vzrostla."
+                        }
+                    }
+                    val newPhase = StaticData.calculatePhase(
+                        broken = copy.broken,
+                        mindbreak = copy.mindbreak,
+                        poslusnost = copy.poslusnost,
+                        loajalita = copy.loajalita,
+                        painAddiction = copy.painAddiction,
+                        scarred = copy.scarred,
+                        touha = copy.touha,
+                        humiliation = copy.humiliation,
+                        zavislost = copy.zavislost,
+                        age = copy.age,
+                        pregnant = copy.tehotna
+                    )
+                    if (newPhase > copy.fazeZkazenosti) {
+                        copy.fazeZkazenosti = newPhase
+                    }
+                    copy
+                } else c
+            }
+
+            val logs = (listOf(resultMsg) + state.gameLog).take(30)
+            state.copy(player = p, concubines = updatedConcubines, gameLog = logs)
+        }
+        addHaremExp(8)
+        return Pair(true, resultMsg)
     }
 
     fun setTheme(themeName: String) {
@@ -346,6 +557,120 @@ class GameEngine(private val context: Context) {
         return Pair(newGirl, message)
     }
 
+    // --- DOMAIN NAVIGATION & EXPLORATION ---
+    fun travelToDomain(domainId: String): Pair<Boolean, String> {
+        val current = _gameState.value
+        val domain = DomainData.getDomainById(domainId)
+        val player = current.player
+
+        if (current.currentDomainId == domainId) {
+            return Pair(true, "Již se nacházíš v dominiu: ${domain.name} (${domain.title}).")
+        }
+
+        if (player.level < domain.minPlayerLevel) {
+            return Pair(false, "Vstup do dominia '${domain.name}' vyžaduje úroveň pána alespoň ${domain.minPlayerLevel} (máš úroveň ${player.level})!")
+        }
+
+        if (player.sexEnergy < domain.travelCostEnergy) {
+            return Pair(false, "Na přesun do dominia potřebuješ ${domain.travelCostEnergy} Sexuální energie!")
+        }
+
+        if (player.gold < domain.travelCostGold) {
+            return Pair(false, "Na cestovní karavanu a ochranu potřebuješ ${domain.travelCostGold} zlatých!")
+        }
+
+        val msg = "🗺️ Přesunul jsi své sídlo a družinu do nového dominia: ${domain.name} • ${domain.title}!"
+        updateState { state ->
+            val p = state.player.copy(
+                sexEnergy = (state.player.sexEnergy - domain.travelCostEnergy).coerceAtLeast(0),
+                gold = (state.player.gold - domain.travelCostGold).coerceAtLeast(0)
+            )
+            val updatedUnlocked = if (!state.unlockedDomains.contains(domainId)) {
+                state.unlockedDomains + domainId
+            } else state.unlockedDomains
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(
+                player = p,
+                currentDomainId = domainId,
+                unlockedDomains = updatedUnlocked,
+                gameLog = logs
+            )
+        }
+        addPlayerXp(20 + domain.difficultyStars * 10)
+        return Pair(true, msg)
+    }
+
+    fun exploreDomain(domainId: String): Pair<Concubine?, String> {
+        val current = _gameState.value
+        val domain = DomainData.getDomainById(domainId)
+        val player = current.player
+
+        val energyCost = 15 + domain.difficultyStars * 2
+        if (player.sexEnergy < energyCost) {
+            return Pair(null, "Na průzkum dominia '${domain.name}' potřebuješ alespoň $energyCost Sexuální energie!")
+        }
+
+        val chosenArchetype = if (domain.potentialArchetypes.isNotEmpty()) {
+            domain.potentialArchetypes.random()
+        } else {
+            StaticData.ARCHETYPES.keys.random()
+        }
+
+        val randomName = StaticData.NAMES.filter { n -> current.concubines.none { it.name == n } }.randomOrNull()
+            ?: "Dívka z ${domain.name} ${Random.nextInt(10, 99)}"
+
+        val age = Random.nextInt(18, 27)
+        val initialAffinity = Random.nextInt(10, 25)
+        val newGirl = Concubine(
+            id = "c_${UUID.randomUUID().toString().take(8)}",
+            name = randomName,
+            age = age,
+            archetypeId = chosenArchetype,
+            hp = 100,
+            maxHp = 100,
+            srdce = Random.nextInt(50, 85),
+            poslusnost = Random.nextInt(20, 50),
+            vlhkost = Random.nextInt(35, 65),
+            submisivita = Random.nextInt(25, 60),
+            loajalita = Random.nextInt(15, 40),
+            duvera = Random.nextInt(20, 45),
+            touha = Random.nextInt(40, 80),
+            strach = Random.nextInt(25, 65),
+            broken = Random.nextInt(0, 15),
+            fazeZkazenosti = 0,
+            affinityPoints = initialAffinity,
+            affinityLevel = AffinityData.getLevelForPoints(initialAffinity),
+            role = "Ulovena v dominiu ${domain.name}"
+        )
+
+        val goldFound = Random.nextInt(20, 50) + domain.difficultyStars * 25
+        val bonusDrop = domain.resourceDrops.randomOrNull() ?: "Zlato"
+
+        val archetypeData = StaticData.ARCHETYPES[chosenArchetype]
+        val message = "⚔️ Úspěšná výprava v dominiu '${domain.name}'! Nalezena dívka ${newGirl.name} (${archetypeData?.name ?: chosenArchetype})! Získáno: +$goldFound zl. a kořist [$bonusDrop]."
+
+        updateState { state ->
+            val p = state.player.copy(
+                sexEnergy = (state.player.sexEnergy - energyCost).coerceAtLeast(0),
+                gold = state.player.gold + goldFound
+            )
+            val updatedUnlocked = if (!state.unlockedDomains.contains(domainId)) {
+                state.unlockedDomains + domainId
+            } else state.unlockedDomains
+            val logs = (listOf(message) + state.gameLog).take(30)
+            state.copy(
+                player = p,
+                concubines = state.concubines + newGirl,
+                currentDomainId = domainId,
+                unlockedDomains = updatedUnlocked,
+                gameLog = logs
+            )
+        }
+        addHaremExp(25 + domain.difficultyStars * 10)
+        addPlayerXp(30 + domain.difficultyStars * 15)
+        return Pair(newGirl, message)
+    }
+
     // --- AUCTION HOUSE ---
     fun buyAuction(archetypeId: String, price: Int): Pair<Boolean, String> {
         val current = _gameState.value
@@ -353,7 +678,6 @@ class GameEngine(private val context: Context) {
             return Pair(false, "Nedostatek zlata pro nákup na dražbě (${current.player.gold}/$price zlatých)!")
         }
 
-        current.player.gold -= price
         val randomName = StaticData.NAMES.filter { n -> current.concubines.none { it.name == n } }.randomOrNull()
             ?: "Otrokyně z aukce ${Random.nextInt(10, 99)}"
 
@@ -376,10 +700,13 @@ class GameEngine(private val context: Context) {
             role = "Zakoupená na dražbě"
         )
 
-        updateState { it.copy(concubines = it.concubines + newConcubine) }
-        addHaremExp(30)
         val msg = "🏛️ Vydražil jsi otrokyni ${newConcubine.name} za $price zlatých!"
-        addLog(msg)
+        updateState { state ->
+            val p = state.player.copy(gold = (state.player.gold - price).coerceAtLeast(0))
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = p, concubines = state.concubines + newConcubine, gameLog = logs)
+        }
+        addHaremExp(30)
         return Pair(true, msg)
     }
 
@@ -397,15 +724,23 @@ class GameEngine(private val context: Context) {
         }
 
         val upfrontGold = days * 45
-        current.player.gold += upfrontGold
-        concubine.naNajmu = true
-        concubine.klient = clientType
-        concubine.typNajmu = "Služba v paláci"
-        concubine.najemZbyvaDni = days
-
         val msg = "💰 ${concubine.name} byla pronajata klientovi ($clientType) na $days dní. Obdržel jsi zálohu $upfrontGold zlatých."
-        addLog(msg)
-        updateState { it.copy() }
+
+        updateState { state ->
+            val p = state.player.copy(gold = state.player.gold + upfrontGold)
+            val updatedConcubines = state.concubines.map { c ->
+                if (c.id == concubineId) {
+                    val copy = c.copy()
+                    copy.naNajmu = true
+                    copy.klient = clientType
+                    copy.typNajmu = "Služba v paláci"
+                    copy.najemZbyvaDni = days
+                    copy
+                } else c
+            }
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = p, concubines = updatedConcubines, gameLog = logs)
+        }
         return Pair(true, msg)
     }
 
@@ -420,11 +755,20 @@ class GameEngine(private val context: Context) {
             return Pair(false, "Vylepšení vyžaduje $cost zlatých (máš ${current.player.gold})!")
         }
 
-        current.player.gold -= cost
-        building.level += 1
-        val msg = "🏰 Budova ${building.name} vylepšena na úroveň ${building.level}!"
-        addLog(msg)
-        updateState { it.copy() }
+        val nextLevel = building.level + 1
+        val msg = "🏰 Budova ${building.name} vylepšena na úroveň $nextLevel!"
+        updateState { state ->
+            val p = state.player.copy(gold = (state.player.gold - cost).coerceAtLeast(0))
+            val updatedBuildings = state.buildings.map { b ->
+                if (b.type == buildingType) {
+                    val copy = b.copy()
+                    copy.level = nextLevel
+                    copy
+                } else b
+            }
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = p, buildings = updatedBuildings, gameLog = logs)
+        }
         return Pair(true, msg)
     }
 
@@ -438,12 +782,21 @@ class GameEngine(private val context: Context) {
             return Pair(false, "Ovládnutí území vyžaduje $cost zlatých (máš ${current.player.gold})!")
         }
 
-        current.player.gold -= cost
-        territory.level += 1
-        territory.securityLevel = (territory.securityLevel + 15).coerceAtMost(100)
-        val msg = "🗡️ Území ${territory.name} povýšeno na úroveň ${territory.level}! Pasivní příjem vzrostl."
-        addLog(msg)
-        updateState { it.copy() }
+        val nextLevel = territory.level + 1
+        val msg = "🗡️ Území ${territory.name} povýšeno na úroveň $nextLevel! Pasivní příjem vzrostl."
+        updateState { state ->
+            val p = state.player.copy(gold = (state.player.gold - cost).coerceAtLeast(0))
+            val updatedTerritories = state.territories.map { t ->
+                if (t.id == territoryId) {
+                    val copy = t.copy()
+                    copy.level = nextLevel
+                    copy.securityLevel = (copy.securityLevel + 15).coerceAtMost(100)
+                    copy
+                } else t
+            }
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = p, territories = updatedTerritories, gameLog = logs)
+        }
         return Pair(true, msg)
     }
 
@@ -459,16 +812,25 @@ class GameEngine(private val context: Context) {
             return Pair(false, "Potřebuješ alespoň 1 volný bod dovednosti!")
         }
 
-        p.gold -= cost
-        p.skillPoints -= 1
         val curEnd = p.skills["vytrvalost"] ?: 0
-        p.skills["vytrvalost"] = curEnd + 1
-        p.maxSexEnergy = (p.maxSexEnergy + 8).coerceAtMost(250)
-        p.maxDarkEnergy = (p.maxDarkEnergy + 5).coerceAtMost(200)
+        val newEnd = curEnd + 1
+        val newMaxSex = (p.maxSexEnergy + 8).coerceAtMost(250)
+        val newMaxDark = (p.maxDarkEnergy + 5).coerceAtMost(200)
 
-        val msg = "⚡ Trénink výdrže úspěšný! Max sex energie: ${p.maxSexEnergy}, Max temná energie: ${p.maxDarkEnergy}."
-        addLog(msg)
-        updateState { it.copy() }
+        val msg = "⚡ Trénink výdrže úspěšný! Max sex energie: $newMaxSex, Max temná energie: $newMaxDark."
+        updateState { state ->
+            val updatedSkills = state.player.skills.toMutableMap()
+            updatedSkills["vytrvalost"] = newEnd
+            val newP = state.player.copy(
+                gold = (state.player.gold - cost).coerceAtLeast(0),
+                skillPoints = (state.player.skillPoints - 1).coerceAtLeast(0),
+                skills = updatedSkills,
+                maxSexEnergy = newMaxSex,
+                maxDarkEnergy = newMaxDark
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newP, gameLog = logs)
+        }
         return Pair(true, msg)
     }
 
@@ -479,12 +841,19 @@ class GameEngine(private val context: Context) {
             return Pair(false, "Nemáš žádné volné body dovedností!")
         }
 
-        p.skillPoints -= 1
         val curVal = p.skills[skillKey] ?: 0
-        p.skills[skillKey] = curVal + 1
-        val msg = "⭐ Dovednost $skillKey zvýšena na ${p.skills[skillKey]}!"
-        addLog(msg)
-        updateState { it.copy() }
+        val newVal = curVal + 1
+        val msg = "⭐ Dovednost $skillKey zvýšena na $newVal!"
+        updateState { state ->
+            val updatedSkills = state.player.skills.toMutableMap()
+            updatedSkills[skillKey] = newVal
+            val newP = state.player.copy(
+                skillPoints = (state.player.skillPoints - 1).coerceAtLeast(0),
+                skills = updatedSkills
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newP, gameLog = logs)
+        }
         return Pair(true, msg)
     }
 
@@ -499,20 +868,75 @@ class GameEngine(private val context: Context) {
             return Pair(false, "Nedostatek temné energie (${p.darkEnergy}/${recipe.darkCost})!")
         }
 
-        p.gold -= recipe.goldCost
-        p.darkEnergy -= recipe.darkCost
+        val msg = "🧪 Uvařil jsi ${recipe.resultItem.name}!"
+        updateState { state ->
+            val newItems = state.player.items.map { it.copy() }.toMutableList()
+            val existing = newItems.firstOrNull { it.id == recipe.resultItem.id }
+            if (existing != null) {
+                existing.count += 1
+            } else {
+                newItems.add(recipe.resultItem.copy())
+            }
 
-        val existing = p.items.firstOrNull { it.id == recipe.resultItem.id }
-        if (existing != null) {
-            existing.count += 1
-        } else {
-            p.items.add(recipe.resultItem.copy())
+            val newP = state.player.copy(
+                gold = (state.player.gold - recipe.goldCost).coerceAtLeast(0),
+                darkEnergy = (state.player.darkEnergy - recipe.darkCost).coerceAtLeast(0),
+                items = newItems
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newP, gameLog = logs)
+        }
+        addPlayerXp(18)
+        return Pair(true, msg)
+    }
+
+    fun giveDirectGift(giftId: String, concubineId: String): Pair<Boolean, String> {
+        val current = _gameState.value
+        val gift = GameContent.DIRECT_GIFTS.firstOrNull { it.id == giftId }
+            ?: return Pair(false, "Dar nebyl nalezen.")
+        val concubine = current.concubines.firstOrNull { it.id == concubineId }
+            ?: return Pair(false, "Dívka nenalezena.")
+
+        if (current.player.gold < gift.goldCost) {
+            return Pair(false, "Nedostatek zlata! Potřebuješ ${gift.goldCost} zlatých (máš ${current.player.gold}).")
         }
 
-        addPlayerXp(18)
-        val msg = "🧪 Uvařil jsi ${recipe.resultItem.name}!"
-        addLog(msg)
-        updateState { it.copy() }
+        val affinityGain = (gift.loyaltyBoost + gift.trustBoost + gift.romanceBoost) / 2 + 10
+        val msg = "🎁 ${concubine.name} ${gift.flavorMessage} (+${gift.loyaltyBoost} loajalita, +${gift.desireBoost} touha, +$affinityGain náklonnost)"
+        updateState { state ->
+            val updatedConcubines = state.concubines.map { c ->
+                if (c.id == concubineId) {
+                    val newLoyalty = (c.loajalita + gift.loyaltyBoost).coerceAtMost(100)
+                    val newDesire = (c.touha + gift.desireBoost).coerceAtMost(100)
+                    val newObedience = (c.poslusnost + gift.obedienceBoost).coerceAtMost(100)
+                    val newTrust = (c.duvera + gift.trustBoost).coerceAtMost(100)
+                    val newRomance = (c.romanceBody + gift.romanceBoost).coerceAtMost(100)
+                    val isPartner = c.partnerka || newRomance >= 50
+                    val newAffinity = c.affinityPoints + affinityGain
+                    val newAffinityLvl = AffinityData.getLevelForPoints(newAffinity)
+                    c.copy(
+                        loajalita = newLoyalty,
+                        touha = newDesire,
+                        poslusnost = newObedience,
+                        duvera = newTrust,
+                        romanceBody = newRomance,
+                        partnerka = isPartner,
+                        affinityPoints = newAffinity,
+                        affinityLevel = newAffinityLvl
+                    )
+                } else c
+            }
+            val newPlayer = state.player.copy(
+                gold = (state.player.gold - gift.goldCost).coerceAtLeast(0)
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(
+                player = newPlayer,
+                concubines = updatedConcubines,
+                gameLog = logs
+            )
+        }
+        addPlayerXp(12)
         return Pair(true, msg)
     }
 
@@ -523,32 +947,196 @@ class GameEngine(private val context: Context) {
         val concubine = current.concubines.firstOrNull { it.id == concubineId }
             ?: return Pair(false, "Dívka nenalezena.")
 
-        item.count -= 1
-        if (item.count <= 0) current.player.items.remove(item)
+        var msg = "Předal jsi ${item.name} dívce ${concubine.name}."
 
-        val msg = when (item.id) {
-            "elixir_touhy" -> {
-                concubine.touha = (concubine.touha + 30).coerceAtMost(100)
-                concubine.vlhkost = (concubine.vlhkost + 25).coerceAtMost(100)
-                "${concubine.name} vypila Elixír touhy. Její tváře planou touhou a vzrušením."
+        updateState { state ->
+            val updatedItems = state.player.items.mapNotNull { itm ->
+                if (itm.id == itemId) {
+                    val remaining = itm.count - 1
+                    if (remaining > 0) itm.copy(count = remaining) else null
+                } else itm.copy()
+            }.toMutableList()
+
+            val updatedConcubines = state.concubines.map { c ->
+                if (c.id == concubineId) {
+                    when (itemId) {
+                        "elixir_touhy" -> {
+                            msg = "🔮 ${c.name} vypila Elixír touhy. Její tělo zaplavil horký žár (+30 touha, +25 vlhkost, +15 náklonnost)."
+                            val newAff = c.affinityPoints + 15
+                            c.copy(
+                                touha = (c.touha + 30).coerceAtMost(100),
+                                vlhkost = (c.vlhkost + 25).coerceAtMost(100),
+                                affinityPoints = newAff,
+                                affinityLevel = AffinityData.getLevelForPoints(newAff)
+                            )
+                        }
+                        "hojivy_balzam" -> {
+                            msg = "🧪 Hojivý balzám ošetřil a zacelil zranění ${c.name} (+40 HP)."
+                            c.copy(hp = (c.hp + 40).coerceAtMost(c.maxHp))
+                        }
+                        "serum_poslusnost" -> {
+                            msg = "💉 ${c.name} požila Sérum poslušnosti. Její odpor byl zlomen a odevzdala se tvé vůli (+25 poslušnost, +20 submisivita, +15 loajalita)."
+                            val newAff = c.affinityPoints + 20
+                            c.copy(
+                                poslusnost = (c.poslusnost + 25).coerceAtMost(100),
+                                submisivita = (c.submisivita + 20).coerceAtMost(100),
+                                loajalita = (c.loajalita + 15).coerceAtMost(100),
+                                affinityPoints = newAff,
+                                affinityLevel = AffinityData.getLevelForPoints(newAff)
+                            )
+                        }
+                        "gift_roses" -> {
+                            msg = "🌹 ${c.name} přijala kytici nočních růží s dojetím (+10 loajalita, +8 touha, +15 náklonnost)."
+                            val newAff = c.affinityPoints + 15
+                            c.copy(
+                                loajalita = (c.loajalita + 10).coerceAtMost(100),
+                                touha = (c.touha + 8).coerceAtMost(100),
+                                romanceBody = (c.romanceBody + 10).coerceAtMost(100),
+                                affinityPoints = newAff,
+                                affinityLevel = AffinityData.getLevelForPoints(newAff)
+                            )
+                        }
+                        "drahy_obojek" -> {
+                            msg = "👑 Pánův zlatý obojek byl uzamčen na hrdle ${c.name}. Její oddanost je absolutní (+30 loajalita, +25 poslušnost, +35 náklonnost)."
+                            val newAff = c.affinityPoints + 35
+                            c.copy(
+                                loajalita = (c.loajalita + 30).coerceAtMost(100),
+                                poslusnost = (c.poslusnost + 25).coerceAtMost(100),
+                                submisivita = (c.submisivita + 20).coerceAtMost(100),
+                                affinityPoints = newAff,
+                                affinityLevel = AffinityData.getLevelForPoints(newAff)
+                            )
+                        }
+                        "gift_perfume" -> {
+                            msg = "🌸 ${c.name} se navoněla nočním parfémem. Komnaty zaplnila sladká esence (+15 loajalita, +18 touha, +18 náklonnost)."
+                            val newAff = c.affinityPoints + 18
+                            c.copy(
+                                loajalita = (c.loajalita + 15).coerceAtMost(100),
+                                touha = (c.touha + 18).coerceAtMost(100),
+                                vlhkost = (c.vlhkost + 15).coerceAtMost(100),
+                                affinityPoints = newAff,
+                                affinityLevel = AffinityData.getLevelForPoints(newAff)
+                            )
+                        }
+                        else -> {
+                            msg = "🎁 Předal jsi ${item.name} dívce ${c.name} (+12 loajalita, +10 náklonnost)."
+                            val newAff = c.affinityPoints + 10
+                            c.copy(
+                                loajalita = (c.loajalita + 12).coerceAtMost(100),
+                                affinityPoints = newAff,
+                                affinityLevel = AffinityData.getLevelForPoints(newAff)
+                            )
+                        }
+                    }
+                } else c
             }
-            "hojivy_balzam" -> {
-                concubine.hp = (concubine.hp + 35).coerceAtMost(concubine.maxHp)
-                "Hojivý balzám zahojil zranění ${concubine.name} (+35 HP)."
-            }
-            "serum_poslusnost" -> {
-                concubine.poslusnost = (concubine.poslusnost + 20).coerceAtMost(100)
-                concubine.submisivita = (concubine.submisivita + 15).coerceAtMost(100)
-                concubine.loajalita = (concubine.loajalita + 15).coerceAtMost(100)
-                "${concubine.name} přijala sérum poslušnosti. Její pohled se stal naprosto odevzdaným."
-            }
-            else -> {
-                concubine.loajalita = (concubine.loajalita + 10).coerceAtMost(100)
-                "Předal jsi ${item.name} dívce ${concubine.name}."
-            }
+
+            val newPlayer = state.player.copy(items = updatedItems)
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(
+                player = newPlayer,
+                concubines = updatedConcubines,
+                gameLog = logs
+            )
         }
+        addPlayerXp(12)
+        return Pair(true, msg)
+    }
+
+    fun useCombatConsumableOnPlayer(itemId: String): Pair<Boolean, String> {
+        val current = _gameState.value
+        val item = current.player.items.firstOrNull { it.id == itemId && it.count > 0 }
+            ?: return Pair(false, "Předmět není k dispozici v brašně.")
+
+        var msg = "Využil jsi ${item.name}."
+        updateState { state ->
+            val p = state.player
+            var newHp = p.hp
+            var newSex = p.sexEnergy
+            var newDark = p.darkEnergy
+
+            when (itemId) {
+                "hojivy_balzam" -> {
+                    val heal = 45
+                    newHp = (p.hp + heal).coerceAtMost(p.maxHp)
+                    msg = "🧪 Použil jsi Hojivý balzám! Tvá zranění byla ošetřena (+$heal HP)."
+                }
+                "elixir_touhy" -> {
+                    newSex = (p.sexEnergy + 35).coerceAtMost(p.maxSexEnergy)
+                    newDark = (p.darkEnergy + 35).coerceAtMost(p.maxDarkEnergy)
+                    msg = "🔮 Vypil jsi Elixír touhy! Tvé tělo zaplavila vlna rozkoše a síly (+35 SE, +35 TE)."
+                }
+                "serum_poslusnost" -> {
+                    newDark = (p.darkEnergy + 50).coerceAtMost(p.maxDarkEnergy)
+                    msg = "💉 Použil jsi Sérum poslušnosti jako zdroj temné magie (+50 TE)."
+                }
+                else -> {
+                    newHp = (p.hp + 30).coerceAtMost(p.maxHp)
+                    msg = "✨ Použil jsi ${item.name} (+30 HP)."
+                }
+            }
+
+            val updatedItems = p.items.mapNotNull { itm ->
+                if (itm.id == itemId) {
+                    val remaining = itm.count - 1
+                    if (remaining > 0) itm.copy(count = remaining) else null
+                } else itm.copy()
+            }.toMutableList()
+
+            val newPlayer = p.copy(
+                hp = newHp,
+                sexEnergy = newSex,
+                darkEnergy = newDark,
+                items = updatedItems
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newPlayer, gameLog = logs)
+        }
+        addPlayerXp(8)
+        return Pair(true, msg)
+    }
+
+    fun inspectQuestItem(itemId: String): Pair<Boolean, String> {
+        val current = _gameState.value
+        val item = current.player.items.firstOrNull { it.id == itemId }
+            ?: return Pair(false, "Úkolový předmět nebyl nalezen.")
+
+        val lore = when (itemId) {
+            "cerna_pecet" -> "📜 Pečeť Černého syndikátu: Nese znak podsvětního cechu. Umožňuje zastrašovat vymahače a odemykat speciální nabídky na trhu otroků."
+            "temny_klic" -> "🗝️ Klíč ke starým kobkám: Vykován z černé oceli a pokrytý runami. Pasuje do železných vrat v podzemí chrámu."
+            "kralovska_listina" -> "⚜️ Královská výsadní listina: Puncovaná královskou pečetí. Poskytuje imunitu před okamžitými raziemi inkvizice a zvyšuje respekt šlechty."
+            else -> "📜 ${item.name}: ${item.description}"
+        }
+
+        val msg = "🔍 Prozkoumán předmět: ${item.name}. $lore"
         addLog(msg)
-        updateState { it.copy() }
+        addPlayerXp(15)
+        return Pair(true, lore)
+    }
+
+    fun sellInventoryItem(itemId: String, quantity: Int = 1): Pair<Boolean, String> {
+        val current = _gameState.value
+        val item = current.player.items.firstOrNull { it.id == itemId && it.count >= quantity }
+            ?: return Pair(false, "Nemáš dostatek kusů tohoto předmětu.")
+
+        val earnedGold = item.price * quantity
+        val msg = "💰 Prodal jsi ${quantity}x ${item.name} za $earnedGold zlatých!"
+
+        updateState { state ->
+            val updatedItems = state.player.items.mapNotNull { itm ->
+                if (itm.id == itemId) {
+                    val remaining = itm.count - quantity
+                    if (remaining > 0) itm.copy(count = remaining) else null
+                } else itm.copy()
+            }.toMutableList()
+
+            val newPlayer = state.player.copy(
+                gold = state.player.gold + earnedGold,
+                items = updatedItems
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newPlayer, gameLog = logs)
+        }
         return Pair(true, msg)
     }
 
@@ -567,98 +1155,337 @@ class GameEngine(private val context: Context) {
             return Pair(false, "Vyžaduje alespoň ${quest.reqConcubines} otrokyň v harému!")
         }
 
-        current.player.gold += quest.rewardGold
-        addPlayerXp(quest.rewardXp)
-        current.player.darkEnergy = (current.player.darkEnergy + quest.rewardDarkEnergy).coerceAtMost(current.player.maxDarkEnergy)
-        current.player.reputation += quest.rewardReputation
-
         val msg = "📜 Úkol '${quest.title}' splněn! Obdržel jsi ${quest.rewardGold} zlatých a ${quest.rewardXp} XP."
-        addLog(msg)
-        updateState { it.copy(completedQuests = it.completedQuests + questId) }
+        updateState { state ->
+            val p = state.player.copy(
+                gold = state.player.gold + quest.rewardGold,
+                darkEnergy = (state.player.darkEnergy + quest.rewardDarkEnergy).coerceAtMost(state.player.maxDarkEnergy),
+                reputation = state.player.reputation + quest.rewardReputation
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(
+                player = p,
+                completedQuests = state.completedQuests + questId,
+                gameLog = logs
+            )
+        }
+        addPlayerXp(quest.rewardXp)
         return Pair(true, msg)
     }
 
     // --- COMBAT SYSTEM ---
     fun startBossCombat(boss: Boss) {
+        val player = _gameState.value.player
+        val initialEntry = CombatLogEntry(
+            turn = 1,
+            type = "system",
+            message = "⚔️ Vstoupil jsi do arény proti: ${boss.name} (${boss.phaseName})!"
+        )
         _combatState.value = CombatSession(
             boss = boss,
             bossHp = boss.hp,
             bossMaxHp = boss.maxHp,
-            playerHp = _gameState.value.player.hp,
-            playerMaxHp = _gameState.value.player.maxHp,
-            log = listOf("⚔️ Vstoupil jsi do arény proti: ${boss.name} (${boss.phaseName})!"),
+            playerHp = player.hp,
+            playerMaxHp = player.maxHp,
+            turnCount = 1,
+            isDefending = false,
+            enemyBleedTurns = 0,
+            enemyStunned = false,
+            activeBuff = null,
+            logEntries = listOf(initialEntry),
+            log = listOf(initialEntry.message),
             isOver = false,
-            victory = false
+            victory = false,
+            lootGained = null
         )
     }
 
-    fun executeCombatTurn(action: String) {
+    fun executeCombatTurn(action: String, itemId: String? = null) {
         val session = _combatState.value ?: return
         if (session.isOver) return
 
         val player = _gameState.value.player
-        val weapon = player.weapons.getOrNull(player.equippedWeaponIndex) ?: player.weapons.first()
+        val weapon = player.weapons.getOrNull(player.equippedWeaponIndex) ?: player.weapons.firstOrNull() ?: Weapon("Pěsti temnoty", "kratka", 10, 0)
         var newBossHp = session.bossHp
         var newPlayerHp = session.playerHp
-        val newLog = session.log.toMutableList()
+        var newPlayerDark = player.darkEnergy
+        var newBleedTurns = session.enemyBleedTurns
+        var newStunned = session.enemyStunned
+        var isDefending = false
+        var activeBuff = session.activeBuff
+        val newLogEntries = session.logEntries.toMutableList()
+        val currentTurn = session.turnCount
         var isOver = false
         var victory = false
+        var lootInfo: String? = null
 
+        // 1. Process Player Action
         when (action) {
-            "attack" -> {
-                val playerDmg = (weapon.damage + (player.skills["boj"] ?: 0) * 3 + Random.nextInt(-3, 6)).coerceAtLeast(5)
-                newBossHp = (newBossHp - playerDmg).coerceAtLeast(0)
-                newLog.add(0, "🗡️ Zaútočil jsi zbraní ${weapon.name} a udělil $playerDmg poškození.")
+            "attack", "slash" -> {
+                val isCrit = Random.nextInt(100) < (15 + (player.skills["boj"] ?: 0) * 2)
+                val critMultiplier = if (isCrit) 1.65f else 1.0f
+                val rawDmg = weapon.damage + (player.skills["boj"] ?: 0) * 3 + Random.nextInt(-2, 5)
+                val finalDmg = ((rawDmg - (session.boss.defense * 0.35f)) * critMultiplier).toInt().coerceAtLeast(6)
+
+                newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
+                val critText = if (isCrit) " 💥 KRITICKÝ ZÁSAH!" else ""
+                newLogEntries.add(0, CombatLogEntry(
+                    turn = currentTurn,
+                    type = if (isCrit) "player_attack" else "player_attack",
+                    message = "🗡️ Sek zbraní ${weapon.name} udělil $finalDmg poškození!$critText"
+                ))
+            }
+            "heavy_strike" -> {
+                val isCrit = Random.nextInt(100) < 25
+                val multiplier = if (isCrit) 2.2f else 1.5f
+                val rawDmg = (weapon.damage * 1.5f) + (player.skills["boj"] ?: 0) * 4 + Random.nextInt(2, 10)
+                val finalDmg = ((rawDmg - (session.boss.defense * 0.25f)) * multiplier).toInt().coerceAtLeast(12)
+
+                newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
+                newLogEntries.add(0, CombatLogEntry(
+                    turn = currentTurn,
+                    type = "player_attack",
+                    message = "⚡ Těžký drtivý úder zasadil $finalDmg drtivého poškození!" + (if (isCrit) " ⭐ Zničující dopad!" else "")
+                ))
+            }
+            "bleed_strike" -> {
+                val rawDmg = weapon.damage + (player.skills["boj"] ?: 0) * 2 + Random.nextInt(0, 4)
+                val finalDmg = (rawDmg - (session.boss.defense * 0.3f)).toInt().coerceAtLeast(5)
+                newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
+                newBleedTurns = 3
+                newLogEntries.add(0, CombatLogEntry(
+                    turn = currentTurn,
+                    type = "player_attack",
+                    message = "🩸 Krvavé bodnutí způsobilo $finalDmg zranění a otevřelo hluboké krvácející rány (3 kola)!"
+                ))
             }
             "dark_burst" -> {
                 if (player.darkEnergy >= 10) {
                     player.darkEnergy -= 10
-                    val darkDmg = 35 + (player.skills["temnota"] ?: 0) * 5 + Random.nextInt(0, 10)
+                    newPlayerDark = player.darkEnergy
+                    val darkDmg = 38 + (player.skills["temnota"] ?: 0) * 6 + (weapon.darkBonus) + Random.nextInt(2, 12)
                     newBossHp = (newBossHp - darkDmg).coerceAtLeast(0)
-                    newLog.add(0, "🔮 Temný výboj zasáhl cíl za $darkDmg drtivého poškození (-10 Temné energie).")
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "player_spell",
+                        message = "🔮 Temný výboj zasáhl cíl magickou silou za $darkDmg stínového poškození (-10 Temné energie)."
+                    ))
                 } else {
-                    newLog.add(0, "❌ Nemáš dostatek temné energie na výboj!")
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "system",
+                        message = "❌ Nemáš dostatek temné energie na výboj (vyžaduje 10)!"
+                    ))
                 }
             }
-            "heal" -> {
-                val healItem = player.items.firstOrNull { it.id == "hojivy_balzam" && it.count > 0 }
-                if (healItem != null) {
-                    healItem.count -= 1
-                    if (healItem.count <= 0) player.items.remove(healItem)
-                    newPlayerHp = (newPlayerHp + 40).coerceAtMost(session.playerMaxHp)
-                    newLog.add(0, "🧪 Použil jsi Hojivý balzám (+40 HP).")
+            "curse_shadow" -> {
+                if (player.darkEnergy >= 15) {
+                    player.darkEnergy -= 15
+                    newPlayerDark = player.darkEnergy
+                    val curseDmg = 25 + (player.skills["temnota"] ?: 0) * 4
+                    newBossHp = (newBossHp - curseDmg).coerceAtLeast(0)
+                    activeBuff = "Prokletí stínů (Nepřítel oslaben)"
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "player_spell",
+                        message = "👁️ Prokletí stínů srazilo nepřítele za $curseDmg zranění a oslabilo jeho útoky (-15 TE)."
+                    ))
                 } else {
-                    newLog.add(0, "❌ Nemáš v inventáři žádný hojivý balzám!")
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "system",
+                        message = "❌ Nemáš dostatek temné energie na Prokletí (vyžaduje 15)!"
+                    ))
+                }
+            }
+            "soul_drain" -> {
+                if (player.darkEnergy >= 20) {
+                    player.darkEnergy -= 20
+                    newPlayerDark = player.darkEnergy
+                    val drainDmg = 32 + (player.skills["temnota"] ?: 0) * 5 + Random.nextInt(3, 9)
+                    val healed = (drainDmg * 0.75f).toInt()
+                    newBossHp = (newBossHp - drainDmg).coerceAtLeast(0)
+                    newPlayerHp = (newPlayerHp + healed).coerceAtMost(session.playerMaxHp)
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "player_spell",
+                        message = "🖤 Vysátí duše vytrhlo z nepřítele životní esenci za $drainDmg poškození a uzdravilo tě o +$healed HP (-20 TE)!"
+                    ))
+                } else {
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "system",
+                        message = "❌ Nemáš dostatek temné energie na Vysátí duše (vyžaduje 20)!"
+                    ))
+                }
+            }
+            "defend" -> {
+                isDefending = true
+                val gainedDark = 8
+                player.darkEnergy = (player.darkEnergy + gainedDark).coerceAtMost(player.maxDarkEnergy)
+                newPlayerDark = player.darkEnergy
+                newLogEntries.add(0, CombatLogEntry(
+                    turn = currentTurn,
+                    type = "player_defend",
+                    message = "🛡️ Zaujal jsi neprostupný obranný postoj (-65% utrženého zranění v tomto kole, +$gainedDark TE)!"
+                ))
+            }
+            "harem_support" -> {
+                val concubines = _gameState.value.concubines
+                val favorite = concubines.firstOrNull { it.oblibena } ?: concubines.firstOrNull { it.jeManzelkou } ?: concubines.firstOrNull()
+                if (favorite != null) {
+                    val healAmt = 28 + (favorite.loajalita / 5)
+                    val energyAmt = 15
+                    newPlayerHp = (newPlayerHp + healAmt).coerceAtMost(session.playerMaxHp)
+                    player.darkEnergy = (player.darkEnergy + energyAmt).coerceAtMost(player.maxDarkEnergy)
+                    newPlayerDark = player.darkEnergy
+                    activeBuff = "Požehnání harému (${favorite.name})"
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "player_support",
+                        message = "💖 ${favorite.name} ti poslala duševní podporu z harému! Obdržel jsi +$healAmt HP a +$energyAmt TE!"
+                    ))
+                } else {
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "system",
+                        message = "❌ V tvém harému není žádná otrokyně, která by ti dodala sílu!"
+                    ))
+                }
+            }
+            "item" -> {
+                val targetItemId = itemId ?: "hojivy_balzam"
+                val item = player.items.firstOrNull { it.id == targetItemId && it.count > 0 }
+                if (item != null) {
+                    item.count -= 1
+                    if (item.count <= 0) player.items.remove(item)
+
+                    when (item.id) {
+                        "hojivy_balzam" -> {
+                            val healAmt = 45
+                            newPlayerHp = (newPlayerHp + healAmt).coerceAtMost(session.playerMaxHp)
+                            newLogEntries.add(0, CombatLogEntry(
+                                turn = currentTurn,
+                                type = "player_heal",
+                                message = "🧪 Použil jsi ${item.name} a vyléčil se o +$healAmt HP."
+                            ))
+                        }
+                        "elixir_touhy" -> {
+                            player.darkEnergy = (player.darkEnergy + 35).coerceAtMost(player.maxDarkEnergy)
+                            player.sexEnergy = (player.sexEnergy + 35).coerceAtMost(player.maxSexEnergy)
+                            newPlayerDark = player.darkEnergy
+                            newLogEntries.add(0, CombatLogEntry(
+                                turn = currentTurn,
+                                type = "player_heal",
+                                message = "🧪 Vypil jsi ${item.name}! Tvé tělo zaplavila energie (+35 TE, +35 SE)."
+                            ))
+                        }
+                        else -> {
+                            val healAmt = 30
+                            newPlayerHp = (newPlayerHp + healAmt).coerceAtMost(session.playerMaxHp)
+                            newLogEntries.add(0, CombatLogEntry(
+                                turn = currentTurn,
+                                type = "player_heal",
+                                message = "🧪 Využil jsi předmět ${item.name} (+30 HP)."
+                            ))
+                        }
+                    }
+                } else {
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "system",
+                        message = "❌ Nemáš tento předmět k dispozici!"
+                    ))
                 }
             }
             "flee" -> {
-                newLog.add(0, "🏃 Uprchl jsi z boje.")
+                newLogEntries.add(0, CombatLogEntry(
+                    turn = currentTurn,
+                    type = "system",
+                    message = "🏃 Takticky jsi ustoupil a opustil bojiště."
+                ))
                 _combatState.value = null
                 return
             }
         }
 
-        // Check boss death
+        // 2. Process Bleed Tick on Boss
+        if (newBleedTurns > 0 && newBossHp > 0) {
+            val bleedDmg = Random.nextInt(8, 14)
+            newBossHp = (newBossHp - bleedDmg).coerceAtLeast(0)
+            newBleedTurns -= 1
+            newLogEntries.add(0, CombatLogEntry(
+                turn = currentTurn,
+                type = "player_spell",
+                message = "🩸 Krvácení způsobilo nepříteli $bleedDmg zranění (zbývá $newBleedTurns kol)."
+            ))
+        }
+
+        // 3. Check Enemy Defeat
         if (newBossHp <= 0) {
             isOver = true
             victory = true
             player.gold += session.boss.rewardGold
             addPlayerXp(session.boss.rewardXp)
             player.killCount += 1
-            newLog.add(0, "🏆 VÍTĚZSTVÍ! Boss ${session.boss.name} byl poražen! Zisk: +${session.boss.rewardGold} zlatých, +${session.boss.rewardXp} XP.")
-            addLog("🏆 Boss ${session.boss.name} byl poražen v souboji!")
+            lootInfo = "+${session.boss.rewardGold} zlatých • +${session.boss.rewardXp} XP"
+            newLogEntries.add(0, CombatLogEntry(
+                turn = currentTurn,
+                type = "victory",
+                message = "🏆 VÍTĚZSTVÍ! Protivník ${session.boss.name} padl! Zisk: $lootInfo."
+            ))
+            addLog("🏆 Protivník ${session.boss.name} byl poražen v souboji!")
             updateState { it.copy(defeatedBosses = it.defeatedBosses + session.boss.id) }
         } else {
-            // Boss turn
-            val bossDmg = (session.boss.attack - (player.skills["obrana"] ?: 0) * 2 + Random.nextInt(-2, 4)).coerceAtLeast(3)
-            newPlayerHp = (newPlayerHp - bossDmg).coerceAtLeast(0)
-            newLog.add(0, "💥 ${session.boss.name} ti zasadil úder za $bossDmg zranění.")
+            // 4. Enemy Turn
+            if (newStunned) {
+                newStunned = false
+                newLogEntries.add(0, CombatLogEntry(
+                    turn = currentTurn,
+                    type = "system",
+                    message = "💫 ${session.boss.name} je omráčen a vynechává své kolo!"
+                ))
+            } else {
+                val isSpecialAttack = (currentTurn % 3 == 0)
+                val baseEnemyAtk = session.boss.attack
+                val defenseReduction = (player.skills["obrana"] ?: 0) * 2
 
-            if (newPlayerHp <= 0) {
-                isOver = true
-                victory = false
-                newLog.add(0, "💀 Byl jsi poražen v boji! Probudil ses vyčerpaný ve své pevnosti.")
-                newPlayerHp = 20
+                val rawBossDmg = if (isSpecialAttack) {
+                    (baseEnemyAtk * 1.45f).toInt() + Random.nextInt(1, 6)
+                } else {
+                    baseEnemyAtk + Random.nextInt(-2, 4)
+                }
+
+                var finalEnemyDmg = (rawBossDmg - defenseReduction).coerceAtLeast(4)
+                if (isDefending) {
+                    finalEnemyDmg = (finalEnemyDmg * 0.35f).toInt().coerceAtLeast(2)
+                }
+                if (activeBuff?.contains("Prokletí") == true) {
+                    finalEnemyDmg = (finalEnemyDmg * 0.75f).toInt().coerceAtLeast(2)
+                }
+
+                newPlayerHp = (newPlayerHp - finalEnemyDmg).coerceAtLeast(0)
+
+                val attackTitle = if (isSpecialAttack) "💥 ${session.boss.name} provedl speciální techniku [${session.boss.phaseName}]" else "⚔️ ${session.boss.name} zaútočil"
+                val defenseNotice = if (isDefending) " (útok odražen štítem!)" else ""
+
+                newLogEntries.add(0, CombatLogEntry(
+                    turn = currentTurn,
+                    type = if (isSpecialAttack) "enemy_special" else "enemy_attack",
+                    message = "$attackTitle za $finalEnemyDmg poškození!$defenseNotice"
+                ))
+
+                if (newPlayerHp <= 0) {
+                    isOver = true
+                    victory = false
+                    newPlayerHp = 25
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "defeat",
+                        message = "💀 Byl jsi v boji poražen! Tví poddaní tě odnesli zpět do bezpečí pevnosti."
+                    ))
+                    addLog("💀 Pán utrpěl porážku v boji proti ${session.boss.name}!")
+                }
             }
         }
 
@@ -666,9 +1493,16 @@ class GameEngine(private val context: Context) {
         _combatState.value = session.copy(
             bossHp = newBossHp,
             playerHp = newPlayerHp,
-            log = newLog.take(20),
+            turnCount = currentTurn + 1,
+            isDefending = isDefending,
+            enemyBleedTurns = newBleedTurns,
+            enemyStunned = newStunned,
+            activeBuff = activeBuff,
+            logEntries = newLogEntries.take(40),
+            log = newLogEntries.take(40).map { it.message },
             isOver = isOver,
-            victory = victory
+            victory = victory,
+            lootGained = lootInfo
         )
         updateState { it.copy() }
     }
@@ -764,14 +1598,3 @@ class GameEngine(private val context: Context) {
         }
     }
 }
-
-data class CombatSession(
-    val boss: Boss,
-    val bossHp: Int,
-    val bossMaxHp: Int,
-    val playerHp: Int,
-    val playerMaxHp: Int,
-    val log: List<String>,
-    val isOver: Boolean,
-    val victory: Boolean
-)
