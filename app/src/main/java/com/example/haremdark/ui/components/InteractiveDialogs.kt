@@ -1,4 +1,5 @@
 package com.example.haremdark.ui.components
+import androidx.compose.foundation.clickable
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -1016,9 +1017,18 @@ fun RentalTab(
     concubine: Concubine,
     onRent: (String, Int) -> Unit
 ) {
-    var selectedClient by remember { mutableStateOf("Šlechtický dvůr") }
+    var selectedClient by remember { mutableStateOf("Místní měšťané") }
     var selectedDays by remember { mutableIntStateOf(3) }
-    val clients = listOf("Šlechtický dvůr", "Otrokářský syndikát", "Inkviziční legie", "Cech bohatých kupců")
+    
+    val clients = listOf(
+        "Místní měšťané" to Pair(20, 10), // (Advance, Daily)
+        "Cech bohatých kupců" to Pair(45, 30),
+        "Šlechtický dvůr" to Pair(70, 50),
+        "Otrokářský syndikát" to Pair(120, 80),
+        "Inkviziční legie" to Pair(180, 100)
+    )
+    val durations = listOf(3, 7, 14)
+    val clientData = clients.firstOrNull { it.first == selectedClient }?.second ?: Pair(45, 50)
 
     Column(
         modifier = Modifier
@@ -1034,37 +1044,63 @@ fun RentalTab(
             )
         } else {
             Text(
-                "Pronajmi otrokyni vybranému klientovi na stanovený počet dní. Získáš okamžitou zálohu (45 zl./den) a denní pasivní příjem.",
+                "Pronajmi otrokyni vybranému klientovi na stanovený počet dní. Získáš okamžitou zálohu i denní pasivní příjem.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
             )
 
             Text("Vyber klienta:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-            clients.forEach { client ->
+            clients.forEach { (client, rates) ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().clickable { selectedClient = client }.padding(vertical = 4.dp)
                 ) {
                     RadioButton(
                         selected = selectedClient == client,
                         onClick = { selectedClient = client }
                     )
-                    Text(client, fontSize = 13.sp)
+                    Column {
+                        Text(client, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Záloha: ${rates.first} zl/den | Denní příjem: ${rates.second} zl/den", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                    }
                 }
             }
 
-            Text("Doba trvání: $selectedDays dní (Záloha: ${selectedDays * 45} zlatých)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-            Slider(
-                value = selectedDays.toFloat(),
-                onValueChange = { selectedDays = it.toInt() },
-                valueRange = 1f..5f,
-                steps = 3
-            )
+            Text("Doba trvání: $selectedDays dní", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                durations.forEach { days ->
+                    FilterChip(
+                        selected = selectedDays == days,
+                        onClick = { selectedDays = days },
+                        label = { Text(if(days==3) "Krátkodobý (3 dny)" else if(days==7) "Střednědobý (7 dní)" else "Dlouhodobý (14 dní)", fontSize = 11.sp) }
+                    )
+                }
+            }
+
+            val totalAdvance = selectedDays * clientData.first
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFFFFD700).copy(alpha = 0.1f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Okamžitá záloha: $totalAdvance zlatých", fontWeight = FontWeight.Bold, color = Color(0xFFFFD700))
+                    Text("Každý den nájmu přinese dalších ${clientData.second} zlatých.", fontSize = 11.sp, color = Color(0xFFFFB74D))
+                    if (selectedClient == "Otrokářský syndikát" || selectedClient == "Inkviziční legie") {
+                        Text("⚠️ Zvýšené riziko! Dívka se může vrátit zraněná.", fontSize = 10.sp, color = Color.Red)
+                    }
+                }
+            }
 
             Button(
                 onClick = { onRent(selectedClient, selectedDays) },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = concubine.hp >= 40
+                enabled = concubine.hp >= 40,
+                colors = ButtonDefaults.buttonColors(containerColor = if (selectedClient.contains("Inkviziční") || selectedClient.contains("Syndikát")) Color(0xFFC62828) else MaterialTheme.colorScheme.primary)
             ) {
                 Text("Odeslat na nájem", fontWeight = FontWeight.Bold)
             }

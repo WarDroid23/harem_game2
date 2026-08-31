@@ -152,6 +152,7 @@ class GameEngine(private val context: Context) {
                     copy.srdce = (copy.srdce + 8).coerceAtMost(100)
                     copy.affinityPoints = copy.affinityPoints + affinityGain
                     copy.affinityLevel = AffinityData.getLevelForPoints(copy.affinityPoints)
+                    copy.lastInteractionDay = current.player.day
                     val newPhase = StaticData.calculatePhase(
                         broken = copy.broken,
                         mindbreak = copy.mindbreak,
@@ -208,6 +209,7 @@ class GameEngine(private val context: Context) {
                     val copy = c.copy()
                     copy.affinityPoints = copy.affinityPoints + affinityGain
                     copy.affinityLevel = AffinityData.getLevelForPoints(copy.affinityPoints)
+                    copy.lastInteractionDay = current.player.day
                     when (itemId) {
                         "elixir_touhy" -> {
                             copy.touha = (copy.touha + 30).coerceAtMost(100)
@@ -297,14 +299,40 @@ class GameEngine(private val context: Context) {
             val updatedConcubines = current.concubines.map { c ->
                 val copy = c.copy()
                 if (copy.naNajmu) {
-                    copy.najemZbyvaDni = (copy.najemZbyvaDni - 1).coerceAtLeast(0)
-                    copy.najemPrijemCelkem += 50
-                    rentalIncome += 50
-                    if (copy.najemZbyvaDni == 0) {
-                        copy.naNajmu = false
-                        copy.klient = null
-                        copy.typNajmu = null
-                        addLog("Dívka ${copy.name} se vrátila z nájmu zpět do tvého harému.")
+                    val dailyIncome = when (copy.klient) {
+                        "Místní měšťané" -> 10
+                        "Cech bohatých kupců" -> 30
+                        "Šlechtický dvůr" -> 50
+                        "Otrokářský syndikát" -> 80
+                        "Inkviziční legie" -> 100
+                        else -> 50
+                    }
+                    val dmg = when (copy.klient) {
+                        "Otrokářský syndikát" -> 15
+                        "Inkviziční legie" -> 25
+                        else -> 0
+                    }
+                    if (dmg > 0) {
+                        copy.hp = (copy.hp - dmg).coerceAtLeast(0)
+                        if (copy.hp == 0) {
+                            addLog("🚨 ${copy.name} byla během pronájmu u '${copy.klient}' kriticky zraněna a odeslána zpět!")
+                            copy.naNajmu = false
+                            copy.klient = null
+                            copy.typNajmu = null
+                            copy.najemZbyvaDni = 0
+                        }
+                    }
+
+                    if (copy.naNajmu) {
+                        copy.najemZbyvaDni = (copy.najemZbyvaDni - 1).coerceAtLeast(0)
+                        copy.najemPrijemCelkem += dailyIncome
+                        rentalIncome += dailyIncome
+                        if (copy.najemZbyvaDni == 0) {
+                            copy.naNajmu = false
+                            copy.klient = null
+                            copy.typNajmu = null
+                            addLog("Dívka ${copy.name} se vrátila z nájmu zpět do tvého harému.")
+                        }
                     }
                 } else if (copy.hp > 0) {
                     val bathLevel = current.buildings.firstOrNull { it.type == "lazne" }?.level ?: 0
@@ -579,11 +607,40 @@ class GameEngine(private val context: Context) {
             return Pair(false, "Na cestovní karavanu a ochranu potřebuješ ${domain.travelCostGold} zlatých!")
         }
 
-        val msg = "🗺️ Přesunul jsi své sídlo a družinu do nového dominia: ${domain.name} • ${domain.title}!"
+        var goldChange = -domain.travelCostGold
+        var darkEnergyChange = 0
+        var xpChange = 20 + domain.difficultyStars * 10
+        
+        val encounterRoll = kotlin.random.Random.nextInt(100)
+        val encounterMsg = when {
+            encounterRoll < 15 -> {
+                val foundGold = kotlin.random.Random.nextInt(50, 150)
+                goldChange += foundGold
+                "\n✨ Náhodná událost: Tvá karavana narazila na opuštěný vůz plný mincí. Získal jsi +$foundGold zlatých!"
+            }
+            encounterRoll < 30 -> {
+                val foundDark = kotlin.random.Random.nextInt(10, 25)
+                darkEnergyChange += foundDark
+                "\n✨ Náhodná událost: Při průjezdu temným hvozdem jsi narazil na starý oltář a načerpal temnou sílu (+$foundDark temné energie)."
+            }
+            encounterRoll < 45 -> {
+                xpChange += 25
+                "\n⚔️ Náhodná událost: Přepadli vás lapkové, ale tvoji strážci je snadno zlikvidovali. Získal jsi dodatečné zkušenosti!"
+            }
+            encounterRoll < 60 -> {
+                val foundGold = kotlin.random.Random.nextInt(100, 250)
+                goldChange += foundGold
+                "\n💎 Náhodná událost: V horském průsmyku jsi objevil ukrytý poklad zlodějů. Získal jsi +$foundGold zlatých!"
+            }
+            else -> "\nCesta proběhla klidně a bez dalších incidentů."
+        }
+
+        val msg = "🗺️ Přesunul jsi své sídlo a družinu do nového dominia: ${domain.name} • ${domain.title}!$encounterMsg"
         updateState { state ->
             val p = state.player.copy(
                 sexEnergy = (state.player.sexEnergy - domain.travelCostEnergy).coerceAtLeast(0),
-                gold = (state.player.gold - domain.travelCostGold).coerceAtLeast(0)
+                gold = (state.player.gold + goldChange).coerceAtLeast(0),
+                darkEnergy = (state.player.darkEnergy + darkEnergyChange).coerceAtMost(state.player.maxDarkEnergy)
             )
             val updatedUnlocked = if (!state.unlockedDomains.contains(domainId)) {
                 state.unlockedDomains + domainId
@@ -596,7 +653,7 @@ class GameEngine(private val context: Context) {
                 gameLog = logs
             )
         }
-        addPlayerXp(20 + domain.difficultyStars * 10)
+        addPlayerXp(xpChange)
         return Pair(true, msg)
     }
 
@@ -723,7 +780,16 @@ class GameEngine(private val context: Context) {
             return Pair(false, "Dívka je příliš vyčerpaná na nájem!")
         }
 
-        val upfrontGold = days * 45
+        val dailyAdvance = when (clientType) {
+            "Místní měšťané" -> 20
+            "Cech bohatých kupců" -> 45
+            "Šlechtický dvůr" -> 70
+            "Otrokářský syndikát" -> 120
+            "Inkviziční legie" -> 180
+            else -> 45
+        }
+
+        val upfrontGold = days * dailyAdvance
         val msg = "💰 ${concubine.name} byla pronajata klientovi ($clientType) na $days dní. Obdržel jsi zálohu $upfrontGold zlatých."
 
         updateState { state ->
@@ -733,7 +799,7 @@ class GameEngine(private val context: Context) {
                     val copy = c.copy()
                     copy.naNajmu = true
                     copy.klient = clientType
-                    copy.typNajmu = "Služba v paláci"
+                    copy.typNajmu = clientType
                     copy.najemZbyvaDni = days
                     copy
                 } else c
@@ -922,7 +988,8 @@ class GameEngine(private val context: Context) {
                         romanceBody = newRomance,
                         partnerka = isPartner,
                         affinityPoints = newAffinity,
-                        affinityLevel = newAffinityLvl
+                        affinityLevel = newAffinityLvl,
+                        lastInteractionDay = state.player.day
                     )
                 } else c
             }
@@ -967,12 +1034,13 @@ class GameEngine(private val context: Context) {
                                 touha = (c.touha + 30).coerceAtMost(100),
                                 vlhkost = (c.vlhkost + 25).coerceAtMost(100),
                                 affinityPoints = newAff,
-                                affinityLevel = AffinityData.getLevelForPoints(newAff)
+                                affinityLevel = AffinityData.getLevelForPoints(newAff),
+                                lastInteractionDay = state.player.day
                             )
                         }
                         "hojivy_balzam" -> {
                             msg = "🧪 Hojivý balzám ošetřil a zacelil zranění ${c.name} (+40 HP)."
-                            c.copy(hp = (c.hp + 40).coerceAtMost(c.maxHp))
+                            c.copy(hp = (c.hp + 40).coerceAtMost(c.maxHp), lastInteractionDay = state.player.day)
                         }
                         "serum_poslusnost" -> {
                             msg = "💉 ${c.name} požila Sérum poslušnosti. Její odpor byl zlomen a odevzdala se tvé vůli (+25 poslušnost, +20 submisivita, +15 loajalita)."
@@ -982,7 +1050,8 @@ class GameEngine(private val context: Context) {
                                 submisivita = (c.submisivita + 20).coerceAtMost(100),
                                 loajalita = (c.loajalita + 15).coerceAtMost(100),
                                 affinityPoints = newAff,
-                                affinityLevel = AffinityData.getLevelForPoints(newAff)
+                                affinityLevel = AffinityData.getLevelForPoints(newAff),
+                                lastInteractionDay = state.player.day
                             )
                         }
                         "gift_roses" -> {
@@ -993,7 +1062,8 @@ class GameEngine(private val context: Context) {
                                 touha = (c.touha + 8).coerceAtMost(100),
                                 romanceBody = (c.romanceBody + 10).coerceAtMost(100),
                                 affinityPoints = newAff,
-                                affinityLevel = AffinityData.getLevelForPoints(newAff)
+                                affinityLevel = AffinityData.getLevelForPoints(newAff),
+                                lastInteractionDay = state.player.day
                             )
                         }
                         "drahy_obojek" -> {
@@ -1004,7 +1074,8 @@ class GameEngine(private val context: Context) {
                                 poslusnost = (c.poslusnost + 25).coerceAtMost(100),
                                 submisivita = (c.submisivita + 20).coerceAtMost(100),
                                 affinityPoints = newAff,
-                                affinityLevel = AffinityData.getLevelForPoints(newAff)
+                                affinityLevel = AffinityData.getLevelForPoints(newAff),
+                                lastInteractionDay = state.player.day
                             )
                         }
                         "gift_perfume" -> {
@@ -1015,7 +1086,8 @@ class GameEngine(private val context: Context) {
                                 touha = (c.touha + 18).coerceAtMost(100),
                                 vlhkost = (c.vlhkost + 15).coerceAtMost(100),
                                 affinityPoints = newAff,
-                                affinityLevel = AffinityData.getLevelForPoints(newAff)
+                                affinityLevel = AffinityData.getLevelForPoints(newAff),
+                                lastInteractionDay = state.player.day
                             )
                         }
                         else -> {
@@ -1024,7 +1096,8 @@ class GameEngine(private val context: Context) {
                             c.copy(
                                 loajalita = (c.loajalita + 12).coerceAtMost(100),
                                 affinityPoints = newAff,
-                                affinityLevel = AffinityData.getLevelForPoints(newAff)
+                                affinityLevel = AffinityData.getLevelForPoints(newAff),
+                                lastInteractionDay = state.player.day
                             )
                         }
                     }

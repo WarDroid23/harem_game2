@@ -50,12 +50,17 @@ fun HaremScreen(
 
     var selectedFilter by remember { mutableIntStateOf(0) }
     val filters = listOf("Všechny", "★ Oblíbená", "💍 Vztahy", "💰 Na nájmu", "🤰 Březí")
+    
+    var selectedSort by remember { mutableStateOf("Náklonnost") }
+    val sortOptions = listOf("Náklonnost", "Rarita", "Nedávno")
+    var sortExpanded by remember { mutableStateOf(false) }
 
     var searchQuery by remember { mutableStateOf("") }
+
     var selectedConcubineForProfile by remember { mutableStateOf<Concubine?>(null) }
     var selectedConcubineForInteraction by remember { mutableStateOf<Concubine?>(null) }
 
-    val filteredList = remember(gameState.concubines, selectedFilter, searchQuery) {
+    val filteredList = remember(gameState.concubines, selectedFilter, searchQuery, selectedSort) {
         var list = when (selectedFilter) {
             1 -> gameState.concubines.filter { it.oblibena }
             2 -> gameState.concubines.filter { it.jeManzelkou || it.partnerka }
@@ -66,6 +71,13 @@ fun HaremScreen(
         if (searchQuery.isNotBlank()) {
             list = list.filter { it.name.contains(searchQuery, ignoreCase = true) || it.archetypeId.contains(searchQuery, ignoreCase = true) }
         }
+        
+        when (selectedSort) {
+            "Náklonnost" -> list = list.sortedByDescending { it.affinityPoints }
+            "Rarita" -> list = list.sortedByDescending { it.rarity }
+            "Nedávno" -> list = list.sortedByDescending { it.lastInteractionDay }
+        }
+        
         list
     }
 
@@ -119,7 +131,7 @@ fun HaremScreen(
                             OutlinedTextField(
                                 value = searchQuery,
                                 onValueChange = { searchQuery = it },
-                                placeholder = { Text("Hledat dívku v harému...", fontSize = 12.sp) },
+                                placeholder = { Text("Hledat...", fontSize = 12.sp) },
                                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
                                 trailingIcon = {
                                     if (searchQuery.isNotEmpty()) {
@@ -132,6 +144,32 @@ fun HaremScreen(
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(12.dp)
                             )
+                            
+                            Box {
+                                IconButton(
+                                    onClick = { sortExpanded = true },
+                                    modifier = Modifier
+                                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+                                        .height(56.dp)
+                                        .width(48.dp)
+                                ) {
+                                    Icon(Icons.Default.Sort, contentDescription = "Třídit", tint = MaterialTheme.colorScheme.primary)
+                                }
+                                DropdownMenu(
+                                    expanded = sortExpanded,
+                                    onDismissRequest = { sortExpanded = false }
+                                ) {
+                                    sortOptions.forEach { option ->
+                                        DropdownMenuItem(
+                                            text = { Text(option, fontWeight = if (selectedSort == option) FontWeight.Bold else FontWeight.Normal) },
+                                            onClick = { 
+                                                selectedSort = option
+                                                sortExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
 
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
