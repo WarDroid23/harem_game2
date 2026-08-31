@@ -1,0 +1,6 @@
+{
+  "name": "Harem Dark",
+  "description": "Dark fantasy RPG with harem management, domain expansion, combat, and progression.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
