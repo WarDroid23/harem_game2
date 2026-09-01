@@ -10,6 +10,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -155,6 +157,7 @@ fun HaremScreen(
                     }
                 }
             } else {
+            Box(modifier = Modifier.weight(1f)) {
             when (selectedHaremTab) {
                 0 -> {
                     // --- TAB 0: DEDICATED HAREM GRID SCREEN ---
@@ -232,7 +235,9 @@ fun HaremScreen(
 
                         // Filter Chips
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             filters.forEachIndexed { index, filter ->
@@ -380,7 +385,9 @@ fun HaremScreen(
                         // Filter Chips
                         item {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 filters.forEachIndexed { index, filter ->
@@ -459,6 +466,7 @@ fun HaremScreen(
                     // --- TAB 5: EMBEDDED GALLERY ---
                     GalleryScreen(gameState = gameState)
                 }
+            }
             }
             }
         }

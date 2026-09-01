@@ -300,11 +300,27 @@ class GameEngine(private val context: Context) {
         updateState { current ->
             val p = current.player
             val newDay = p.day + 1
+            
+            // Affinity Passive Multipliers Setup
+            var level2Count = 0
+            var level4Count = 0
+            var level6Count = 0
+            current.concubines.forEach { c ->
+                if (c.affinityLevel >= 2) level2Count++
+                if (c.affinityLevel >= 4) level4Count++
+                if (c.affinityLevel >= 6) level6Count++
+            }
 
             // Passive income from mafia and buildings
             val buildingIncome = current.buildings.sumOf { it.level * 15 }
             val territoryIncome = current.territories.filter { it.level > 0 }.sumOf { it.baseIncome * it.level }
-            val totalPassive = buildingIncome + territoryIncome + (current.haremLevel * 10)
+            
+            val haremIncomeBase = current.haremLevel * 10
+            val haremIncomeBonus = (haremIncomeBase * (0.10f * level2Count)).toInt()
+            
+            val basePassive = buildingIncome + territoryIncome + haremIncomeBase + haremIncomeBonus
+            val globalIncomeMultiplier = 1.0f + (0.50f * level6Count)
+            val totalPassive = (basePassive * globalIncomeMultiplier).toInt()
 
             // Process slave rentals
             var rentalIncome = 0
@@ -382,7 +398,7 @@ class GameEngine(private val context: Context) {
                 }
             }
 
-            val newMaxSex = (p.maxSexEnergy + maxSexBonus).coerceAtMost(250)
+            val newMaxSex = (p.maxSexEnergy + maxSexBonus + (level4Count * 10)).coerceAtMost(500)
             val newMaxDark = (p.maxDarkEnergy + (if (meditative) maxDarkBonus + 1 else maxDarkBonus)).coerceAtMost(200)
 
             p.gold += totalPassive + rentalIncome
@@ -502,6 +518,24 @@ class GameEngine(private val context: Context) {
 
         // Apply interaction
         val message = interaction.applyEffect(concubine, player)
+
+        // Affinity Passives Processing for Intimate Interactions
+        if (interaction.type == "intimni") {
+            if (concubine.affinityLevel >= 3) {
+                // Level 3: +15% efektivita (we boost stats directly here), +10% zisk temné energie
+                concubine.touha = (concubine.touha + 3).coerceAtMost(100)
+                concubine.vlhkost = (concubine.vlhkost + 3).coerceAtMost(100)
+                concubine.duvera = (concubine.duvera + 3).coerceAtMost(100)
+                player.darkEnergy = (player.darkEnergy + 5).coerceAtMost(player.maxDarkEnergy)
+            }
+            if (concubine.affinityLevel >= 4 && !concubine.tehotna && interaction.id == "eroticka_noc") {
+                // Level 4: +20% šance na zplození dědice (extra roll)
+                if ((1..100).random() <= 20) {
+                    concubine.tehotna = true
+                    concubine.dnyTehotenstvi = 0
+                }
+            }
+        }
 
         // Recalculate degradation phase
         val newPhase = StaticData.calculatePhase(
@@ -1363,13 +1397,15 @@ class GameEngine(private val context: Context) {
         var lootInfo: String? = null
 
         // 1. Process Player Action
+        val level5Count = _gameState.value.concubines.count { it.affinityLevel >= 5 }
+        val playerMultiplier = 1.0f + (0.25f * level5Count)
+
         when (action) {
             "attack", "slash" -> {
                 val isCrit = Random.nextInt(100) < (15 + (player.skills["boj"] ?: 0) * 2)
                 val critMultiplier = if (isCrit) 1.65f else 1.0f
                 val rawDmg = weapon.damage + (player.skills["boj"] ?: 0) * 3 + Random.nextInt(-2, 5)
-                val finalDmg = ((rawDmg - (session.boss.defense * 0.35f)) * critMultiplier).toInt().coerceAtLeast(6)
-
+                val finalDmg = (((rawDmg - (session.boss.defense * 0.35f)) * critMultiplier) * playerMultiplier).toInt().coerceAtLeast(6)
                 newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
                 val critText = if (isCrit) " 💥 KRITICKÝ ZÁSAH!" else ""
                 newLogEntries.add(0, CombatLogEntry(
@@ -1382,8 +1418,7 @@ class GameEngine(private val context: Context) {
                 val isCrit = Random.nextInt(100) < 25
                 val multiplier = if (isCrit) 2.2f else 1.5f
                 val rawDmg = (weapon.damage * 1.5f) + (player.skills["boj"] ?: 0) * 4 + Random.nextInt(2, 10)
-                val finalDmg = ((rawDmg - (session.boss.defense * 0.25f)) * multiplier).toInt().coerceAtLeast(12)
-
+                val finalDmg = (((rawDmg - (session.boss.defense * 0.25f)) * multiplier) * playerMultiplier).toInt().coerceAtLeast(12)
                 newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
                 newLogEntries.add(0, CombatLogEntry(
                     turn = currentTurn,
@@ -1393,7 +1428,7 @@ class GameEngine(private val context: Context) {
             }
             "bleed_strike" -> {
                 val rawDmg = weapon.damage + (player.skills["boj"] ?: 0) * 2 + Random.nextInt(0, 4)
-                val finalDmg = (rawDmg - (session.boss.defense * 0.3f)).toInt().coerceAtLeast(5)
+                val finalDmg = ((rawDmg - (session.boss.defense * 0.3f)) * playerMultiplier).toInt().coerceAtLeast(5)
                 newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
                 newBleedTurns = 3
                 newLogEntries.add(0, CombatLogEntry(
@@ -1406,7 +1441,7 @@ class GameEngine(private val context: Context) {
                 if (player.darkEnergy >= 10) {
                     player.darkEnergy -= 10
                     newPlayerDark = player.darkEnergy
-                    val darkDmg = 38 + (player.skills["temnota"] ?: 0) * 6 + (weapon.darkBonus) + Random.nextInt(2, 12)
+                    val darkDmg = ((38 + (player.skills["temnota"] ?: 0) * 6 + (weapon.darkBonus) + Random.nextInt(2, 12)) * playerMultiplier).toInt()
                     newBossHp = (newBossHp - darkDmg).coerceAtLeast(0)
                     newLogEntries.add(0, CombatLogEntry(
                         turn = currentTurn,
@@ -1425,7 +1460,7 @@ class GameEngine(private val context: Context) {
                 if (player.darkEnergy >= 15) {
                     player.darkEnergy -= 15
                     newPlayerDark = player.darkEnergy
-                    val curseDmg = 25 + (player.skills["temnota"] ?: 0) * 4
+                    val curseDmg = ((25 + (player.skills["temnota"] ?: 0) * 4) * playerMultiplier).toInt()
                     newBossHp = (newBossHp - curseDmg).coerceAtLeast(0)
                     activeBuff = "Prokletí stínů (Nepřítel oslaben)"
                     newLogEntries.add(0, CombatLogEntry(
@@ -1600,6 +1635,7 @@ class GameEngine(private val context: Context) {
                 }
 
                 var finalEnemyDmg = (rawBossDmg - defenseReduction).coerceAtLeast(4)
+                finalEnemyDmg = (finalEnemyDmg * (1.0f / playerMultiplier)).toInt()
                 if (isDefending) {
                     finalEnemyDmg = (finalEnemyDmg * 0.35f).toInt().coerceAtLeast(2)
                 }
