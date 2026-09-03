@@ -44,7 +44,7 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val player = gameState.player
-    val favorite = gameState.concubines.firstOrNull { it.oblibena }
+    val favorite = gameState.characters.firstOrNull { it.oblibena }
 
     LazyColumn(
         modifier = modifier
@@ -89,7 +89,7 @@ fun HomeScreen(
                         color = Color.White
                     )
                     Text(
-                        text = "Den ${player.day} • ${gameState.concubines.size} otrokyň v komnatách",
+                        text = "Den ${player.day} • ${gameState.characters.size} otrokyň v komnatách",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFFFFD700)
                     )
@@ -153,7 +153,7 @@ fun HomeScreen(
                             icon = Icons.Default.Groups, 
                             color = Color(0xFF2196F3),
                             label = "Harém",
-                            value = "${gameState.concubines.size} Dívek",
+                            value = "${gameState.characters.size} Dívek",
                             progress = null
                         )
                         ResourceItem(
@@ -168,7 +168,58 @@ fun HomeScreen(
             }
         }
 
-        // Favorite Concubine Spotlight if exists
+
+        // Active Buffs
+        if (gameState.activeBuffs.isNotEmpty()) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "✨ Aktivní pouta a požehnání",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        
+                        gameState.activeBuffs.forEach { buff ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(text = buff.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text(text = buff.description, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                                    modifier = Modifier.padding(start = 8.dp)
+                                ) {
+                                    Text(
+                                        text = "${buff.durationDays} dny",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Favorite Character Spotlight if exists
         if (favorite != null) {
             item {
                 Card(

@@ -75,7 +75,7 @@ class GameEngine(private val context: Context) {
                 items = p.items.map { it.copy() }.toMutableList(),
                 agents = p.agents.map { it.copy() }.toMutableList()
             ),
-            concubines = transformed.concubines.map { it.copy() },
+            characters = transformed.characters.map { it.copy() },
             buildings = transformed.buildings.map { it.copy() },
             territories = transformed.territories.map { it.copy() }
         )
@@ -132,7 +132,7 @@ class GameEngine(private val context: Context) {
     }
 
     fun buyAndGiveDirectGift(
-        concubineId: String,
+        characterId: String,
         giftName: String,
         goldCost: Int,
         loyaltyBoost: Int,
@@ -142,7 +142,7 @@ class GameEngine(private val context: Context) {
         flavorText: String
     ): Pair<Boolean, String> {
         val current = _gameState.value
-        val concubine = current.concubines.firstOrNull { it.id == concubineId }
+        val character = current.characters.firstOrNull { it.id == characterId }
             ?: return Pair(false, "Dívka nebyla nalezena.")
 
         if (current.player.gold < goldCost) {
@@ -150,11 +150,11 @@ class GameEngine(private val context: Context) {
         }
 
         val affinityGain = (loyaltyBoost + trustBoost) / 2 + 12
-        val successMsg = "🎁 Předal jsi dar '$giftName' dívce ${concubine.name}. $flavorText"
+        val successMsg = "🎁 Předal jsi dar '$giftName' dívce ${character.name}. $flavorText"
         updateState { state ->
             val p = state.player.copy(gold = (state.player.gold - goldCost).coerceAtLeast(0))
-            val updatedConcubines = state.concubines.map { c ->
-                if (c.id == concubineId) {
+            val updatedCharacters = state.characters.map { c ->
+                if (c.id == characterId) {
                     val copy = c.copy()
                     copy.loajalita = (copy.loajalita + loyaltyBoost).coerceAtMost(100)
                     copy.touha = (copy.touha + desireBoost).coerceAtMost(100)
@@ -185,17 +185,17 @@ class GameEngine(private val context: Context) {
                 } else c
             }
             val logs = (listOf(successMsg) + state.gameLog).take(30)
-            state.copy(player = p, concubines = updatedConcubines, gameLog = logs)
+            state.copy(player = p, characters = updatedCharacters, gameLog = logs)
         }
         addHaremExp(10)
         return Pair(true, successMsg)
     }
 
-    fun giveInventoryGift(concubineId: String, itemId: String): Pair<Boolean, String> {
+    fun giveInventoryGift(characterId: String, itemId: String): Pair<Boolean, String> {
         val current = _gameState.value
         val item = current.player.items.firstOrNull { it.id == itemId && it.count > 0 }
             ?: return Pair(false, "Předmět není v tvém inventáři.")
-        val concubine = current.concubines.firstOrNull { it.id == concubineId }
+        val character = current.characters.firstOrNull { it.id == characterId }
             ?: return Pair(false, "Dívka nebyla nalezena.")
 
         var resultMsg = ""
@@ -216,8 +216,8 @@ class GameEngine(private val context: Context) {
                 }
             }
 
-            val updatedConcubines = state.concubines.map { c ->
-                if (c.id == concubineId) {
+            val updatedCharacters = state.characters.map { c ->
+                if (c.id == characterId) {
                     val copy = c.copy()
                     copy.affinityPoints = copy.affinityPoints + affinityGain
                     copy.affinityLevel = AffinityData.getLevelForPoints(copy.affinityPoints)
@@ -274,7 +274,7 @@ class GameEngine(private val context: Context) {
             }
 
             val logs = (listOf(resultMsg) + state.gameLog).take(30)
-            state.copy(player = p, concubines = updatedConcubines, gameLog = logs)
+            state.copy(player = p, characters = updatedCharacters, gameLog = logs)
         }
         addHaremExp(8)
         return Pair(true, resultMsg)
@@ -305,26 +305,33 @@ class GameEngine(private val context: Context) {
             var level2Count = 0
             var level4Count = 0
             var level6Count = 0
-            current.concubines.forEach { c ->
+            current.characters.forEach { c ->
                 if (c.affinityLevel >= 2) level2Count++
                 if (c.affinityLevel >= 4) level4Count++
                 if (c.affinityLevel >= 6) level6Count++
             }
 
-            // Passive income from mafia and buildings
-            val buildingIncome = current.buildings.sumOf { it.level * 15 }
-            val territoryIncome = current.territories.filter { it.level > 0 }.sumOf { it.baseIncome * it.level }
+            // Domain Resources & Passive income
+            val resourceManager = DomainResourceManager()
+            val yield = resourceManager.calculateDailyYield(current)
             
             val haremIncomeBase = current.haremLevel * 10
             val haremIncomeBonus = (haremIncomeBase * (0.10f * level2Count)).toInt()
             
-            val basePassive = buildingIncome + territoryIncome + haremIncomeBase + haremIncomeBonus
-            val globalIncomeMultiplier = 1.0f + (0.50f * level6Count)
-            val totalPassive = (basePassive * globalIncomeMultiplier).toInt()
+            val basePassiveGold = yield.gold + haremIncomeBase + haremIncomeBonus
+            var globalIncomeMultiplier = 1.0f + (0.50f * level6Count)
+            
+            // Apply RESOURCE_BOOST buffs
+            val resourceBuffs = current.activeBuffs.filter { it.type == "RESOURCE_BOOST" }.sumOf { it.value }
+            if (resourceBuffs > 0) {
+                globalIncomeMultiplier += (resourceBuffs / 100f)
+            }
+            
+            val totalPassiveGold = (basePassiveGold * globalIncomeMultiplier).toInt()
 
             // Process slave rentals
             var rentalIncome = 0
-            val updatedConcubines = current.concubines.map { c ->
+            val updatedCharacters = current.characters.map { c ->
                 val copy = c.copy()
                 if (copy.naNajmu) {
                     val dailyIncome = when (copy.klient) {
@@ -381,8 +388,8 @@ class GameEngine(private val context: Context) {
             }
 
             // Relationship bonus to max energy
-            val wives = updatedConcubines.filter { it.jeManzelkou }
-            val favorites = updatedConcubines.filter { it.oblibena }
+            val wives = updatedCharacters.filter { it.jeManzelkou }
+            val favorites = updatedCharacters.filter { it.oblibena }
 
             var maxSexBonus = 0
             var maxDarkBonus = 0
@@ -401,7 +408,12 @@ class GameEngine(private val context: Context) {
             val newMaxSex = (p.maxSexEnergy + maxSexBonus + (level4Count * 10)).coerceAtMost(500)
             val newMaxDark = (p.maxDarkEnergy + (if (meditative) maxDarkBonus + 1 else maxDarkBonus)).coerceAtMost(200)
 
-            p.gold += totalPassive + rentalIncome
+                        // Apply Domain Resources
+            val modifiedYield = yield.copy(gold = totalPassiveGold + rentalIncome)
+            resourceManager.applyYield(p, modifiedYield)
+            if (yield.wood > 0 || yield.stone > 0 || yield.iron > 0 || yield.mana > 0) {
+                addLog("🏘️ Dominium vyprodukovalo: +${yield.wood} dreva, +${yield.stone} kameni, +${yield.iron} zeleza, +${yield.mana} many. Populace vzrostla o ${yield.populationGrowth}.")
+            }
             p.day = newDay
             p.maxSexEnergy = newMaxSex
             p.maxDarkEnergy = newMaxDark
@@ -410,9 +422,9 @@ class GameEngine(private val context: Context) {
             p.hp = p.maxHp
 
             // Random Jealousy / Night incident check if favorite exists
-            if (favorites.isNotEmpty() && updatedConcubines.size > 1 && Random.nextFloat() < 0.35f) {
+            if (favorites.isNotEmpty() && updatedCharacters.size > 1 && Random.nextFloat() < 0.35f) {
                 val fav = favorites.first()
-                val other = updatedConcubines.filter { !it.oblibena }.randomOrNull()
+                val other = updatedCharacters.filter { !it.oblibena }.randomOrNull()
                 if (other != null) {
                     other.strach = (other.strach + 4).coerceAtMost(100)
                     other.humiliation = (other.humiliation + 3).coerceAtMost(100)
@@ -420,8 +432,43 @@ class GameEngine(private val context: Context) {
                 }
             }
 
-            val logEntry = "🌅 Den $newDay svítá. Energie plně obnovena (${p.sexEnergy}/${p.darkEnergy}). Příjem: +${totalPassive + rentalIncome} zlatých."
-            val logs = (listOf(logEntry) + current.gameLog).take(30)
+
+            // Buff durations
+            val newBuffs = current.activeBuffs.map { it.copy(durationDays = it.durationDays - 1) }.filter { it.durationDays > 0 }.toMutableList()
+            var bondingLog: String? = null
+
+            // Random Bonding Event
+            if (updatedCharacters.size >= 2 && Math.random() < 0.3) {
+                val shuffled = updatedCharacters.shuffled()
+                val c1 = shuffled[0]
+                val c2 = shuffled[1]
+                
+                val eventType = listOf("COMBAT", "PRODUCTION", "MORALE").random()
+                when (eventType) {
+                    "COMBAT" -> {
+                        bondingLog = "⚔️ Pouto: ${c1.name} a ${c2.name} spolu v noci trénovaly. Celý harém má bonus +10% k poškození na 2 dny!"
+                        newBuffs.add(PartyBuff("bond_combat_${newDay}", "Bojové pouto", "Bonus k poškození z nočního tréninku.", 2, "DAMAGE", 10))
+                    }
+                    "PRODUCTION" -> {
+                        bondingLog = "🛠️ Pouto: ${c1.name} a ${c2.name} zorganizovaly výpomoc v dominiu. Zvýšená produkce zlata o 15% na 2 dny!"
+                        newBuffs.add(PartyBuff("bond_prod_${newDay}", "Organizační talent", "Bonus k produkci surovin.", 2, "RESOURCE_BOOST", 15))
+                    }
+                    "MORALE" -> {
+                        bondingLog = "💕 Pouto: ${c1.name} a ${c2.name} strávily noc spolu a posílily své pouto. Dočasná odolnost a nadšení!"
+                        newBuffs.add(PartyBuff("bond_morale_${newDay}", "Hřejivé pouto", "Pasivní odolnost harému.", 3, "DEFENSE", 10))
+                        c1.vlhkost = (c1.vlhkost + 20).coerceAtMost(100)
+                        c2.vlhkost = (c2.vlhkost + 20).coerceAtMost(100)
+                        c1.loajalita = (c1.loajalita + 5).coerceAtMost(100)
+                        c2.loajalita = (c2.loajalita + 5).coerceAtMost(100)
+                    }
+                }
+            }
+
+            val logEntry = "🌅 Den $newDay svítá. Energie plně obnovena (${p.sexEnergy}/${p.darkEnergy}). Příjem: +${totalPassiveGold + rentalIncome} zlatých."
+            val logsList = mutableListOf(logEntry)
+            if (bondingLog != null) logsList.add(bondingLog!!)
+            val logs = (logsList + current.gameLog).take(30)
+
             
             val newMissions = listOf(
                 DailyMission(id = "m1_$newDay", type = "INTERACT", description = "Provést interakce s dívkami", targetCount = 3, rewardGold = 50, rewardSexEnergy = 20),
@@ -431,10 +478,11 @@ class GameEngine(private val context: Context) {
 
             current.copy(
                 player = p,
-                concubines = updatedConcubines,
+                characters = updatedCharacters,
                 gameLog = logs,
                 dailyMissions = newMissions,
-                lastMissionUpdateDay = newDay
+                lastMissionUpdateDay = newDay,
+                activeBuffs = newBuffs
             )
         }
         autoSave()
@@ -487,10 +535,10 @@ class GameEngine(private val context: Context) {
     }
 
     // --- CONCUBINE INTERACTIONS ---
-    fun executeInteraction(concubineId: String, interaction: GameInteraction): Pair<Boolean, String> {
+    fun executeInteraction(characterId: String, interaction: GameInteraction): Pair<Boolean, String> {
         val current = _gameState.value
         val player = current.player
-        val concubine = current.concubines.firstOrNull { it.id == concubineId }
+        val character = current.characters.firstOrNull { it.id == characterId }
             ?: return Pair(false, "Dívka nebyla nalezena.")
 
         if (player.sexEnergy < interaction.energyCost) {
@@ -502,13 +550,13 @@ class GameEngine(private val context: Context) {
         if (player.gold < interaction.goldCost) {
             return Pair(false, "Nedostatek zlata (${player.gold}/${interaction.goldCost} zlatých)!")
         }
-        if (interaction.requiresFavorite && !concubine.oblibena) {
+        if (interaction.requiresFavorite && !character.oblibena) {
             return Pair(false, "Tato akce vyžaduje, aby byla dívka jmenována tvou Oblíbenkyní ★!")
         }
-        if (interaction.requiresWife && !concubine.jeManzelkou) {
+        if (interaction.requiresWife && !character.jeManzelkou) {
             return Pair(false, "Tato akce vyžaduje manželský svazek 💍!")
         }
-        if (concubine.fazeZkazenosti < interaction.minPhase) {
+        if (character.fazeZkazenosti < interaction.minPhase) {
             return Pair(false, "Dívka musí dosáhnout alespoň fáze zkázanosti ${interaction.minPhase}!")
         }
 
@@ -517,44 +565,44 @@ class GameEngine(private val context: Context) {
         player.gold -= interaction.goldCost
 
         // Apply interaction
-        val message = interaction.applyEffect(concubine, player)
+        val message = interaction.applyEffect(character, player)
 
         // Affinity Passives Processing for Intimate Interactions
         if (interaction.type == "intimni") {
-            if (concubine.affinityLevel >= 3) {
+            if (character.affinityLevel >= 3) {
                 // Level 3: +15% efektivita (we boost stats directly here), +10% zisk temné energie
-                concubine.touha = (concubine.touha + 3).coerceAtMost(100)
-                concubine.vlhkost = (concubine.vlhkost + 3).coerceAtMost(100)
-                concubine.duvera = (concubine.duvera + 3).coerceAtMost(100)
+                character.touha = (character.touha + 3).coerceAtMost(100)
+                character.vlhkost = (character.vlhkost + 3).coerceAtMost(100)
+                character.duvera = (character.duvera + 3).coerceAtMost(100)
                 player.darkEnergy = (player.darkEnergy + 5).coerceAtMost(player.maxDarkEnergy)
             }
-            if (concubine.affinityLevel >= 4 && !concubine.tehotna && interaction.id == "eroticka_noc") {
+            if (character.affinityLevel >= 4 && !character.tehotna && interaction.id == "eroticka_noc") {
                 // Level 4: +20% šance na zplození dědice (extra roll)
                 if ((1..100).random() <= 20) {
-                    concubine.tehotna = true
-                    concubine.dnyTehotenstvi = 0
+                    character.tehotna = true
+                    character.dnyTehotenstvi = 0
                 }
             }
         }
 
         // Recalculate degradation phase
         val newPhase = StaticData.calculatePhase(
-            broken = concubine.broken,
-            mindbreak = concubine.mindbreak,
-            poslusnost = concubine.poslusnost,
-            loajalita = concubine.loajalita,
-            painAddiction = concubine.painAddiction,
-            scarred = concubine.scarred,
-            touha = concubine.touha,
-            humiliation = concubine.humiliation,
-            zavislost = concubine.zavislost,
-            age = concubine.age,
-            pregnant = concubine.tehotna
+            broken = character.broken,
+            mindbreak = character.mindbreak,
+            poslusnost = character.poslusnost,
+            loajalita = character.loajalita,
+            painAddiction = character.painAddiction,
+            scarred = character.scarred,
+            touha = character.touha,
+            humiliation = character.humiliation,
+            zavislost = character.zavislost,
+            age = character.age,
+            pregnant = character.tehotna
         )
-        if (newPhase > concubine.fazeZkazenosti) {
-            concubine.fazeZkazenosti = newPhase
+        if (newPhase > character.fazeZkazenosti) {
+            character.fazeZkazenosti = newPhase
             val phaseInfo = StaticData.DEGRADATION_PHASES[newPhase]
-            addLog("★ ${concubine.name} postoupila do fáze zkázanosti: ${phaseInfo?.name ?: "$newPhase"}!")
+            addLog("★ ${character.name} postoupila do fáze zkázanosti: ${phaseInfo?.name ?: "$newPhase"}!")
         }
 
         // Add player XP & harem EXP
@@ -567,12 +615,12 @@ class GameEngine(private val context: Context) {
         return Pair(true, message)
     }
 
-    fun setFavorite(concubineId: String): String {
+    fun setFavorite(characterId: String): String {
         var msg = ""
         updateState { current ->
-            val updated = current.concubines.map { c ->
+            val updated = current.characters.map { c ->
                 val copy = c.copy()
-                if (copy.id == concubineId) {
+                if (copy.id == characterId) {
                     copy.oblibena = true
                     copy.loajalita = (copy.loajalita + 15).coerceAtMost(100)
                     copy.duvera = (copy.duvera + 10).coerceAtMost(100)
@@ -582,43 +630,43 @@ class GameEngine(private val context: Context) {
                 }
                 copy
             }
-            current.copy(concubines = updated)
+            current.copy(characters = updated)
         }
         addLog(msg)
         return msg
     }
 
-    fun courtRomance(concubineId: String): Pair<Boolean, String> {
+    fun courtRomance(characterId: String): Pair<Boolean, String> {
         val current = _gameState.value
-        val concubine = current.concubines.firstOrNull { it.id == concubineId }
+        val character = current.characters.firstOrNull { it.id == characterId }
             ?: return Pair(false, "Dívka nenalezena.")
 
         if (current.player.gold < 50) {
             return Pair(false, "Dvoření vyžaduje 50 zlatých na dary a hostinu.")
         }
         current.player.gold -= 50
-        concubine.romanceBody += 15
-        concubine.duvera = (concubine.duvera + 10).coerceAtMost(100)
-        concubine.srdce = (concubine.srdce + 12).coerceAtMost(100)
+        character.romanceBody += 15
+        character.duvera = (character.duvera + 10).coerceAtMost(100)
+        character.srdce = (character.srdce + 12).coerceAtMost(100)
 
-        if (concubine.romanceBody >= 50 && !concubine.partnerka) {
-            concubine.partnerka = true
-            addLog("♥ ${concubine.name} přijala tvůj slib a stala se tvou oficiální Partnerkou!")
-            return Pair(true, "♥ ${concubine.name} je nyní tvou Partnerkou!")
+        if (character.romanceBody >= 50 && !character.partnerka) {
+            character.partnerka = true
+            addLog("♥ ${character.name} přijala tvůj slib a stala se tvou oficiální Partnerkou!")
+            return Pair(true, "♥ ${character.name} je nyní tvou Partnerkou!")
         }
 
-        val res = "${concubine.name} byla potěšena tvou přízní (Romance: ${concubine.romanceBody}/100)."
+        val res = "${character.name} byla potěšena tvou přízní (Romance: ${character.romanceBody}/100)."
         addLog(res)
         updateState { it.copy() }
         return Pair(true, res)
     }
 
-    fun marryConcubine(concubineId: String): Pair<Boolean, String> {
+    fun marryConcubine(characterId: String): Pair<Boolean, String> {
         val current = _gameState.value
-        val concubine = current.concubines.firstOrNull { it.id == concubineId }
+        val character = current.characters.firstOrNull { it.id == characterId }
             ?: return Pair(false, "Dívka nenalezena.")
 
-        if (concubine.romanceBody < 80 || concubine.loajalita < 70) {
+        if (character.romanceBody < 80 || character.loajalita < 70) {
             return Pair(false, "Svatba vyžaduje alespoň 80 Romance a 70 Loajality!")
         }
         if (current.player.gold < 300) {
@@ -626,22 +674,22 @@ class GameEngine(private val context: Context) {
         }
 
         current.player.gold -= 300
-        concubine.jeManzelkou = true
-        concubine.partnerka = true
-        concubine.loajalita = 100
-        concubine.duvera = 100
+        character.jeManzelkou = true
+        character.partnerka = true
+        character.loajalita = 100
+        character.duvera = 100
         current.player.reputation += 15
         current.player.maxSexEnergy = (current.player.maxSexEnergy + 10).coerceAtMost(250)
         current.player.maxDarkEnergy = (current.player.maxDarkEnergy + 5).coerceAtMost(200)
 
-        val msg = "💍 SLAVNOSTNÍ SVATBA! ${concubine.name} se stala tvou Manželkou a Paní dominia! Max energie trvale navýšena."
+        val msg = "💍 SLAVNOSTNÍ SVATBA! ${character.name} se stala tvou Manželkou a Paní dominia! Max energie trvale navýšena."
         addLog(msg)
         updateState { it.copy() }
         return Pair(true, msg)
     }
 
     // --- HUNTING & RECRUITMENT ---
-    fun hunt(locationName: String): Pair<Concubine?, String> {
+    fun hunt(locationName: String): Pair<Character?, String> {
         val current = _gameState.value
         val player = current.player
 
@@ -652,11 +700,11 @@ class GameEngine(private val context: Context) {
 
         val archetypes = StaticData.ARCHETYPES.keys.toList()
         val randomArchetype = archetypes.random()
-        val randomName = StaticData.NAMES.filter { n -> current.concubines.none { it.name == n } }.randomOrNull()
+        val randomName = StaticData.NAMES.filter { n -> current.characters.none { it.name == n } }.randomOrNull()
             ?: "Dívka ze stínů ${Random.nextInt(10, 99)}"
 
         val age = Random.nextInt(18, 28)
-        val newGirl = Concubine(
+        val newGirl = Character(
             id = "c_${UUID.randomUUID().toString().take(8)}",
             name = randomName,
             age = age,
@@ -676,7 +724,7 @@ class GameEngine(private val context: Context) {
             role = "Ulovená v lokaci $locationName"
         )
 
-        updateState { it.copy(concubines = it.concubines + newGirl) }
+        updateState { it.copy(characters = it.characters + newGirl) }
         addHaremExp(20)
         addPlayerXp(25)
 
@@ -758,7 +806,7 @@ class GameEngine(private val context: Context) {
         return Pair(true, msg)
     }
 
-    fun exploreDomain(domainId: String): Pair<Concubine?, String> {
+    fun exploreDomain(domainId: String): Pair<Character?, String> {
         val current = _gameState.value
         val domain = DomainData.getDomainById(domainId)
         val player = current.player
@@ -774,12 +822,12 @@ class GameEngine(private val context: Context) {
             StaticData.ARCHETYPES.keys.random()
         }
 
-        val randomName = StaticData.NAMES.filter { n -> current.concubines.none { it.name == n } }.randomOrNull()
+        val randomName = StaticData.NAMES.filter { n -> current.characters.none { it.name == n } }.randomOrNull()
             ?: "Dívka z ${domain.name} ${Random.nextInt(10, 99)}"
 
         val age = Random.nextInt(18, 27)
         val initialAffinity = Random.nextInt(10, 25)
-        val newGirl = Concubine(
+        val newGirl = Character(
             id = "c_${UUID.randomUUID().toString().take(8)}",
             name = randomName,
             age = age,
@@ -818,7 +866,7 @@ class GameEngine(private val context: Context) {
             val logs = (listOf(message) + state.gameLog).take(30)
             state.copy(
                 player = p,
-                concubines = state.concubines + newGirl,
+                characters = state.characters + newGirl,
                 currentDomainId = domainId,
                 unlockedDomains = updatedUnlocked,
                 gameLog = logs
@@ -837,11 +885,11 @@ class GameEngine(private val context: Context) {
             return Pair(false, "Nedostatek zlata pro nákup na dražbě (${current.player.gold}/$price zlatých)!")
         }
 
-        val randomName = StaticData.NAMES.filter { n -> current.concubines.none { it.name == n } }.randomOrNull()
+        val randomName = StaticData.NAMES.filter { n -> current.characters.none { it.name == n } }.randomOrNull()
             ?: "Otrokyně z aukce ${Random.nextInt(10, 99)}"
 
         val age = Random.nextInt(18, 26)
-        val newConcubine = Concubine(
+        val newCharacter = Character(
             id = "c_${UUID.randomUUID().toString().take(8)}",
             name = randomName,
             age = age,
@@ -859,26 +907,26 @@ class GameEngine(private val context: Context) {
             role = "Zakoupená na dražbě"
         )
 
-        val msg = "🏛️ Vydražil jsi otrokyni ${newConcubine.name} za $price zlatých!"
+        val msg = "🏛️ Vydražil jsi otrokyni ${newCharacter.name} za $price zlatých!"
         updateState { state ->
             val p = state.player.copy(gold = (state.player.gold - price).coerceAtLeast(0))
             val logs = (listOf(msg) + state.gameLog).take(30)
-            state.copy(player = p, concubines = state.concubines + newConcubine, gameLog = logs)
+            state.copy(player = p, characters = state.characters + newCharacter, gameLog = logs)
         }
         addHaremExp(30)
         return Pair(true, msg)
     }
 
     // --- SLAVE RENTAL ---
-    fun rentSlave(concubineId: String, clientType: String, days: Int): Pair<Boolean, String> {
+    fun rentSlave(characterId: String, clientType: String, days: Int): Pair<Boolean, String> {
         val current = _gameState.value
-        val concubine = current.concubines.firstOrNull { it.id == concubineId }
+        val character = current.characters.firstOrNull { it.id == characterId }
             ?: return Pair(false, "Dívka nenalezena.")
 
-        if (concubine.naNajmu) {
-            return Pair(false, "Dívka je již na nájmu u klienta ${concubine.klient}!")
+        if (character.naNajmu) {
+            return Pair(false, "Dívka je již na nájmu u klienta ${character.klient}!")
         }
-        if (concubine.hp < 40) {
+        if (character.hp < 40) {
             return Pair(false, "Dívka je příliš vyčerpaná na nájem!")
         }
 
@@ -892,12 +940,12 @@ class GameEngine(private val context: Context) {
         }
 
         val upfrontGold = days * dailyAdvance
-        val msg = "💰 ${concubine.name} byla pronajata klientovi ($clientType) na $days dní. Obdržel jsi zálohu $upfrontGold zlatých."
+        val msg = "💰 ${character.name} byla pronajata klientovi ($clientType) na $days dní. Obdržel jsi zálohu $upfrontGold zlatých."
 
         updateState { state ->
             val p = state.player.copy(gold = state.player.gold + upfrontGold)
-            val updatedConcubines = state.concubines.map { c ->
-                if (c.id == concubineId) {
+            val updatedCharacters = state.characters.map { c ->
+                if (c.id == characterId) {
                     val copy = c.copy()
                     copy.naNajmu = true
                     copy.klient = clientType
@@ -907,7 +955,7 @@ class GameEngine(private val context: Context) {
                 } else c
             }
             val logs = (listOf(msg) + state.gameLog).take(30)
-            state.copy(player = p, concubines = updatedConcubines, gameLog = logs)
+            state.copy(player = p, characters = updatedCharacters, gameLog = logs)
         }
         return Pair(true, msg)
     }
@@ -918,15 +966,24 @@ class GameEngine(private val context: Context) {
         val building = current.buildings.firstOrNull { it.type == buildingType }
             ?: return Pair(false, "Budova nenalezena.")
 
-        val cost = (building.baseCost * (building.level + 1))
-        if (current.player.gold < cost) {
-            return Pair(false, "Vylepšení vyžaduje $cost zlatých (máš ${current.player.gold})!")
+        val costGold = (building.baseCost * (building.level + 1))
+        val costWood = (building.baseCostWood * (building.level + 1))
+        val costStone = (building.baseCostStone * (building.level + 1))
+        val costIron = (building.baseCostIron * (building.level + 1))
+        
+        if (current.player.gold < costGold || current.player.wood < costWood || current.player.stone < costStone || current.player.iron < costIron) {
+            return Pair(false, "Nedostatek surovin! Potřebuješ: $costGold zl, $costWood dřeva, $costStone kamení, $costIron železa.")
         }
 
         val nextLevel = building.level + 1
         val msg = "🏰 Budova ${building.name} vylepšena na úroveň $nextLevel!"
         updateState { state ->
-            val p = state.player.copy(gold = (state.player.gold - cost).coerceAtLeast(0))
+            val p = state.player.copy(
+                gold = (state.player.gold - costGold).coerceAtLeast(0),
+                wood = (state.player.wood - costWood).coerceAtLeast(0),
+                stone = (state.player.stone - costStone).coerceAtLeast(0),
+                iron = (state.player.iron - costIron).coerceAtLeast(0)
+            )
             val updatedBuildings = state.buildings.map { b ->
                 if (b.type == buildingType) {
                     val copy = b.copy()
@@ -1058,11 +1115,11 @@ class GameEngine(private val context: Context) {
         return Pair(true, msg)
     }
 
-    fun giveDirectGift(giftId: String, concubineId: String): Pair<Boolean, String> {
+    fun giveDirectGift(giftId: String, characterId: String): Pair<Boolean, String> {
         val current = _gameState.value
         val gift = GameContent.DIRECT_GIFTS.firstOrNull { it.id == giftId }
             ?: return Pair(false, "Dar nebyl nalezen.")
-        val concubine = current.concubines.firstOrNull { it.id == concubineId }
+        val character = current.characters.firstOrNull { it.id == characterId }
             ?: return Pair(false, "Dívka nenalezena.")
 
         if (current.player.gold < gift.goldCost) {
@@ -1070,10 +1127,10 @@ class GameEngine(private val context: Context) {
         }
 
         val affinityGain = (gift.loyaltyBoost + gift.trustBoost + gift.romanceBoost) / 2 + 10
-        val msg = "🎁 ${concubine.name} ${gift.flavorMessage} (+${gift.loyaltyBoost} loajalita, +${gift.desireBoost} touha, +$affinityGain náklonnost)"
+        val msg = "🎁 ${character.name} ${gift.flavorMessage} (+${gift.loyaltyBoost} loajalita, +${gift.desireBoost} touha, +$affinityGain náklonnost)"
         updateState { state ->
-            val updatedConcubines = state.concubines.map { c ->
-                if (c.id == concubineId) {
+            val updatedCharacters = state.characters.map { c ->
+                if (c.id == characterId) {
                     val newLoyalty = (c.loajalita + gift.loyaltyBoost).coerceAtMost(100)
                     val newDesire = (c.touha + gift.desireBoost).coerceAtMost(100)
                     val newObedience = (c.poslusnost + gift.obedienceBoost).coerceAtMost(100)
@@ -1101,7 +1158,7 @@ class GameEngine(private val context: Context) {
             val logs = (listOf(msg) + state.gameLog).take(30)
             state.copy(
                 player = newPlayer,
-                concubines = updatedConcubines,
+                characters = updatedCharacters,
                 gameLog = logs
             )
         }
@@ -1110,14 +1167,14 @@ class GameEngine(private val context: Context) {
         return Pair(true, msg)
     }
 
-    fun useItemOnConcubine(itemId: String, concubineId: String): Pair<Boolean, String> {
+    fun useItemOnConcubine(itemId: String, characterId: String): Pair<Boolean, String> {
         val current = _gameState.value
         val item = current.player.items.firstOrNull { it.id == itemId && it.count > 0 }
             ?: return Pair(false, "Předmět není v inventáři.")
-        val concubine = current.concubines.firstOrNull { it.id == concubineId }
+        val character = current.characters.firstOrNull { it.id == characterId }
             ?: return Pair(false, "Dívka nenalezena.")
 
-        var msg = "Předal jsi ${item.name} dívce ${concubine.name}."
+        var msg = "Předal jsi ${item.name} dívce ${character.name}."
 
         updateState { state ->
             val updatedItems = state.player.items.mapNotNull { itm ->
@@ -1127,8 +1184,8 @@ class GameEngine(private val context: Context) {
                 } else itm.copy()
             }.toMutableList()
 
-            val updatedConcubines = state.concubines.map { c ->
-                if (c.id == concubineId) {
+            val updatedCharacters = state.characters.map { c ->
+                if (c.id == characterId) {
                     when (itemId) {
                         "elixir_touhy" -> {
                             msg = "🔮 ${c.name} vypila Elixír touhy. Její tělo zaplavil horký žár (+30 touha, +25 vlhkost, +15 náklonnost)."
@@ -1211,7 +1268,7 @@ class GameEngine(private val context: Context) {
             val logs = (listOf(msg) + state.gameLog).take(30)
             state.copy(
                 player = newPlayer,
-                concubines = updatedConcubines,
+                characters = updatedCharacters,
                 gameLog = logs
             )
         }
@@ -1328,8 +1385,8 @@ class GameEngine(private val context: Context) {
         if (current.player.level < quest.reqLevel) {
             return Pair(false, "Vyžaduje úroveň pána ${quest.reqLevel}!")
         }
-        if (quest.reqConcubines > 0 && current.concubines.size < quest.reqConcubines) {
-            return Pair(false, "Vyžaduje alespoň ${quest.reqConcubines} otrokyň v harému!")
+        if (quest.reqCharacters > 0 && current.characters.size < quest.reqCharacters) {
+            return Pair(false, "Vyžaduje alespoň ${quest.reqCharacters} otrokyň v harému!")
         }
 
         val msg = "📜 Úkol '${quest.title}' splněn! Obdržel jsi ${quest.rewardGold} zlatých a ${quest.rewardXp} XP."
@@ -1397,7 +1454,7 @@ class GameEngine(private val context: Context) {
         var lootInfo: String? = null
 
         // 1. Process Player Action
-        val level5Count = _gameState.value.concubines.count { it.affinityLevel >= 5 }
+        val level5Count = _gameState.value.characters.count { it.affinityLevel >= 5 }
         val playerMultiplier = 1.0f + (0.25f * level5Count)
 
         when (action) {
@@ -1509,8 +1566,8 @@ class GameEngine(private val context: Context) {
                 ))
             }
             "harem_support" -> {
-                val concubines = _gameState.value.concubines
-                val favorite = concubines.firstOrNull { it.oblibena } ?: concubines.firstOrNull { it.jeManzelkou } ?: concubines.firstOrNull()
+                val characters = _gameState.value.characters
+                val favorite = characters.firstOrNull { it.oblibena } ?: characters.firstOrNull { it.jeManzelkou } ?: characters.firstOrNull()
                 if (favorite != null) {
                     val healAmt = 28 + (favorite.loajalita / 5)
                     val energyAmt = 15
@@ -1729,7 +1786,7 @@ class GameEngine(private val context: Context) {
         val state = _gameState.value
         val current = state.copy(
             slotNumber = slot,
-            saveDate = "Den ${state.player.day} - ${state.concubines.size} dívek"
+            saveDate = "Den ${state.player.day} - ${state.characters.size} dívek"
         )
         _gameState.value = current
         val str = json.encodeToString(current)
@@ -1741,7 +1798,8 @@ class GameEngine(private val context: Context) {
 
     fun loadFromSlot(slot: Int): Boolean {
         val prefs = context.getSharedPreferences("harem_dark_prefs", Context.MODE_PRIVATE)
-        val str = prefs.getString("save_slot_$slot", null) ?: return false
+        val key = when(slot) { 0 -> "save_slot_autosave"; 99 -> "save_slot_quicksave"; else -> "save_slot_$slot" }
+        val str = prefs.getString(key, null) ?: return false
         return try {
             val loaded = json.decodeFromString<GameSave>(str)
             _gameState.value = loaded
@@ -1765,15 +1823,125 @@ class GameEngine(private val context: Context) {
         prefs.edit().putString("save_slot_autosave", str).apply()
     }
 
+    fun quickSave() {
+        val state = _gameState.value
+        val current = state.copy(
+            slotNumber = 99,
+            saveDate = "Den ${state.player.day} (Quick Save)"
+        )
+        val str = json.encodeToString(current)
+        val prefs = context.getSharedPreferences("harem_dark_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putString("save_slot_quicksave", str).apply()
+        addLog("⚡ Rychlé uložení dokončeno.")
+    }
+
     fun getSlotSummary(slot: Int): String {
         val prefs = context.getSharedPreferences("harem_dark_prefs", Context.MODE_PRIVATE)
-        val key = if (slot == 0) "save_slot_autosave" else "save_slot_$slot"
+        val key = when(slot) { 0 -> "save_slot_autosave"; 99 -> "save_slot_quicksave"; else -> "save_slot_$slot" }
         val str = prefs.getString(key, null) ?: return "Prázdný slot"
         return try {
             val save = json.decodeFromString<GameSave>(str)
-            "Den ${save.player.day} | ${save.player.gold} zlata | Harém: ${save.concubines.size} dívek"
+            "Den ${save.player.day} | ${save.player.gold} zlata | Harém: ${save.characters.size} dívek"
         } catch (e: Exception) {
             "Poškozená data"
         }
+    }
+    fun runArenaExpedition(girlIds: List<String>): List<String> {
+        val current = _gameState.value
+        val player = current.player
+        val logs = mutableListOf<String>()
+        var prestigeGain = 0
+        var foundGear: String? = null
+
+        val girlsInTeam = current.characters.filter { girlIds.contains(it.id) }
+        
+        var teamHp = girlsInTeam.sumOf { it.hp }
+        
+        var baseTeamDmg = girlsInTeam.sumOf { (it.loajalita / 10) + (it.bloodlust / 5) + 5 }
+        val damageBuffs = current.activeBuffs.filter { it.type == "DAMAGE" }.sumOf { it.value }
+        if (damageBuffs > 0) {
+            baseTeamDmg = (baseTeamDmg * (1.0f + (damageBuffs / 100f))).toInt()
+        }
+        val teamDmg = baseTeamDmg
+        var baseDefense = girlsInTeam.sumOf { it.poslusnost / 15 + 2 }
+        val defenseBuffs = current.activeBuffs.filter { it.type == "DEFENSE" }.sumOf { it.value }
+        if (defenseBuffs > 0) {
+            baseDefense += defenseBuffs
+        }
+        val teamDefense = baseDefense
+
+        logs.add("⚔️ Aréna začíná! Tým dívek vstupuje na písek arény.")
+        logs.add("❤️ Počáteční zdraví týmu: $teamHp | ⚔️ Síla týmu: $teamDmg")
+
+        var currentWave = 1
+        var eHp = 0
+        var enemyDmg = 0
+
+        while (teamHp > 0 && currentWave <= 10) {
+            logs.add("--- Vlna $currentWave ---")
+            eHp = 20 + (currentWave * 25)
+            enemyDmg = 8 + (currentWave * 6)
+
+            while (eHp > 0 && teamHp > 0) {
+                // Team attacks
+                val dmgDealt = (teamDmg + (0..6).random()).coerceAtLeast(1)
+                eHp -= dmgDealt
+                
+                // Enemy attacks
+                if (eHp > 0) {
+                    val dmgTaken = (enemyDmg - teamDefense + (0..4).random()).coerceAtLeast(1)
+                    teamHp -= dmgTaken
+                }
+            }
+
+            if (teamHp > 0) {
+                logs.add("✅ Vlna $currentWave poražena! (Zbývá HP týmu: $teamHp)")
+                val gained = currentWave * 3
+                prestigeGain += gained
+                logs.add("🏆 Získáno +$gained prestiže.")
+
+                // Rare gear drop
+                if (foundGear == null && (0..100).random() < (currentWave * 4)) {
+                    val newWeapons = listOf("Krvavá kosa", "Stínová dýka smrti", "Plamenný bič", "Mithrilový meč")
+                    foundGear = newWeapons.random()
+                    logs.add("🎁 VZÁCNÝ DROP: Získána zbraň '$foundGear'!")
+                }
+                currentWave++
+            }
+        }
+
+        if (teamHp > 0) {
+            logs.add("👑 Tým úspěšně přežil všech 10 vln arény! Publikum šílí.")
+        } else {
+            logs.add("☠️ Tvůj tým padl ve vlně $currentWave. Dívky musely být odtaženy zpět do komnat.")
+        }
+
+        logs.add("===========================")
+        logs.add("CELKOVÝ VÝSLEDEK EXPEDICE:")
+        logs.add("🏆 Celkem prestiže: +$prestigeGain")
+        
+        // Apply damage to individual girls
+        val damagePercentage = if (teamHp <= 0) 1.0f else 1.0f - (teamHp.toFloat() / girlsInTeam.sumOf { it.maxHp })
+        
+        updateState { state ->
+            val updatedGirls = state.characters.map { girl ->
+                if (girlIds.contains(girl.id)) {
+                    val individualDmg = (girl.maxHp * damagePercentage).toInt()
+                    girl.copy(hp = (girl.hp - individualDmg).coerceAtLeast(1))
+                } else girl
+            }
+            
+            val newPlayer = state.player.copy(prestige = state.player.prestige + prestigeGain)
+            if (foundGear != null) {
+                newPlayer.weapons.add(com.example.haremdark.models.Weapon(foundGear!!, "kratka", 25 + currentWave, 250, 1.0f, "Vzácná zbraň z Arény", 5))
+            }
+            
+            state.copy(
+                player = newPlayer,
+                characters = updatedGirls
+            )
+        }
+        
+        return logs
     }
 }

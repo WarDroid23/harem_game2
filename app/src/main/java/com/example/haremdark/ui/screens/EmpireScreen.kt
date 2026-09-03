@@ -10,6 +10,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.scale
+
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +41,8 @@ fun EmpireScreen(
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        DomainResourceBanner(gameState)
+
         // Tab Selector
         TabRow(
             selectedTabIndex = selectedTab,
@@ -217,7 +223,7 @@ fun BuildingsTab(gameState: GameSave, engine: GameEngine) {
 
 @Composable
 fun RentalsHubTab(gameState: GameSave) {
-    val rented = gameState.concubines.filter { it.naNajmu }
+    val rented = gameState.characters.filter { it.naNajmu }
 
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -251,7 +257,7 @@ fun RentalsHubTab(gameState: GameSave) {
                 }
             }
         } else {
-            items(rented) { concubine ->
+            items(rented) { character ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)),
                     shape = RoundedCornerShape(12.dp)
@@ -264,13 +270,13 @@ fun RentalsHubTab(gameState: GameSave) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text(concubine.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                            Text("Klient: ${concubine.klient ?: "Neznámý"}", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
-                            Text("Vyděláno celkem: ${concubine.najemPrijemCelkem} zlatých", fontSize = 11.sp, color = Color(0xFFFFD700))
+                            Text(character.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                            Text("Klient: ${character.klient ?: "Neznámý"}", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                            Text("Vyděláno celkem: ${character.najemPrijemCelkem} zlatých", fontSize = 11.sp, color = Color(0xFFFFD700))
                         }
                         Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFF3E2723)) {
                             Text(
-                                text = "Zbývá ${concubine.najemZbyvaDni} dní",
+                                text = "Zbývá ${character.najemZbyvaDni} dní",
                                 color = Color(0xFFFFB74D),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp,
@@ -281,5 +287,49 @@ fun RentalsHubTab(gameState: GameSave) {
                 }
             }
         }
+    }
+}
+
+@Composable
+fun AnimatedResourceItem(icon: String, name: String, value: Int, maxValue: Int? = null) {
+    var previousValue by remember { mutableIntStateOf(value) }
+    val scale = remember { Animatable(1f) }
+
+    LaunchedEffect(value) {
+        if (value != previousValue) {
+            scale.animateTo(1.2f, animationSpec = tween(150))
+            scale.animateTo(1f, animationSpec = tween(300))
+        }
+        previousValue = value
+    }
+
+    val displayValue = if (maxValue != null) "$value/$maxValue" else "$value"
+
+    Row(
+        modifier = Modifier
+            .scale(scale.value)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha=0.6f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(icon, fontSize = 14.sp)
+        Text(displayValue, color = MaterialTheme.colorScheme.onSurface, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun DomainResourceBanner(gameState: GameSave) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        AnimatedResourceItem("🪵", "Dřevo", gameState.player.wood)
+        AnimatedResourceItem("🪨", "Kamení", gameState.player.stone)
+        AnimatedResourceItem("⛓️", "Železo", gameState.player.iron)
+        AnimatedResourceItem("🔮", "Mana", gameState.player.mana, gameState.player.maxMana)
+        AnimatedResourceItem("👥", "Populace", gameState.player.population, gameState.player.maxPopulation)
     }
 }

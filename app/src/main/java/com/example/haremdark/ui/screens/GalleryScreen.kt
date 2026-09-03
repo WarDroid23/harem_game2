@@ -44,8 +44,8 @@ fun GalleryScreen(
     val filters = listOf("Všechny", "Odemčené", "Zamčené")
     var selectedEntry by remember { mutableStateOf<GalleryArchetypeEntry?>(null) }
 
-    val recruitedArchetypeIds = remember(gameState.concubines) {
-        gameState.concubines.map { it.archetypeId }.toSet()
+    val recruitedArchetypeIds = remember(gameState.characters) {
+        gameState.characters.map { it.archetypeId }.toSet()
     }
 
     val totalArchetypes = StaticData.GALLERY_ENTRIES.size
@@ -161,7 +161,7 @@ fun GalleryScreen(
         ) {
             items(displayedEntries) { entry ->
                 val isUnlocked = recruitedArchetypeIds.contains(entry.archetypeId)
-                val recruitedGirls = gameState.concubines.filter { it.archetypeId == entry.archetypeId }
+                val recruitedGirls = gameState.characters.filter { it.archetypeId == entry.archetypeId }
 
                 GalleryCard(
                     entry = entry,
@@ -177,7 +177,7 @@ fun GalleryScreen(
     // Detail Lore & Dossier Modal
     selectedEntry?.let { entry ->
         val isUnlocked = recruitedArchetypeIds.contains(entry.archetypeId)
-        val recruitedGirls = gameState.concubines.filter { it.archetypeId == entry.archetypeId }
+        val recruitedGirls = gameState.characters.filter { it.archetypeId == entry.archetypeId }
 
         GalleryDetailDialog(
             entry = entry,
@@ -396,7 +396,7 @@ fun GalleryCard(
 fun GalleryDetailDialog(
     entry: GalleryArchetypeEntry,
     isUnlocked: Boolean,
-    recruitedGirls: List<com.example.haremdark.models.Concubine>,
+    recruitedGirls: List<com.example.haremdark.models.Character>,
     onDismiss: () -> Unit,
     onGoToHarem: () -> Unit
 ) {

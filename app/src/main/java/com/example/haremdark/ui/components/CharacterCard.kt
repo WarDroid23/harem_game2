@@ -21,20 +21,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.haremdark.data.AffinityData
 import com.example.haremdark.data.StaticData
-import com.example.haremdark.models.Concubine
+import com.example.haremdark.models.Character
 
 @Composable
-fun ConcubineCard(
-    concubine: Concubine,
+fun CharacterCard(
+    character: Character,
     onInteractClick: () -> Unit,
     onDetailClick: () -> Unit,
     onFavoriteClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val loyaltyTier = StaticData.getLoyaltyTier(concubine.loajalita)
-    val archetype = StaticData.ARCHETYPES[concubine.archetypeId]
-    val phase = StaticData.DEGRADATION_PHASES[concubine.fazeZkazenosti]
-    val affinityTier = AffinityData.getTierForPoints(concubine.affinityPoints)
+    val loyaltyTier = StaticData.getLoyaltyTier(character.loajalita)
+    val archetype = StaticData.ARCHETYPES[character.archetypeId]
+    val phase = StaticData.DEGRADATION_PHASES[character.fazeZkazenosti]
+    val affinityTier = AffinityData.getTierForPoints(character.affinityPoints)
 
     Card(
         modifier = modifier
@@ -72,7 +72,7 @@ fun ConcubineCard(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = concubine.name.take(1),
+                            text = character.name.take(1),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
@@ -85,12 +85,12 @@ fun ConcubineCard(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = concubine.name,
+                                text = character.name,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            if (concubine.oblibena) {
+                            if (character.oblibena) {
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
                                     color = Color(0xFFFFD700).copy(alpha = 0.2f),
@@ -105,7 +105,7 @@ fun ConcubineCard(
                                     )
                                 }
                             }
-                            if (concubine.jeManzelkou) {
+                            if (character.jeManzelkou) {
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
                                     color = Color(0xFFE040FB).copy(alpha = 0.2f),
@@ -119,7 +119,7 @@ fun ConcubineCard(
                                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                                     )
                                 }
-                            } else if (concubine.partnerka) {
+                            } else if (character.partnerka) {
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
                                     color = Color(0xFFFF4081).copy(alpha = 0.2f)
@@ -136,7 +136,7 @@ fun ConcubineCard(
                         }
 
                         Text(
-                            text = "${archetype?.name ?: "Otrokyně"} • ${concubine.age} let • ${concubine.role}",
+                            text = "${archetype?.name ?: "Otrokyně"} • ${character.age} let • ${character.role}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
@@ -149,9 +149,9 @@ fun ConcubineCard(
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
-                        imageVector = if (concubine.oblibena) Icons.Default.Star else Icons.Default.StarBorder,
+                        imageVector = if (character.oblibena) Icons.Default.Star else Icons.Default.StarBorder,
                         contentDescription = "Oblíbenkyně",
-                        tint = if (concubine.oblibena) Color(0xFFFFD700) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                        tint = if (character.oblibena) Color(0xFFFFD700) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                     )
                 }
             }
@@ -180,7 +180,7 @@ fun ConcubineCard(
                         )
                         Column {
                             Text(
-                                text = "Fáze ${concubine.fazeZkazenosti}: ${phase?.name ?: "Čistá"}",
+                                text = "Fáze ${character.fazeZkazenosti}: ${phase?.name ?: "Čistá"}",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -209,7 +209,7 @@ fun ConcubineCard(
                                 .background(Color(loyaltyTier.colorHex))
                         )
                         Text(
-                            text = "${loyaltyTier.title} (${concubine.loajalita}%)",
+                            text = "${loyaltyTier.title} (${character.loajalita}%)",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(loyaltyTier.colorHex),
@@ -225,12 +225,12 @@ fun ConcubineCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                StatBadge("Touha", "${concubine.touha}%", Color(0xFFE91E63), Modifier.weight(1f))
-                StatBadge("Submisivita", "${concubine.submisivita}%", Color(0xFF00E5FF), Modifier.weight(1f))
-                StatBadge("Důvěra", "${concubine.duvera}%", Color(0xFF4CAF50), Modifier.weight(1f))
-                StatBadge("Strach", "${concubine.strach}%", Color(0xFFFF9800), Modifier.weight(1f))
-                if (concubine.broken > 0) {
-                    StatBadge("Zlomení", "${concubine.broken}%", Color(0xFF9C27B0), Modifier.weight(1f))
+                StatBadge("Touha", "${character.touha}%", Color(0xFFE91E63), Modifier.weight(1f))
+                StatBadge("Submisivita", "${character.submisivita}%", Color(0xFF00E5FF), Modifier.weight(1f))
+                StatBadge("Důvěra", "${character.duvera}%", Color(0xFF4CAF50), Modifier.weight(1f))
+                StatBadge("Strach", "${character.strach}%", Color(0xFFFF9800), Modifier.weight(1f))
+                if (character.broken > 0) {
+                    StatBadge("Zlomení", "${character.broken}%", Color(0xFF9C27B0), Modifier.weight(1f))
                 }
             }
 
@@ -254,7 +254,7 @@ fun ConcubineCard(
                         color = Color(affinityTier.colorHex)
                     )
                     Text(
-                        text = "• „${AffinityData.getRandomActiveDialogue(concubine.affinityPoints, concubine.archetypeId)}“",
+                        text = "• „${AffinityData.getRandomActiveDialogue(character.affinityPoints, character.archetypeId)}“",
                         fontSize = 10.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                         fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
@@ -266,7 +266,7 @@ fun ConcubineCard(
             }
 
             // Rental Status Banner if on rental
-            if (concubine.naNajmu) {
+            if (character.naNajmu) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
@@ -284,7 +284,7 @@ fun ConcubineCard(
                             modifier = Modifier.size(14.dp)
                         )
                         Text(
-                            text = "Na nájmu u: ${concubine.klient ?: "Klient"} (Zbývá ${concubine.najemZbyvaDni} dní)",
+                            text = "Na nájmu u: ${character.klient ?: "Klient"} (Zbývá ${character.najemZbyvaDni} dní)",
                             color = Color(0xFFFFB74D),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium
@@ -336,15 +336,15 @@ fun ConcubineCard(
 }
 
 @Composable
-fun ConcubineGridCard(
-    concubine: Concubine,
+fun CharacterGridCard(
+    character: Character,
     onClick: () -> Unit,
     onFavoriteClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val loyaltyTier = StaticData.getLoyaltyTier(concubine.loajalita)
-    val archetype = StaticData.ARCHETYPES[concubine.archetypeId]
-    val portraitRes = StaticData.getPortraitForArchetype(concubine.archetypeId)
+    val loyaltyTier = StaticData.getLoyaltyTier(character.loajalita)
+    val archetype = StaticData.ARCHETYPES[character.archetypeId]
+    val portraitRes = StaticData.getPortraitForArchetype(character.archetypeId)
 
     Card(
         modifier = modifier
@@ -362,7 +362,7 @@ fun ConcubineGridCard(
             // Character Portrait Image
             Image(
                 painter = androidx.compose.ui.res.painterResource(id = portraitRes),
-                contentDescription = concubine.name,
+                contentDescription = character.name,
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
@@ -394,7 +394,7 @@ fun ConcubineGridCard(
             ) {
                 // Status Badges Column
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    if (concubine.jeManzelkou) {
+                    if (character.jeManzelkou) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = Color(0xFFE040FB).copy(alpha = 0.9f)
@@ -407,7 +407,7 @@ fun ConcubineGridCard(
                                 modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                             )
                         }
-                    } else if (concubine.partnerka) {
+                    } else if (character.partnerka) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = Color(0xFFFF4081).copy(alpha = 0.9f)
@@ -422,13 +422,13 @@ fun ConcubineGridCard(
                         }
                     }
 
-                    if (concubine.tehotna) {
+                    if (character.tehotna) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = Color(0xFFFF80AB).copy(alpha = 0.9f)
                         ) {
                             Text(
-                                text = "🤰 Březí (${concubine.dnyTehotenstvi}d)",
+                                text = "🤰 Březí (${character.dnyTehotenstvi}d)",
                                 color = Color.Black,
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
@@ -437,13 +437,13 @@ fun ConcubineGridCard(
                         }
                     }
 
-                    if (concubine.naNajmu) {
+                    if (character.naNajmu) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = Color(0xFFFFB74D).copy(alpha = 0.95f)
                         ) {
                             Text(
-                                text = "💰 Nájem (${concubine.najemZbyvaDni}d)",
+                                text = "💰 Nájem (${character.najemZbyvaDni}d)",
                                 color = Color.Black,
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
@@ -461,9 +461,9 @@ fun ConcubineGridCard(
                         .background(Color(0x88000000), CircleShape)
                 ) {
                     Icon(
-                        imageVector = if (concubine.oblibena) Icons.Default.Star else Icons.Default.StarBorder,
+                        imageVector = if (character.oblibena) Icons.Default.Star else Icons.Default.StarBorder,
                         contentDescription = "Oblíbená",
-                        tint = if (concubine.oblibena) Color(0xFFFFD700) else Color.White,
+                        tint = if (character.oblibena) Color(0xFFFFD700) else Color.White,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -484,7 +484,7 @@ fun ConcubineGridCard(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = concubine.name,
+                            text = character.name,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
@@ -492,7 +492,7 @@ fun ConcubineGridCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "${archetype?.name ?: "Dívka"} • ${concubine.age} let",
+                            text = "${archetype?.name ?: "Dívka"} • ${character.age} let",
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFFE0E0E0),
                             fontSize = 10.sp
@@ -505,7 +505,7 @@ fun ConcubineGridCard(
                         border = androidx.compose.foundation.BorderStroke(1.dp, Color(loyaltyTier.colorHex))
                     ) {
                         Text(
-                            text = "${concubine.loajalita}% loajal.",
+                            text = "${character.loajalita}% loajal.",
                             color = Color(loyaltyTier.colorHex),
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
@@ -520,7 +520,7 @@ fun ConcubineGridCard(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     LinearProgressIndicator(
-                        progress = { (concubine.hp.toFloat() / concubine.maxHp.toFloat()).coerceIn(0f, 1f) },
+                        progress = { (character.hp.toFloat() / character.maxHp.toFloat()).coerceIn(0f, 1f) },
                         modifier = Modifier
                             .weight(1f)
                             .height(4.dp)
@@ -529,7 +529,7 @@ fun ConcubineGridCard(
                         trackColor = Color(0x44FFFFFF)
                     )
                     LinearProgressIndicator(
-                        progress = { (concubine.touha / 100f).coerceIn(0f, 1f) },
+                        progress = { (character.touha / 100f).coerceIn(0f, 1f) },
                         modifier = Modifier
                             .weight(1f)
                             .height(4.dp)
@@ -546,7 +546,7 @@ fun ConcubineGridCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Fáze ${concubine.fazeZkazenosti}/15",
+                        text = "Fáze ${character.fazeZkazenosti}/15",
                         fontSize = 9.sp,
                         color = Color(0xFFCE93D8),
                         fontWeight = FontWeight.Bold

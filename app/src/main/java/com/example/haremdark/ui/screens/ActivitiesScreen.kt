@@ -126,7 +126,7 @@ fun HuntingTab(gameState: GameSave, engine: GameEngine) {
 
                     Button(
                         onClick = {
-                            val (concubine, msg) = engine.hunt(locName)
+                            val (character, msg) = engine.hunt(locName)
                             Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -318,7 +318,7 @@ fun QuestsTab(gameState: GameSave, engine: GameEngine) {
         items(GameContent.QUESTS) { quest ->
             val completed = gameState.completedQuests.contains(quest.id)
             val levelOk = gameState.player.level >= quest.reqLevel
-            val concubinesOk = quest.reqConcubines == 0 || gameState.concubines.size >= quest.reqConcubines
+            val concubinesOk = quest.reqCharacters == 0 || gameState.characters.size >= quest.reqCharacters
 
             Card(
                 colors = CardDefaults.cardColors(

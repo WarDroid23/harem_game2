@@ -36,7 +36,7 @@ data class Quest(
     val description: String,
     val reqLevel: Int,
     val reqGold: Int = 0,
-    val reqConcubines: Int = 0,
+    val reqCharacters: Int = 0,
     val rewardGold: Int,
     val rewardXp: Int,
     val rewardDarkEnergy: Int = 0,
@@ -72,7 +72,10 @@ data class Building(
     var level: Int = 0,
     val name: String,
     val description: String,
-    val baseCost: Int = 150
+    val baseCost: Int = 150,
+    val baseCostWood: Int = 50,
+    val baseCostStone: Int = 20,
+    val baseCostIron: Int = 0
 )
 
 @Serializable
@@ -127,7 +130,7 @@ data class DomainLocation(
 )
 
 @Serializable
-data class Concubine(
+data class Character(
     val id: String,
     var name: String,
     var age: Int = 19,
@@ -172,7 +175,9 @@ data class Concubine(
     var klient: String? = null,
     var typNajmu: String? = null,
     var najemZbyvaDni: Int = 0,
-    var najemPrijemCelkem: Int = 0
+    var najemPrijemCelkem: Int = 0,
+    var inventory: MutableList<InventoryItem> = mutableListOf(),
+    var equippedWeapon: Weapon? = null
 )
 
 @Serializable
@@ -181,9 +186,17 @@ data class Player(
     var level: Int = 1,
     var xp: Int = 0,
     var xpNext: Int = 100,
+    var prestige: Int = 0,
+    var population: Int = 10,
+    var maxPopulation: Int = 50,
+    var mana: Int = 50,
+    var maxMana: Int = 100,
     var hp: Int = 100,
     var maxHp: Int = 100,
     var gold: Int = 500,
+    var wood: Int = 100,
+    var stone: Int = 50,
+    var iron: Int = 10,
     var sexEnergy: Int = 100,
     var darkEnergy: Int = 50,
     var maxSexEnergy: Int = 100,
@@ -273,12 +286,22 @@ data class DailyMission(
 )
 
 @Serializable
+data class PartyBuff(
+    val id: String,
+    val name: String,
+    val description: String,
+    var durationDays: Int,
+    val type: String, // e.g., "DAMAGE", "DEFENSE", "RESOURCE_BOOST"
+    val value: Int
+)
+
+@Serializable
 data class GameSave(
     val version: String = "22.1-dark",
     val saveDate: String,
     val slotNumber: Int,
     val player: Player,
-    val concubines: List<Concubine>,
+    val characters: List<Character>,
     val haremLevel: Int = 1,
     val haremExp: Int = 0,
     val haremMaxExp: Int = 100,
@@ -291,5 +314,6 @@ data class GameSave(
     val completedQuests: List<String> = emptyList(),
     val dailyMissions: List<DailyMission> = emptyList(),
     val lastMissionUpdateDay: Int = 0,
-    val gameLog: List<String> = emptyList()
+    val gameLog: List<String> = emptyList(),
+    val activeBuffs: List<PartyBuff> = emptyList()
 )

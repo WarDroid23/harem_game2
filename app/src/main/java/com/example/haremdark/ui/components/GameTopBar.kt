@@ -21,6 +21,7 @@ import com.example.haremdark.models.Player
 fun GameTopBar(
     player: Player,
     onRestClick: () -> Unit,
+    onQuickSaveClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -102,6 +103,22 @@ fun GameTopBar(
                                 fontSize = 13.sp
                             )
                         }
+                    }
+
+                    // Quick Save Button
+                    FilledTonalIconButton(
+                        onClick = onQuickSaveClick,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ),
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Save,
+                            contentDescription = "Rychlé uložení",
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
 
                     // Next Day / Rest Button

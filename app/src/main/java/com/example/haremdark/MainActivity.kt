@@ -48,7 +48,11 @@ class MainActivity : ComponentActivity() {
                     topBar = {
                         GameTopBar(
                             player = gameState.player,
-                            onRestClick = { showRestDialog = true }
+                            onRestClick = { showRestDialog = true },
+                            onQuickSaveClick = { 
+                                engine.quickSave()
+                                Toast.makeText(context, "⚡ Rychlé uložení dokončeno!", Toast.LENGTH_SHORT).show()
+                            }
                         )
                     },
                     bottomBar = {
@@ -60,7 +64,7 @@ class MainActivity : ComponentActivity() {
                                 NavigationDestination("Dominium", Icons.Default.Castle, "home"),
                                 NavigationDestination("Harém", Icons.Default.Favorite, "harem"),
                                 NavigationDestination("Mapa", Icons.Default.Map, "map"),
-                                NavigationDestination("Galerie", Icons.Default.Collections, "gallery"),
+                                NavigationDestination("Aréna", Icons.Default.Warning, "arena"),
                                 NavigationDestination("Pevnost", Icons.Default.LocationCity, "empire"),
                                 NavigationDestination("Aktivity", Icons.Default.Explore, "activities"),
                                 NavigationDestination("Pán", Icons.Default.Person, "progression"),
@@ -118,8 +122,8 @@ class MainActivity : ComponentActivity() {
                             composable("map") {
                                 WorldMapScreen(gameState = gameState, engine = engine)
                             }
-                            composable("gallery") {
-                                GalleryScreen(gameState = gameState, onNavigateToHarem = { navController.navigate("harem") })
+                            composable("arena") {
+                                ArenaScreen(gameState = gameState, engine = engine)
                             }
                             composable("empire") {
                                 EmpireScreen(gameState = gameState, engine = engine)

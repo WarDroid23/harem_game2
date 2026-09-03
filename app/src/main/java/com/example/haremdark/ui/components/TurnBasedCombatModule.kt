@@ -509,8 +509,8 @@ fun ActiveCombatView(
                                     buttonColor = Color(0xFF1565C0),
                                     onClick = { engine.executeCombatTurn("defend") }
                                 )
-                                val concubines = gameState.concubines
-                                val favorite = concubines.firstOrNull { it.oblibena } ?: concubines.firstOrNull { it.jeManzelkou } ?: concubines.firstOrNull()
+                                val characters = gameState.characters
+                                val favorite = characters.firstOrNull { it.oblibena } ?: characters.firstOrNull { it.jeManzelkou } ?: characters.firstOrNull()
                                 ActionRowButton(
                                     title = "Podpora harému (${favorite?.name ?: "Žádná"})",
                                     subtitle = "Oblíbenkyně ti dodá duševní sílu (+28 HP, +15 TE)",

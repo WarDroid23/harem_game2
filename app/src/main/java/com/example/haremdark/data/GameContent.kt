@@ -29,7 +29,7 @@ data class GameInteraction(
     val requiresWife: Boolean = false,
     val requiresFavorite: Boolean = false,
     val effectDescription: String,
-    val applyEffect: (Concubine, Player) -> String
+    val applyEffect: (Character, Player) -> String
 )
 
 object GameContent {
@@ -498,7 +498,7 @@ object GameContent {
             category = "Příběh",
             description = "Shromáždi ve své pevnosti alespoň 2 otrokyně a vybuduj Harémové komnaty.",
             reqLevel = 1,
-            reqConcubines = 2,
+            reqCharacters = 2,
             rewardGold = 250,
             rewardXp = 100,
             rewardReputation = 5
@@ -565,8 +565,8 @@ object GameContent {
     )
 
     fun createInitialSave(): GameSave {
-        val initialConcubines = listOf(
-            Concubine(
+        val initialCharacters = listOf(
+            Character(
                 id = "c_1",
                 name = "Valeria",
                 age = 21,
@@ -585,7 +585,7 @@ object GameContent {
                 fazeZkazenosti = 1,
                 role = "Urozená zajatkyně"
             ),
-            Concubine(
+            Character(
                 id = "c_2",
                 name = "Lilith",
                 age = 19,
@@ -608,6 +608,11 @@ object GameContent {
         )
 
         val buildings = listOf(
+            Building("drevohorec", 1, "Dřevorubecký tábor", "Produkuje 15 dřeva denně na každou úroveň.", 100, 0, 0, 0),
+            Building("kamenolom", 0, "Kamenolom", "Produkuje 10 kamení denně na každou úroveň.", 150, 50, 0, 0),
+            Building("zelezny_dul", 0, "Železný důl", "Produkuje 5 železa denně na každou úroveň.", 250, 100, 50, 0),
+            Building("chram_temnoty", 0, "Chrám temnoty", "Produkuje 5 many denně na každou úroveň a zvyšuje temnou energii.", 300, 100, 150, 20),
+            Building("ubytovny", 1, "Ubytovny pro poddané", "Zvyšuje maximální populaci o 20 a přidává růst populace.", 150, 100, 50, 0),
             Building("komnaty", 1, "Harémové komnaty", "Ubytování pro otrokyně a soukromé ložnice pána.", 150),
             Building("lazne", 1, "Voňavé lázně", "Regenerují HP otrokyň a zvyšují jejich vlhkost.", 200),
             Building("mucirna", 0, "Temná kobka & mučírna", "Zvyšuje efektivitu trestů a zisk temné energie.", 250),
@@ -627,7 +632,7 @@ object GameContent {
             saveDate = "Den 1 - Založení dominia",
             slotNumber = 1,
             player = Player(),
-            concubines = initialConcubines,
+            characters = initialCharacters,
             haremLevel = 1,
             haremExp = 25,
             haremMaxExp = 100,

@@ -38,7 +38,7 @@ import com.example.haremdark.R
 import com.example.haremdark.data.AffinityData
 import com.example.haremdark.data.StaticData
 import com.example.haremdark.domain.GameEngine
-import com.example.haremdark.models.Concubine
+import com.example.haremdark.models.Character
 import com.example.haremdark.models.GameSave
 import com.example.haremdark.models.InventoryItem
 
@@ -423,12 +423,12 @@ fun InventoryScreen(
 
     // --- GIFT SELECTION MODAL ---
     selectedItemForGift?.let { giftItem ->
-        GiftToConcubineModal(
+        GiftToCharacterModal(
             item = giftItem,
-            concubines = gameState.concubines,
+            characters = gameState.characters,
             onDismiss = { selectedItemForGift = null },
-            onSelectConcubine = { concubineId ->
-                val (success, msg) = engine.useItemOnConcubine(giftItem.id, concubineId)
+            onSelectCharacter = { characterId ->
+                val (success, msg) = engine.useItemOnConcubine(giftItem.id, characterId)
                 Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                 selectedItemForGift = null
             }
@@ -858,11 +858,11 @@ fun InventoryItemCard(
 }
 
 @Composable
-fun GiftToConcubineModal(
+fun GiftToCharacterModal(
     item: InventoryItem,
-    concubines: List<Concubine>,
+    characters: List<Character>,
     onDismiss: () -> Unit,
-    onSelectConcubine: (String) -> Unit
+    onSelectCharacter: (String) -> Unit
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -899,7 +899,7 @@ fun GiftToConcubineModal(
                     }
                 }
 
-                if (concubines.isEmpty()) {
+                if (characters.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text("V harému zatím nemáš žádné dívky.", color = Color.Gray)
                     }
@@ -908,15 +908,15 @@ fun GiftToConcubineModal(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(concubines) { concubine ->
-                            val tierInfo = AffinityData.getTierForPoints(concubine.affinityPoints)
-                            val archetype = StaticData.ARCHETYPES[concubine.archetypeId]
+                        items(characters) { character ->
+                            val tierInfo = AffinityData.getTierForPoints(character.affinityPoints)
+                            val archetype = StaticData.ARCHETYPES[character.archetypeId]
 
                             Card(
                                 shape = RoundedCornerShape(12.dp),
                                 colors = CardDefaults.cardColors(containerColor = Color(0xFF2C1A27)),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(tierInfo.colorHex).copy(alpha = 0.5f)),
-                                modifier = Modifier.fillMaxWidth().clickable { onSelectConcubine(concubine.id) }
+                                modifier = Modifier.fillMaxWidth().clickable { onSelectCharacter(character.id) }
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(10.dp),
@@ -940,18 +940,18 @@ fun GiftToConcubineModal(
 
                                         Column {
                                             Text(
-                                                text = concubine.name,
+                                                text = character.name,
                                                 fontWeight = FontWeight.Bold,
                                                 style = MaterialTheme.typography.titleSmall,
                                                 color = Color.White
                                             )
                                             Text(
-                                                text = "${archetype?.name ?: concubine.archetypeId} • Věk ${concubine.age}",
+                                                text = "${archetype?.name ?: character.archetypeId} • Věk ${character.age}",
                                                 fontSize = 10.sp,
                                                 color = Color(0xFFFF80AB)
                                             )
                                             Text(
-                                                text = "${tierInfo.title} (${concubine.affinityPoints} bodů)",
+                                                text = "${tierInfo.title} (${character.affinityPoints} bodů)",
                                                 fontSize = 9.sp,
                                                 color = Color(tierInfo.colorHex)
                                             )
@@ -959,7 +959,7 @@ fun GiftToConcubineModal(
                                     }
 
                                     Button(
-                                        onClick = { onSelectConcubine(concubine.id) },
+                                        onClick = { onSelectCharacter(character.id) },
                                         shape = RoundedCornerShape(8.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
                                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)

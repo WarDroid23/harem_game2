@@ -98,6 +98,35 @@ fun SaveSettingsScreen(
             Text("Ukládání a Načítání hry", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
 
+        // Quick Save info
+        item {
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f))
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Rychlé uložení (Quick Save)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                        Text(engine.getSlotSummary(99), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            val ok = engine.loadFromSlot(99)
+                            Toast.makeText(context, if (ok) "Rychlé uložení načteno!" else "Chyba načtení!", Toast.LENGTH_SHORT).show()
+                        },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
+                    ) {
+                        Text("Načíst", fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+
         // Autosave info
         item {
             Card(
@@ -180,12 +209,12 @@ fun SaveSettingsScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val totalKids = gameState.concubines.sumOf { it.deti }
-                    val totalWives = gameState.concubines.count { it.jeManzelkou }
-                    val totalRentEarned = gameState.concubines.sumOf { it.najemPrijemCelkem }
+                    val totalKids = gameState.characters.sumOf { it.deti }
+                    val totalWives = gameState.characters.count { it.jeManzelkou }
+                    val totalRentEarned = gameState.characters.sumOf { it.najemPrijemCelkem }
 
                     GlobalStatRow("Dnů vlády nad dominiem", "${gameState.player.day}")
-                    GlobalStatRow("Počet dívek v harému", "${gameState.concubines.size}")
+                    GlobalStatRow("Počet dívek v harému", "${gameState.characters.size}")
                     GlobalStatRow("Počet manželek", "$totalWives")
                     GlobalStatRow("Narozených dětí páně", "$totalKids")
                     GlobalStatRow("Poražených bossů", "${gameState.defeatedBosses.size}")

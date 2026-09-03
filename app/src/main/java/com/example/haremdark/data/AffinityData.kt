@@ -1,6 +1,6 @@
 package com.example.haremdark.data
 
-import com.example.haremdark.models.Concubine
+import com.example.haremdark.models.Character
 
 data class AffinityTierInfo(
     val level: Int,
@@ -127,9 +127,9 @@ object AffinityData {
         return Pair(currentInTier, tierSpan)
     }
 
-    fun getPassiveDialogues(concubine: Concubine): List<String> {
-        val tier = getLevelForPoints(concubine.affinityPoints)
-        val archetype = concubine.archetypeId
+    fun getPassiveDialogues(character: Character): List<String> {
+        val tier = getLevelForPoints(character.affinityPoints)
+        val archetype = character.archetypeId
 
         val baseDialogues = when (archetype) {
             "subka" -> when (tier) {
@@ -271,8 +271,8 @@ object AffinityData {
         return baseDialogues
     }
 
-    fun getRandomActiveDialogue(concubine: Concubine): String {
-        val list = getPassiveDialogues(concubine)
+    fun getRandomActiveDialogue(character: Character): String {
+        val list = getPassiveDialogues(character)
         return list.randomOrNull() ?: "„Můj pane, má oddanost patří jen tobě.“"
     }
 

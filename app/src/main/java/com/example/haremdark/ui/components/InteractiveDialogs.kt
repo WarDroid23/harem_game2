@@ -32,13 +32,13 @@ import com.example.haremdark.data.DirectGiftItem
 import com.example.haremdark.data.GameContent
 import com.example.haremdark.data.GameInteraction
 import com.example.haremdark.data.StaticData
-import com.example.haremdark.models.Concubine
+import com.example.haremdark.models.Character
 import com.example.haremdark.models.InventoryItem
 import com.example.haremdark.models.Player
 
 @Composable
-fun ConcubineDetailDialog(
-    concubine: Concubine,
+fun CharacterDetailDialog(
+    character: Character,
     player: Player,
     onDismiss: () -> Unit,
     onGiveDirectGift: (DirectGiftItem) -> Unit,
@@ -48,10 +48,10 @@ fun ConcubineDetailDialog(
     onMarry: () -> Unit,
     onRent: (String, Int) -> Unit
 ) {
-    val loyalty = StaticData.getLoyaltyTier(concubine.loajalita)
-    val archetype = StaticData.ARCHETYPES[concubine.archetypeId]
-    val phase = StaticData.DEGRADATION_PHASES[concubine.fazeZkazenosti]
-    val portraitRes = StaticData.getPortraitForArchetype(concubine.archetypeId)
+    val loyalty = StaticData.getLoyaltyTier(character.loajalita)
+    val archetype = StaticData.ARCHETYPES[character.archetypeId]
+    val phase = StaticData.DEGRADATION_PHASES[character.fazeZkazenosti]
+    val portraitRes = StaticData.getPortraitForArchetype(character.archetypeId)
 
     var selectedSection by remember { mutableIntStateOf(0) }
     val sectionTabs = listOf("📊 Profil", "💖 Náklonnost", "🎁 Dary", "⚡ Akce")
@@ -76,7 +76,7 @@ fun ConcubineDetailDialog(
                 ) {
                     Image(
                         painter = painterResource(id = portraitRes),
-                        contentDescription = concubine.name,
+                        contentDescription = character.name,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -116,12 +116,12 @@ fun ConcubineDetailDialog(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = concubine.name,
+                                text = character.name,
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
-                            if (concubine.oblibena) {
+                            if (character.oblibena) {
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
                                     color = Color(0xFFFFD700).copy(alpha = 0.85f)
@@ -135,7 +135,7 @@ fun ConcubineDetailDialog(
                                     )
                                 }
                             }
-                            if (concubine.jeManzelkou) {
+                            if (character.jeManzelkou) {
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
                                     color = Color(0xFFE040FB).copy(alpha = 0.85f)
@@ -152,7 +152,7 @@ fun ConcubineDetailDialog(
                         }
 
                         Text(
-                            text = "${archetype?.name ?: "Otrokyně"} • ${concubine.age} let • Fáze ${concubine.fazeZkazenosti}: ${phase?.name ?: "Poddajná"}",
+                            text = "${archetype?.name ?: "Otrokyně"} • ${character.age} let • Fáze ${character.fazeZkazenosti}: ${phase?.name ?: "Poddajná"}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Medium
@@ -189,16 +189,16 @@ fun ConcubineDetailDialog(
                         .padding(14.dp)
                 ) {
                     when (selectedSection) {
-                        0 -> ProfileAndStatsTab(concubine = concubine, loyaltyTier = loyalty, archetype = archetype, phase = phase)
-                        1 -> AffinityAndDialogueTab(concubine = concubine)
+                        0 -> ProfileAndStatsTab(character = character, loyaltyTier = loyalty, archetype = archetype, phase = phase)
+                        1 -> AffinityAndDialogueTab(character = character)
                         2 -> GiftingAndItemsTab(
-                            concubine = concubine,
+                            character = character,
                             player = player,
                             onGiveDirectGift = onGiveDirectGift,
                             onUseInventoryItem = onUseInventoryItem
                         )
                         3 -> InteractionsSectionTab(
-                            concubine = concubine,
+                            character = character,
                             player = player,
                             onExecuteInteraction = onExecuteInteraction,
                             onCourtRomance = onCourtRomance,
@@ -214,7 +214,7 @@ fun ConcubineDetailDialog(
 
 @Composable
 fun ProfileAndStatsTab(
-    concubine: Concubine,
+    character: Character,
     loyaltyTier: com.example.haremdark.models.LoyaltyTier,
     archetype: com.example.haremdark.models.CharacterArchetype?,
     phase: com.example.haremdark.models.DegradationPhase?
@@ -237,7 +237,7 @@ fun ProfileAndStatsTab(
                 Text("🎭 Archetyp: ${archetype?.name ?: "Dívka"}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 Text(archetype?.description ?: "Bez popisu", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-                Text("🔥 Fáze ${concubine.fazeZkazenosti}: ${phase?.name ?: ""}", fontWeight = FontWeight.Bold, color = Color(0xFFCE93D8))
+                Text("🔥 Fáze ${character.fazeZkazenosti}: ${phase?.name ?: ""}", fontWeight = FontWeight.Bold, color = Color(0xFFCE93D8))
                 Text(phase?.description ?: "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
             }
         }
@@ -257,10 +257,10 @@ fun ProfileAndStatsTab(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("👑 Stupeň oddanosti", fontWeight = FontWeight.Bold, color = Color(loyaltyTier.colorHex))
-                    Text("${loyaltyTier.title} (${concubine.loajalita}%)", fontWeight = FontWeight.Bold, color = Color(loyaltyTier.colorHex))
+                    Text("${loyaltyTier.title} (${character.loajalita}%)", fontWeight = FontWeight.Bold, color = Color(loyaltyTier.colorHex))
                 }
                 LinearProgressIndicator(
-                    progress = { (concubine.loajalita / 100f).coerceIn(0f, 1f) },
+                    progress = { (character.loajalita / 100f).coerceIn(0f, 1f) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(6.dp)
@@ -272,7 +272,7 @@ fun ProfileAndStatsTab(
         }
 
         // Quick Affinity Preview Card
-        val affinityTier = AffinityData.getTierForPoints(concubine.affinityPoints)
+        val affinityTier = AffinityData.getTierForPoints(character.affinityPoints)
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
             shape = RoundedCornerShape(12.dp)
@@ -293,17 +293,17 @@ fun ProfileAndStatsTab(
                         Text(affinityTier.icon, fontSize = 14.sp)
                         Text("Náklonnost k pánovi", fontWeight = FontWeight.Bold, color = Color(affinityTier.colorHex))
                     }
-                    Text("Úr. ${affinityTier.level} • ${affinityTier.title} (${concubine.affinityPoints} pts)", fontWeight = FontWeight.Bold, color = Color(affinityTier.colorHex), fontSize = 11.sp)
+                    Text("Úr. ${affinityTier.level} • ${affinityTier.title} (${character.affinityPoints} pts)", fontWeight = FontWeight.Bold, color = Color(affinityTier.colorHex), fontSize = 11.sp)
                 }
                 LinearProgressIndicator(
-                    progress = { (concubine.affinityPoints % 100 / 100f).coerceIn(0f, 1f) },
+                    progress = { (character.affinityPoints % 100 / 100f).coerceIn(0f, 1f) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(6.dp)
                         .clip(RoundedCornerShape(3.dp)),
                     color = Color(affinityTier.colorHex)
                 )
-                Text("💭 \"${AffinityData.getRandomActiveDialogue(concubine.affinityPoints, concubine.archetypeId)}\"", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f), fontWeight = FontWeight.Medium)
+                Text("💭 \"${AffinityData.getRandomActiveDialogue(character.affinityPoints, character.archetypeId)}\"", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f), fontWeight = FontWeight.Medium)
             }
         }
 
@@ -317,13 +317,13 @@ fun ProfileAndStatsTab(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                StatProgressBar("Životní síla (HP)", concubine.hp, concubine.maxHp, Color(0xFF4CAF50))
-                StatProgressBar("Touha a vzrušení", concubine.touha, 100, Color(0xFFE91E63))
-                StatProgressBar("Vlhkost a citlivost", concubine.vlhkost, 100, Color(0xFF00BCD4))
-                StatProgressBar("Poslušnost", concubine.poslusnost, 100, Color(0xFF00E5FF))
-                StatProgressBar("Submisivita", concubine.submisivita, 100, Color(0xFF9C27B0))
-                StatProgressBar("Důvěra k pánovi", concubine.duvera, 100, Color(0xFF8BC34A))
-                StatProgressBar("Strach a bázeň", concubine.strach, 100, Color(0xFFFF9800))
+                StatProgressBar("Životní síla (HP)", character.hp, character.maxHp, Color(0xFF4CAF50))
+                StatProgressBar("Touha a vzrušení", character.touha, 100, Color(0xFFE91E63))
+                StatProgressBar("Vlhkost a citlivost", character.vlhkost, 100, Color(0xFF00BCD4))
+                StatProgressBar("Poslušnost", character.poslusnost, 100, Color(0xFF00E5FF))
+                StatProgressBar("Submisivita", character.submisivita, 100, Color(0xFF9C27B0))
+                StatProgressBar("Důvěra k pánovi", character.duvera, 100, Color(0xFF8BC34A))
+                StatProgressBar("Strach a bázeň", character.strach, 100, Color(0xFFFF9800))
             }
         }
 
@@ -337,11 +337,11 @@ fun ProfileAndStatsTab(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                StatProgressBar("Zlomení vůle (Broken)", concubine.broken, 100, Color(0xFF7E57C2))
-                StatProgressBar("Ztráta rozumu (Mindbreak)", concubine.mindbreak, 100, Color(0xFFD32F2F))
-                StatProgressBar("Závislost na bolesti", concubine.painAddiction, 100, Color(0xFFFF5252))
-                StatProgressBar("Hladina ponížení", concubine.humiliation, 100, Color(0xFFFFA726))
-                StatProgressBar("Jizvy a stopy trestu", concubine.scarred, 100, Color(0xFF8D6E63))
+                StatProgressBar("Zlomení vůle (Broken)", character.broken, 100, Color(0xFF7E57C2))
+                StatProgressBar("Ztráta rozumu (Mindbreak)", character.mindbreak, 100, Color(0xFFD32F2F))
+                StatProgressBar("Závislost na bolesti", character.painAddiction, 100, Color(0xFFFF5252))
+                StatProgressBar("Hladina ponížení", character.humiliation, 100, Color(0xFFFFA726))
+                StatProgressBar("Jizvy a stopy trestu", character.scarred, 100, Color(0xFF8D6E63))
             }
         }
 
@@ -355,21 +355,21 @@ fun ProfileAndStatsTab(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                StatRow("Cejch pána na kůži", if (concubine.ownedMark) "🔥 Vypálen" else "Ne")
-                StatRow("Stav těhotenství", if (concubine.tehotna) "🤰 Březí (Den ${concubine.dnyTehotenstvi})" else "Ne")
-                StatRow("Narozené děti v dominiu", "👶 ${concubine.deti}")
-                StatRow("Stav nájmu", if (concubine.naNajmu) "💰 Pronajata (${concubine.klient})" else "V paláci")
+                StatRow("Cejch pána na kůži", if (character.ownedMark) "🔥 Vypálen" else "Ne")
+                StatRow("Stav těhotenství", if (character.tehotna) "🤰 Březí (Den ${character.dnyTehotenstvi})" else "Ne")
+                StatRow("Narozené děti v dominiu", "👶 ${character.deti}")
+                StatRow("Stav nájmu", if (character.naNajmu) "💰 Pronajata (${character.klient})" else "V paláci")
             }
         }
     }
 }
 
 @Composable
-fun AffinityAndDialogueTab(concubine: Concubine) {
-    val tier = AffinityData.getTierForPoints(concubine.affinityPoints)
+fun AffinityAndDialogueTab(character: Character) {
+    val tier = AffinityData.getTierForPoints(character.affinityPoints)
     val nextTier = AffinityData.TIERS.firstOrNull { it.level == tier.level + 1 }
     val progressInTier = if (nextTier != null) {
-        val currentSpan = (concubine.affinityPoints - tier.minPoints).toFloat()
+        val currentSpan = (character.affinityPoints - tier.minPoints).toFloat()
         val totalSpan = (nextTier.minPoints - tier.minPoints).toFloat()
         (currentSpan / totalSpan).coerceIn(0f, 1f)
     } else 1.0f
@@ -407,7 +407,7 @@ fun AffinityAndDialogueTab(concubine: Concubine) {
                                 color = Color(tier.colorHex)
                             )
                             Text(
-                                text = "Celkem bodů náklonnosti: ${concubine.affinityPoints} pts",
+                                text = "Celkem bodů náklonnosti: ${character.affinityPoints} pts",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
@@ -425,7 +425,7 @@ fun AffinityAndDialogueTab(concubine: Concubine) {
                 )
 
                 if (nextTier != null) {
-                    val ptsNeeded = nextTier.minPoints - concubine.affinityPoints
+                    val ptsNeeded = nextTier.minPoints - character.affinityPoints
                     Text(
                         text = "Do další úrovně (${nextTier.title}): zbývá $ptsNeeded bodů (daruj dary)",
                         fontSize = 11.sp,
@@ -443,7 +443,7 @@ fun AffinityAndDialogueTab(concubine: Concubine) {
         }
 
         // Active Speech Dialogue Card
-        val activeLine = AffinityData.getRandomActiveDialogue(concubine.affinityPoints, concubine.archetypeId)
+        val activeLine = AffinityData.getRandomActiveDialogue(character.affinityPoints, character.archetypeId)
         Card(
             colors = CardDefaults.cardColors(
                 containerColor = Color(tier.colorHex).copy(alpha = 0.12f)
@@ -510,7 +510,7 @@ fun AffinityAndDialogueTab(concubine: Concubine) {
         // Unlocked Dialogue Tree Breakdown
         Text("📜 Rejstřík pasivních dialogů:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
         AffinityData.TIERS.forEach { t ->
-            val isUnlocked = concubine.affinityPoints >= t.minPoints
+            val isUnlocked = character.affinityPoints >= t.minPoints
             Card(
                 colors = CardDefaults.cardColors(
                     containerColor = if (isUnlocked) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
@@ -575,12 +575,12 @@ fun AffinityAndDialogueTab(concubine: Concubine) {
 
 @Composable
 fun GiftingAndItemsTab(
-    concubine: Concubine,
+    character: Character,
     player: Player,
     onGiveDirectGift: (DirectGiftItem) -> Unit,
     onUseInventoryItem: (InventoryItem) -> Unit
 ) {
-    val affinityTier = AffinityData.getTierForPoints(concubine.affinityPoints)
+    val affinityTier = AffinityData.getTierForPoints(character.affinityPoints)
 
     Column(
         modifier = Modifier
@@ -614,7 +614,7 @@ fun GiftingAndItemsTab(
                     color = Color(affinityTier.colorHex).copy(alpha = 0.2f)
                 ) {
                     Text(
-                        text = "${affinityTier.icon} Úr. ${affinityTier.level} (${concubine.affinityPoints} pts)",
+                        text = "${affinityTier.icon} Úr. ${affinityTier.level} (${character.affinityPoints} pts)",
                         color = Color(affinityTier.colorHex),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
@@ -747,7 +747,7 @@ fun GiftingAndItemsTab(
 
 @Composable
 fun InteractionsSectionTab(
-    concubine: Concubine,
+    character: Character,
     player: Player,
     onExecuteInteraction: (GameInteraction) -> Unit,
     onCourtRomance: () -> Unit,
@@ -779,11 +779,11 @@ fun InteractionsSectionTab(
 
         Box(modifier = Modifier.weight(1f)) {
             when (subTab) {
-                0 -> InteractionList(GameContent.REWARDS, player, concubine, onExecuteInteraction)
-                1 -> InteractionList(GameContent.PUNISHMENTS, player, concubine, onExecuteInteraction)
-                2 -> InteractionList(GameContent.INTIMATE, player, concubine, onExecuteInteraction)
-                3 -> RelationshipsTab(concubine, player, onCourtRomance, onMarry)
-                4 -> RentalTab(concubine, onRent)
+                0 -> InteractionList(GameContent.REWARDS, player, character, onExecuteInteraction)
+                1 -> InteractionList(GameContent.PUNISHMENTS, player, character, onExecuteInteraction)
+                2 -> InteractionList(GameContent.INTIMATE, player, character, onExecuteInteraction)
+                3 -> RelationshipsTab(character, player, onCourtRomance, onMarry)
+                4 -> RentalTab(character, onRent)
             }
         }
     }
@@ -813,7 +813,7 @@ fun StatProgressBar(label: String, value: Int, max: Int, color: Color) {
 
 @Composable
 fun InteractionDialog(
-    concubine: Concubine,
+    character: Character,
     player: Player,
     onDismiss: () -> Unit,
     onExecuteInteraction: (GameInteraction) -> Unit,
@@ -821,8 +821,8 @@ fun InteractionDialog(
     onMarry: () -> Unit,
     onRent: (String, Int) -> Unit
 ) {
-    ConcubineDetailDialog(
-        concubine = concubine,
+    CharacterDetailDialog(
+        character = character,
         player = player,
         onDismiss = onDismiss,
         onGiveDirectGift = {},
@@ -838,7 +838,7 @@ fun InteractionDialog(
 fun InteractionList(
     interactions: List<GameInteraction>,
     player: Player,
-    concubine: Concubine,
+    character: Character,
     onExecute: (GameInteraction) -> Unit
 ) {
     LazyColumn(
@@ -849,9 +849,9 @@ fun InteractionList(
             val canAffordEnergy = player.sexEnergy >= interaction.energyCost
             val canAffordDark = player.darkEnergy >= interaction.darkCost
             val canAffordGold = player.gold >= interaction.goldCost
-            val phaseOk = concubine.fazeZkazenosti >= interaction.minPhase
-            val favOk = !interaction.requiresFavorite || concubine.oblibena
-            val wifeOk = !interaction.requiresWife || concubine.jeManzelkou
+            val phaseOk = character.fazeZkazenosti >= interaction.minPhase
+            val favOk = !interaction.requiresFavorite || character.oblibena
+            val wifeOk = !interaction.requiresWife || character.jeManzelkou
             val enabled = canAffordEnergy && canAffordDark && canAffordGold && phaseOk && favOk && wifeOk
 
             Card(
@@ -917,7 +917,7 @@ fun InteractionList(
 
                     if (interaction.minPhase > 0) {
                         Text(
-                            text = "Vyžaduje Fázi ${interaction.minPhase} (dívka má ${concubine.fazeZkazenosti})",
+                            text = "Vyžaduje Fázi ${interaction.minPhase} (dívka má ${character.fazeZkazenosti})",
                             fontSize = 10.sp,
                             color = if (phaseOk) Color(0xFF4CAF50) else Color(0xFFE53935)
                         )
@@ -940,7 +940,7 @@ fun InteractionList(
 
 @Composable
 fun RelationshipsTab(
-    concubine: Concubine,
+    character: Character,
     player: Player,
     onCourt: () -> Unit,
     onMarry: () -> Unit
@@ -958,12 +958,12 @@ fun RelationshipsTab(
             Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Romantické sbližování ♥", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "Stav romance: ${concubine.romanceBody}/100 body",
+                    "Stav romance: ${character.romanceBody}/100 body",
                     color = Color(0xFFFF4081),
                     fontWeight = FontWeight.Bold
                 )
                 LinearProgressIndicator(
-                    progress = { (concubine.romanceBody / 100f).coerceIn(0f, 1f) },
+                    progress = { (character.romanceBody / 100f).coerceIn(0f, 1f) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(6.dp)
@@ -977,7 +977,7 @@ fun RelationshipsTab(
                 )
                 Button(
                     onClick = onCourt,
-                    enabled = player.gold >= 50 && concubine.romanceBody < 100,
+                    enabled = player.gold >= 50 && character.romanceBody < 100,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Dvořit se & obdarovat (50 zlatých)", fontSize = 12.sp)
@@ -992,15 +992,15 @@ fun RelationshipsTab(
             Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Manželský svazek 💍", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    if (concubine.jeManzelkou) "Již je tvou oficiální Manželkou dominia!"
-                    else "Vyžaduje: 80 Romance (máš ${concubine.romanceBody}) & 70 Loajalita (máš ${concubine.loajalita}%) & 300 Zlata.",
+                    if (character.jeManzelkou) "Již je tvou oficiální Manželkou dominia!"
+                    else "Vyžaduje: 80 Romance (máš ${character.romanceBody}) & 70 Loajalita (máš ${character.loajalita}%) & 300 Zlata.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                 )
-                if (!concubine.jeManzelkou) {
+                if (!character.jeManzelkou) {
                     Button(
                         onClick = onMarry,
-                        enabled = concubine.romanceBody >= 80 && concubine.loajalita >= 70 && player.gold >= 300,
+                        enabled = character.romanceBody >= 80 && character.loajalita >= 70 && player.gold >= 300,
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9C27B0)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -1014,7 +1014,7 @@ fun RelationshipsTab(
 
 @Composable
 fun RentalTab(
-    concubine: Concubine,
+    character: Character,
     onRent: (String, Int) -> Unit
 ) {
     var selectedClient by remember { mutableStateOf("Místní měšťané") }
@@ -1036,9 +1036,9 @@ fun RentalTab(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        if (concubine.naNajmu) {
+        if (character.naNajmu) {
             Text(
-                "Dívka je v současnosti pronajata klientovi '${concubine.klient}'. Zbývá ${concubine.najemZbyvaDni} dní.",
+                "Dívka je v současnosti pronajata klientovi '${character.klient}'. Zbývá ${character.najemZbyvaDni} dní.",
                 color = Color(0xFFFFB74D),
                 fontWeight = FontWeight.Bold
             )
@@ -1099,7 +1099,7 @@ fun RentalTab(
             Button(
                 onClick = { onRent(selectedClient, selectedDays) },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = concubine.hp >= 40,
+                enabled = character.hp >= 40,
                 colors = ButtonDefaults.buttonColors(containerColor = if (selectedClient.contains("Inkviziční") || selectedClient.contains("Syndikát")) Color(0xFFC62828) else MaterialTheme.colorScheme.primary)
             ) {
                 Text("Odeslat na nájem", fontWeight = FontWeight.Bold)

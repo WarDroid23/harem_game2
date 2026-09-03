@@ -1,0 +1,87 @@
+    fun runArenaExpedition(girlIds: List<String>): List<String> {
+        val current = _gameState.value
+        val player = current.player
+        val logs = mutableListOf<String>()
+        var prestigeGain = 0
+        var foundGear: String? = null
+
+        val girlsInTeam = current.concubines.filter { girlIds.contains(it.id) }
+        
+        var teamHp = girlsInTeam.sumOf { it.hp }
+        val teamDmg = girlsInTeam.sumOf { (it.loajalita / 10) + (it.bloodlust / 5) + 5 }
+        val teamDefense = girlsInTeam.sumOf { it.poslusnost / 15 + 2 }
+
+        logs.add("⚔️ Aréna začíná! Tým dívek vstupuje na písek arény.")
+        logs.add("❤️ Počáteční zdraví týmu: $teamHp | ⚔️ Síla týmu: $teamDmg")
+
+        var currentWave = 1
+        var eHp = 0
+        var enemyDmg = 0
+
+        while (teamHp > 0 && currentWave <= 10) {
+            logs.add("--- Vlna $currentWave ---")
+            eHp = 20 + (currentWave * 25)
+            enemyDmg = 8 + (currentWave * 6)
+
+            while (eHp > 0 && teamHp > 0) {
+                // Team attacks
+                val dmgDealt = (teamDmg + (0..6).random()).coerceAtLeast(1)
+                eHp -= dmgDealt
+                
+                // Enemy attacks
+                if (eHp > 0) {
+                    val dmgTaken = (enemyDmg - teamDefense + (0..4).random()).coerceAtLeast(1)
+                    teamHp -= dmgTaken
+                }
+            }
+
+            if (teamHp > 0) {
+                logs.add("✅ Vlna $currentWave poražena! (Zbývá HP týmu: $teamHp)")
+                val gained = currentWave * 3
+                prestigeGain += gained
+                logs.add("🏆 Získáno +$gained prestiže.")
+
+                // Rare gear drop
+                if (foundGear == null && (0..100).random() < (currentWave * 4)) {
+                    val newWeapons = listOf("Krvavá kosa", "Stínová dýka smrti", "Plamenný bič", "Mithrilový meč")
+                    foundGear = newWeapons.random()
+                    logs.add("🎁 VZÁCNÝ DROP: Získána zbraň '$foundGear'!")
+                }
+                currentWave++
+            }
+        }
+
+        if (teamHp > 0) {
+            logs.add("👑 Tým úspěšně přežil všech 10 vln arény! Publikum šílí.")
+        } else {
+            logs.add("☠️ Tvůj tým padl ve vlně $currentWave. Dívky musely být odtaženy zpět do komnat.")
+        }
+
+        logs.add("===========================")
+        logs.add("CELKOVÝ VÝSLEDEK EXPEDICE:")
+        logs.add("🏆 Celkem prestiže: +$prestigeGain")
+        
+        // Apply damage to individual girls
+        val damagePercentage = if (teamHp <= 0) 1.0f else 1.0f - (teamHp.toFloat() / girlsInTeam.sumOf { it.maxHp })
+        
+        updateState { state ->
+            val updatedGirls = state.concubines.map { girl ->
+                if (girlIds.contains(girl.id)) {
+                    val individualDmg = (girl.maxHp * damagePercentage).toInt()
+                    girl.copy(hp = (girl.hp - individualDmg).coerceAtLeast(1))
+                } else girl
+            }
+            
+            val newPlayer = state.player.copy(prestige = state.player.prestige + prestigeGain)
+            if (foundGear != null) {
+                newPlayer.weapons.add(com.example.haremdark.models.Weapon(foundGear!!, "kratka", 25 + currentWave, 250, 1.0f, "Vzácná zbraň z Arény", 5))
+            }
+            
+            state.copy(
+                player = newPlayer,
+                concubines = updatedGirls
+            )
+        }
+        
+        return logs
+    }

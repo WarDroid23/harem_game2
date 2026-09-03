@@ -32,11 +32,15 @@ import androidx.compose.ui.unit.sp
 import com.example.haremdark.R
 import com.example.haremdark.data.GameContent
 import com.example.haremdark.domain.GameEngine
-import com.example.haremdark.models.Concubine
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModel
+import com.example.haremdark.viewmodels.HaremViewModel
+import com.example.haremdark.models.Character
 import com.example.haremdark.models.GameSave
-import com.example.haremdark.ui.components.ConcubineCard
-import com.example.haremdark.ui.components.ConcubineDetailDialog
-import com.example.haremdark.ui.components.ConcubineGridCard
+import com.example.haremdark.ui.components.CharacterCard
+import com.example.haremdark.ui.components.CharacterDetailDialog
+import com.example.haremdark.ui.components.CharacterGridCard
 import com.example.haremdark.ui.components.InteractionDialog
 
 @Composable
@@ -47,42 +51,26 @@ fun HaremScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var selectedHaremTab by remember { mutableIntStateOf(0) }
-    val haremTabs = listOf("🔲 Mřížka", "🛏️ Komnaty", "👑 Hierarchie", "👶 Dynastie", "👗 Garderóba", "🖼️ Galerie")
+    val haremViewModel: HaremViewModel = viewModel(
+        factory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return HaremViewModel(engine) as T
+            }
+        }
+    )
 
-    var selectedFilter by remember { mutableIntStateOf(0) }
+    val selectedHaremTab by haremViewModel.selectedHaremTab.collectAsState()
+    val selectedFilter by haremViewModel.selectedFilter.collectAsState()
+    val selectedSort by haremViewModel.selectedSort.collectAsState()
+    val searchQuery by haremViewModel.searchQuery.collectAsState()
+    val selectedCharacterForProfile by haremViewModel.selectedCharacterForProfile.collectAsState()
+    val selectedCharacterForInteraction by haremViewModel.selectedCharacterForInteraction.collectAsState()
+    val filteredList by haremViewModel.filteredList.collectAsState()
+
+    val haremTabs = listOf("🔲 Mřížka", "🛏️ Komnaty", "👑 Hierarchie", "👶 Dynastie", "👗 Garderóba", "📚 Archiv")
     val filters = listOf("Všechny", "★ Oblíbená", "💍 Vztahy", "💰 Na nájmu", "🤰 Březí")
-    
-    var selectedSort by remember { mutableStateOf("Náklonnost") }
     val sortOptions = listOf("Náklonnost", "Rarita", "Nedávno")
     var sortExpanded by remember { mutableStateOf(false) }
-
-    var searchQuery by remember { mutableStateOf("") }
-
-    var selectedConcubineForProfile by remember { mutableStateOf<Concubine?>(null) }
-    var selectedConcubineForInteraction by remember { mutableStateOf<Concubine?>(null) }
-
-    val filteredList = remember(gameState.concubines, selectedFilter, searchQuery, selectedSort) {
-        var list = when (selectedFilter) {
-            1 -> gameState.concubines.filter { it.oblibena }
-            2 -> gameState.concubines.filter { it.jeManzelkou || it.partnerka }
-            3 -> gameState.concubines.filter { it.naNajmu }
-            4 -> gameState.concubines.filter { it.tehotna }
-            else -> gameState.concubines
-        }
-        if (searchQuery.isNotBlank()) {
-            list = list.filter { it.name.contains(searchQuery, ignoreCase = true) || it.archetypeId.contains(searchQuery, ignoreCase = true) }
-        }
-        
-        when (selectedSort) {
-            "Náklonnost" -> list = list.sortedByDescending { it.affinityPoints }
-            "Rarita" -> list = list.sortedByDescending { it.rarity }
-            "Nedávno" -> list = list.sortedByDescending { it.lastInteractionDay }
-        }
-        
-        list
-    }
-
     Box(modifier = modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -103,7 +91,7 @@ fun HaremScreen(
                 haremTabs.forEachIndexed { index, title ->
                     Tab(
                         selected = selectedHaremTab == index,
-                        onClick = { selectedHaremTab = index },
+                        onClick = { haremViewModel.selectTab(index) },
                         text = {
                             Text(
                                 title,
@@ -115,7 +103,7 @@ fun HaremScreen(
                 }
             }
 
-            if (gameState.concubines.isEmpty()) {
+            if (gameState.characters.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxSize().padding(bottom = 60.dp),
                     contentAlignment = Alignment.Center
@@ -175,12 +163,12 @@ fun HaremScreen(
                         ) {
                             OutlinedTextField(
                                 value = searchQuery,
-                                onValueChange = { searchQuery = it },
+                                onValueChange = { haremViewModel.setSearchQuery(it) },
                                 placeholder = { Text("Hledat...", fontSize = 12.sp) },
                                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
                                 trailingIcon = {
                                     if (searchQuery.isNotEmpty()) {
-                                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(20.dp)) {
+                                        IconButton(onClick = { haremViewModel.setSearchQuery("") }, modifier = Modifier.size(20.dp)) {
                                             Icon(Icons.Default.Close, contentDescription = "Vymazat", modifier = Modifier.size(16.dp))
                                         }
                                     }
@@ -208,7 +196,7 @@ fun HaremScreen(
                                         DropdownMenuItem(
                                             text = { Text(option, fontWeight = if (selectedSort == option) FontWeight.Bold else FontWeight.Normal) },
                                             onClick = { 
-                                                selectedSort = option
+                                                haremViewModel.setSort(option)
                                                 sortExpanded = false
                                             }
                                         )
@@ -226,7 +214,7 @@ fun HaremScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("${gameState.concubines.size}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
+                                        Text("${gameState.characters.size}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
                                         Text("dívek", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                                     }
                                 }
@@ -243,7 +231,7 @@ fun HaremScreen(
                             filters.forEachIndexed { index, filter ->
                                 FilterChip(
                                     selected = selectedFilter == index,
-                                    onClick = { selectedFilter = index },
+                                    onClick = { haremViewModel.setFilter(index) },
                                     label = { Text(filter, fontSize = 11.sp, fontWeight = if (selectedFilter == index) FontWeight.Bold else FontWeight.Normal) },
                                     colors = FilterChipDefaults.filterChipColors(
                                         selectedContainerColor = MaterialTheme.colorScheme.primary,
@@ -292,12 +280,12 @@ fun HaremScreen(
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                                 contentPadding = PaddingValues(top = 2.dp, bottom = 90.dp)
                             ) {
-                                items(filteredList, key = { it.id }) { concubine ->
-                                    ConcubineGridCard(
-                                        concubine = concubine,
-                                        onClick = { selectedConcubineForProfile = concubine },
+                                items(filteredList, key = { it.id }) { character ->
+                                    CharacterGridCard(
+                                        character = character,
+                                        onClick = { haremViewModel.openProfile(character) },
                                         onFavoriteClick = {
-                                            val res = engine.setFavorite(concubine.id)
+                                            val res = engine.setFavorite(character.id)
                                             Toast.makeText(context, res, Toast.LENGTH_SHORT).show()
                                         }
                                     )
@@ -354,7 +342,7 @@ fun HaremScreen(
                                                     color = Color.White
                                                 )
                                                 Text(
-                                                    text = "${gameState.concubines.size} dívek",
+                                                    text = "${gameState.characters.size} dívek",
                                                     fontSize = 12.sp,
                                                     color = Color(0xFFFFD700),
                                                     fontWeight = FontWeight.Bold
@@ -393,7 +381,7 @@ fun HaremScreen(
                                 filters.forEachIndexed { index, filter ->
                                     FilterChip(
                                         selected = selectedFilter == index,
-                                        onClick = { selectedFilter = index },
+                                        onClick = { haremViewModel.setFilter(index) },
                                         label = { Text(filter, fontSize = 11.sp, fontWeight = if (selectedFilter == index) FontWeight.Bold else FontWeight.Normal) },
                                         colors = FilterChipDefaults.filterChipColors(
                                             selectedContainerColor = MaterialTheme.colorScheme.primary,
@@ -432,13 +420,13 @@ fun HaremScreen(
                                 }
                             }
                         } else {
-                            items(filteredList, key = { it.id }) { concubine ->
-                                ConcubineCard(
-                                    concubine = concubine,
-                                    onInteractClick = { selectedConcubineForProfile = concubine },
-                                    onDetailClick = { selectedConcubineForProfile = concubine },
+                            items(filteredList, key = { it.id }) { character ->
+                                CharacterCard(
+                                    character = character,
+                                    onInteractClick = { haremViewModel.openInteraction(character) },
+                                    onDetailClick = { haremViewModel.openProfile(character) },
                                     onFavoriteClick = {
-                                        val res = engine.setFavorite(concubine.id)
+                                        val res = engine.setFavorite(character.id)
                                         Toast.makeText(context, res, Toast.LENGTH_SHORT).show()
                                     }
                                 )
@@ -463,8 +451,8 @@ fun HaremScreen(
                 }
 
                 5 -> {
-                    // --- TAB 5: EMBEDDED GALLERY ---
-                    GalleryScreen(gameState = gameState)
+                    // --- TAB 5: EMBEDDED ARCHIVE ---
+                    HaremArchiveTab(gameState = gameState)
                 }
             }
             }
@@ -472,7 +460,7 @@ fun HaremScreen(
         }
 
         // Floating Action Button for Hunt (when on Grid or Chambers tab)
-        if (!gameState.concubines.isEmpty() && (selectedHaremTab == 0 || selectedHaremTab == 1)) {
+        if (!gameState.characters.isEmpty() && (selectedHaremTab == 0 || selectedHaremTab == 1)) {
             FloatingActionButton(
                 onClick = onNavigateToHunt,
                 modifier = Modifier
@@ -494,12 +482,12 @@ fun HaremScreen(
     }
 
     // Comprehensive Character Profile & Gifting Dialog
-    selectedConcubineForProfile?.let { concubine ->
-        val currentConcubine = gameState.concubines.firstOrNull { it.id == concubine.id } ?: concubine
-        ConcubineDetailDialog(
-            concubine = currentConcubine,
+    selectedCharacterForProfile?.let { character ->
+        val currentConcubine = gameState.characters.firstOrNull { it.id == character.id } ?: character
+        CharacterDetailDialog(
+            character = currentConcubine,
             player = gameState.player,
-            onDismiss = { selectedConcubineForProfile = null },
+            onDismiss = { haremViewModel.openProfile(null) },
             onGiveDirectGift = { gift ->
                 val (success, msg) = engine.giveDirectGift(gift.id, currentConcubine.id)
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
@@ -523,7 +511,7 @@ fun HaremScreen(
             onRent = { client, days ->
                 val (success, msg) = engine.rentSlave(currentConcubine.id, client, days)
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                if (success) selectedConcubineForProfile = null
+                if (success) haremViewModel.openProfile(null)
             }
         )
     }
@@ -532,7 +520,7 @@ fun HaremScreen(
 @Composable
 fun HaremHierarchyTab(gameState: GameSave, engine: GameEngine) {
     val context = LocalContext.current
-    val concubines = gameState.concubines
+    val characters = gameState.characters
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -557,10 +545,10 @@ fun HaremHierarchyTab(gameState: GameSave, engine: GameEngine) {
 
         // Rank categories
         val ranks = listOf(
-            Triple("👑 Vrchní favoritka & Družky", "Dívky s nejvyšším postavením, které tě provázejí a udělují požehnání.", concubines.filter { it.oblibena || it.jeManzelkou }),
-            Triple("💎 Důvěrnice & Konkubíny", "Věrné členky harému s vysokou loajalitou a vlivem.", concubines.filter { !it.oblibena && !it.jeManzelkou && it.loajalita >= 50 }),
-            Triple("🗝️ Komorné & Služebné", "Dívky plnící denní povinnosti v komnatách a paláci.", concubines.filter { !it.oblibena && !it.jeManzelkou && it.loajalita in 25..49 }),
-            Triple("⛓️ Pokorné otrokyně", "Nově ulovené nebo zkrocené dívky vyžadující další výcvik a poslušnost.", concubines.filter { !it.oblibena && !it.jeManzelkou && it.loajalita < 25 })
+            Triple("👑 Vrchní favoritka & Družky", "Dívky s nejvyšším postavením, které tě provázejí a udělují požehnání.", characters.filter { it.oblibena || it.jeManzelkou }),
+            Triple("💎 Důvěrnice & Konkubíny", "Věrné členky harému s vysokou loajalitou a vlivem.", characters.filter { !it.oblibena && !it.jeManzelkou && it.loajalita >= 50 }),
+            Triple("🗝️ Komorné & Služebné", "Dívky plnící denní povinnosti v komnatách a paláci.", characters.filter { !it.oblibena && !it.jeManzelkou && it.loajalita in 25..49 }),
+            Triple("⛓️ Pokorné otrokyně", "Nově ulovené nebo zkrocené dívky vyžadující další výcvik a poslušnost.", characters.filter { !it.oblibena && !it.jeManzelkou && it.loajalita < 25 })
         )
 
         ranks.forEach { (rankTitle, rankDesc, rankList) ->
@@ -627,8 +615,8 @@ fun HaremHierarchyTab(gameState: GameSave, engine: GameEngine) {
 @Composable
 fun HaremDynastyTab(gameState: GameSave, engine: GameEngine) {
     val context = LocalContext.current
-    val pregnantConcubines = gameState.concubines.filter { it.tehotna }
-    val totalChildren = gameState.concubines.sumOf { it.deti }
+    val pregnantConcubines = gameState.characters.filter { it.tehotna }
+    val totalChildren = gameState.characters.sumOf { it.deti }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -677,7 +665,7 @@ fun HaremDynastyTab(gameState: GameSave, engine: GameEngine) {
             }
         }
 
-        // Section: Currently pregnant concubines
+        // Section: Currently pregnant characters
         item {
             Text("Probíhající těhotenství v harému", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
         }
@@ -698,7 +686,7 @@ fun HaremDynastyTab(gameState: GameSave, engine: GameEngine) {
                 }
             }
         } else {
-            items(pregnantConcubines) { concubine ->
+            items(pregnantConcubines) { character ->
                 Card(
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f))
@@ -709,13 +697,13 @@ fun HaremDynastyTab(gameState: GameSave, engine: GameEngine) {
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("🤰 ${concubine.name}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("🤰 ${character.name}", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             Surface(shape = RoundedCornerShape(6.dp), color = Color(0xFFE91E63).copy(alpha = 0.2f)) {
-                                Text("Den těhotenství: ${concubine.dnyTehotenstvi}/9", fontSize = 10.sp, color = Color(0xFFE91E63), fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                Text("Den těhotenství: ${character.dnyTehotenstvi}/9", fontSize = 10.sp, color = Color(0xFFE91E63), fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                             }
                         }
 
-                        val progress = (concubine.dnyTehotenstvi.toFloat() / 9f).coerceIn(0f, 1f)
+                        val progress = (character.dnyTehotenstvi.toFloat() / 9f).coerceIn(0f, 1f)
                         LinearProgressIndicator(
                             progress = { progress },
                             modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
