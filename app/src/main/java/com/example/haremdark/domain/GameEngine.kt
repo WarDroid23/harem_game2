@@ -7,6 +7,7 @@ import com.example.haremdark.data.GameContent
 import com.example.haremdark.data.GameInteraction
 import com.example.haremdark.data.StaticData
 import com.example.haremdark.models.*
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,6 +36,13 @@ class GameEngine(private val context: Context) {
 
     init {
         _currentTheme.value = _gameState.value.currentTheme
+        
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            while (true) {
+                kotlinx.coroutines.delay(5 * 60 * 1000L) // 5 minut
+                autoSave()
+            }
+        }
         if (_gameState.value.dailyMissions.isEmpty() || _gameState.value.lastMissionUpdateDay != _gameState.value.player.day) {
             val day = _gameState.value.player.day
             val initMissions = listOf(
@@ -994,6 +1002,7 @@ class GameEngine(private val context: Context) {
             val logs = (listOf(msg) + state.gameLog).take(30)
             state.copy(player = p, buildings = updatedBuildings, gameLog = logs)
         }
+        autoSave()
         return Pair(true, msg)
     }
 
@@ -1022,6 +1031,7 @@ class GameEngine(private val context: Context) {
             val logs = (listOf(msg) + state.gameLog).take(30)
             state.copy(player = p, territories = updatedTerritories, gameLog = logs)
         }
+        autoSave()
         return Pair(true, msg)
     }
 
@@ -1745,6 +1755,7 @@ class GameEngine(private val context: Context) {
 
     fun endCombat() {
         _combatState.value = null
+        autoSave()
     }
 
     private fun addPlayerXp(amount: Int) {
@@ -1941,7 +1952,7 @@ class GameEngine(private val context: Context) {
                 characters = updatedGirls
             )
         }
-        
+        autoSave()
         return logs
     }
 }
