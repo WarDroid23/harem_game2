@@ -12,10 +12,18 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.encodeToString
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.util.*
 import kotlin.random.Random
+
+val Context.dataStore by preferencesDataStore(name = "harem_dark_saves")
 
 class GameEngine(private val context: Context) {
 
@@ -25,7 +33,7 @@ class GameEngine(private val context: Context) {
         encodeDefaults = true
     }
 
-    private val _gameState = MutableStateFlow(loadInitialState())
+    private val _gameState = MutableStateFlow(GameContent.createInitialSave())
     val gameState: StateFlow<GameSave> = _gameState.asStateFlow()
 
     private val _combatState = MutableStateFlow<CombatSession?>(null)
@@ -36,6 +44,16 @@ class GameEngine(private val context: Context) {
 
     init {
         _currentTheme.value = _gameState.value.currentTheme
+        
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            val savedState = loadStateSuspend("save_slot_autosave") 
+                ?: loadStateSuspend("save_slot_1")
+            
+            if (savedState != null) {
+                _gameState.value = savedState
+                _currentTheme.value = savedState.currentTheme
+            }
+        }
         
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             while (true) {
@@ -57,10 +75,12 @@ class GameEngine(private val context: Context) {
         }
     }
 
-    private fun loadInitialState(): GameSave {
-        val prefs = context.getSharedPreferences("harem_dark_prefs", Context.MODE_PRIVATE)
-        val savedJson = prefs.getString("save_slot_autosave", null)
-            ?: prefs.getString("save_slot_1", null)
+
+
+    private suspend fun loadStateSuspend(keyStr: String): GameSave? {
+        val key = stringPreferencesKey(keyStr)
+        val prefs = context.dataStore.data.first()
+        val savedJson = prefs[key]
         if (savedJson != null) {
             try {
                 return json.decodeFromString<GameSave>(savedJson)
@@ -68,7 +88,17 @@ class GameEngine(private val context: Context) {
                 e.printStackTrace()
             }
         }
-        return GameContent.createInitialSave()
+        return null
+    }
+
+    private fun saveStateAsync(keyStr: String, state: GameSave) {
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            val key = stringPreferencesKey(keyStr)
+            val str = json.encodeToString(state)
+            context.dataStore.edit { prefs ->
+                prefs[key] = str
+            }
+        }
     }
 
     fun updateState(transform: (GameSave) -> GameSave) {
@@ -1901,27 +1931,18 @@ class GameEngine(private val context: Context) {
             saveDate = "Den ${state.player.day} - ${state.characters.size} dívek"
         )
         _gameState.value = current
-        val str = json.encodeToString(current)
-        val prefs = context.getSharedPreferences("harem_dark_prefs", Context.MODE_PRIVATE)
-        prefs.edit().putString("save_slot_$slot", str).apply()
+        saveStateAsync("save_slot_$slot", current)
         addLog("💾 Hra byla uložena do slotu $slot.")
         return true
     }
 
-    fun loadFromSlot(slot: Int): Boolean {
-        val prefs = context.getSharedPreferences("harem_dark_prefs", Context.MODE_PRIVATE)
+    suspend fun loadFromSlotSuspend(slot: Int): Boolean {
         val key = when(slot) { 0 -> "save_slot_autosave"; 99 -> "save_slot_quicksave"; else -> "save_slot_$slot" }
-        val str = prefs.getString(key, null) ?: return false
-        return try {
-            val loaded = json.decodeFromString<GameSave>(str)
-            _gameState.value = loaded
-            _currentTheme.value = loaded.currentTheme
-            addLog("📂 Hra načtena ze slotu $slot.")
-            true
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
-        }
+        val loaded = loadStateSuspend(key) ?: return false
+        _gameState.value = loaded
+        _currentTheme.value = loaded.currentTheme
+        addLog("📂 Hra načtena ze slotu $slot.")
+        return true
     }
 
     fun autoSave() {
@@ -1930,9 +1951,7 @@ class GameEngine(private val context: Context) {
             slotNumber = 0,
             saveDate = "Den ${state.player.day} (Autosave)"
         )
-        val str = json.encodeToString(current)
-        val prefs = context.getSharedPreferences("harem_dark_prefs", Context.MODE_PRIVATE)
-        prefs.edit().putString("save_slot_autosave", str).apply()
+        saveStateAsync("save_slot_autosave", current)
     }
 
     fun quickSave() {
@@ -1941,22 +1960,14 @@ class GameEngine(private val context: Context) {
             slotNumber = 99,
             saveDate = "Den ${state.player.day} (Quick Save)"
         )
-        val str = json.encodeToString(current)
-        val prefs = context.getSharedPreferences("harem_dark_prefs", Context.MODE_PRIVATE)
-        prefs.edit().putString("save_slot_quicksave", str).apply()
+        saveStateAsync("save_slot_quicksave", current)
         addLog("⚡ Rychlé uložení dokončeno.")
     }
 
-    fun getSlotSummary(slot: Int): String {
-        val prefs = context.getSharedPreferences("harem_dark_prefs", Context.MODE_PRIVATE)
+    suspend fun getSlotSummary(slot: Int): String {
         val key = when(slot) { 0 -> "save_slot_autosave"; 99 -> "save_slot_quicksave"; else -> "save_slot_$slot" }
-        val str = prefs.getString(key, null) ?: return "Prázdný slot"
-        return try {
-            val save = json.decodeFromString<GameSave>(str)
-            "Den ${save.player.day} | ${save.player.gold} zlata | Harém: ${save.characters.size} dívek"
-        } catch (e: Exception) {
-            "Poškozená data"
-        }
+        val save = loadStateSuspend(key) ?: return "Prázdný slot"
+        return "Den ${save.player.day} | ${save.player.gold} zlata | Harém: ${save.characters.size} dívek"
     }
     fun runArenaExpedition(girlIds: List<String>): List<String> {
         val current = _gameState.value

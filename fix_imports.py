@@ -1,13 +1,19 @@
-with open('app/src/main/java/com/example/haremdark/ui/screens/EmpireScreen.kt', 'r') as f:
-    text = f.read()
+import re
+import os
 
-imports_to_add = """import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
-import androidx.compose.ui.draw.scale
-"""
+files = [
+    'app/src/main/java/com/example/haremdark/ui/components/InteractiveDialogs.kt',
+    'app/src/main/java/com/example/haremdark/ui/screens/ArchiveTab.kt',
+    'app/src/main/java/com/example/haremdark/ui/screens/WorldMapScreen.kt'
+]
 
-if "import androidx.compose.animation.core.Animatable" not in text:
-    text = text.replace("import androidx.compose.runtime.*", "import androidx.compose.runtime.*\n" + imports_to_add)
-
-with open('app/src/main/java/com/example/haremdark/ui/screens/EmpireScreen.kt', 'w') as f:
-    f.write(text)
+for file in files:
+    with open(file, 'r') as f:
+        text = f.read()
+    
+    # ensure exactly one ContentScale import
+    text = re.sub(r'import androidx\.compose\.ui\.layout\.ContentScale\n?', '', text)
+    text = text.replace("import androidx.compose.ui.unit.sp", "import androidx.compose.ui.unit.sp\nimport androidx.compose.ui.layout.ContentScale")
+    
+    with open(file, 'w') as f:
+        f.write(text)

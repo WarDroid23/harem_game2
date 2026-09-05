@@ -20,12 +20,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.window.Dialog
 import com.example.haremdark.data.AffinityData
 import com.example.haremdark.data.DirectGiftItem
@@ -76,11 +79,40 @@ fun CharacterDetailDialog(
                         .fillMaxWidth()
                         .height(140.dp)
                 ) {
-                    Image(
-                        painter = painterResource(id = portraitRes),
+                    SubcomposeAsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(portraitRes)
+                            .crossfade(true)
+                            .build(),
                         contentDescription = character.name,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        loading = {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                            }
+                        },
+                        error = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Fallback",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                    modifier = Modifier.size(64.dp)
+                                )
+                            }
+                        }
                     )
                     Box(
                         modifier = Modifier

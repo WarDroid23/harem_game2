@@ -19,6 +19,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
 import com.example.haremdark.data.AffinityData
 import com.example.haremdark.data.StaticData
 import com.example.haremdark.models.Character
@@ -64,22 +69,49 @@ fun CharacterCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Avatar Placeholder with Initial
-                    Box(
+                    // Avatar with Coil
+                    val portraitRes = StaticData.getPortraitForArchetype(character.archetypeId)
+                    SubcomposeAsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(portraitRes)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = character.name,
+                        contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
                             .border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = character.name.take(1),
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                        loading = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    strokeWidth = 2.dp
+                                )
+                            }
+                        },
+                        error = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = character.name.take(1),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    )
 
                     Column {
                         Row(
@@ -388,12 +420,41 @@ fun CharacterGridCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // Character Portrait Image
-            Image(
-                painter = androidx.compose.ui.res.painterResource(id = portraitRes),
+            // Character Portrait Image with Coil
+            SubcomposeAsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(portraitRes)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = character.name,
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+                loading = {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+                },
+                error = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Fallback",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                            modifier = Modifier.size(64.dp)
+                        )
+                    }
+                }
             )
 
             // Dynamic Gradient Scrim

@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,6 +33,13 @@ fun SaveSettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val summaries = remember { mutableStateMapOf<Int, String>() }
+    LaunchedEffect(Unit) {
+        summaries[99] = summaries[99] ?: "Načítání..."
+        summaries[0] = summaries[0] ?: "Načítání..."
+        for (i in 1..5) summaries[i] = engine.getSlotSummary(i)
+    }
     val themes = listOf(
         "Temné dominium" to Color(0xFFB71C1C),
         "Krvavý trůn" to Color(0xFFD32F2F),
@@ -111,12 +119,14 @@ fun SaveSettingsScreen(
                 ) {
                     Column {
                         Text("Rychlé uložení (Quick Save)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                        Text(engine.getSlotSummary(99), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
+                        Text(summaries[99] ?: "Načítání...", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f))
                     }
                     OutlinedButton(
                         onClick = {
-                            val ok = engine.loadFromSlot(99)
-                            Toast.makeText(context, if (ok) "Rychlé uložení načteno!" else "Chyba načtení!", Toast.LENGTH_SHORT).show()
+                            coroutineScope.launch {
+                                val ok = engine.loadFromSlotSuspend(99)
+                                Toast.makeText(context, if (ok) "Slot 99 načten!" else "Slot je prázdný!", Toast.LENGTH_SHORT).show()
+                            }
                         },
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
@@ -140,12 +150,14 @@ fun SaveSettingsScreen(
                 ) {
                     Column {
                         Text("Slot 0: Automatické uložení", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                        Text(engine.getSlotSummary(0), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                        Text(summaries[0] ?: "Načítání...", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                     }
                     OutlinedButton(
                         onClick = {
-                            val ok = engine.loadFromSlot(0)
-                            Toast.makeText(context, if (ok) "Autosave načten!" else "Chyba načtení!", Toast.LENGTH_SHORT).show()
+                            coroutineScope.launch {
+                                val ok = engine.loadFromSlotSuspend(0)
+                                Toast.makeText(context, if (ok) "Slot 0 načten!" else "Slot je prázdný!", Toast.LENGTH_SHORT).show()
+                            }
                         },
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                     ) {
@@ -168,13 +180,16 @@ fun SaveSettingsScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Slot $slot", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                        Text(engine.getSlotSummary(slot), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                        Text(summaries[slot] ?: "Načítání...", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
                     }
 
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Button(
                             onClick = {
                                 engine.saveToSlot(slot)
+                                coroutineScope.launch {
+                                    summaries[slot] = engine.getSlotSummary(slot)
+                                }
                                 Toast.makeText(context, "Hra uložena do slotu $slot!", Toast.LENGTH_SHORT).show()
                             },
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
@@ -185,8 +200,10 @@ fun SaveSettingsScreen(
 
                         OutlinedButton(
                             onClick = {
-                                val ok = engine.loadFromSlot(slot)
-                                Toast.makeText(context, if (ok) "Slot $slot načten!" else "Slot je prázdný!", Toast.LENGTH_SHORT).show()
+                                coroutineScope.launch {
+                                val ok = engine.loadFromSlotSuspend(slot)
+                                Toast.makeText(context, if (ok) "Slot slot načten!" else "Slot je prázdný!", Toast.LENGTH_SHORT).show()
+                            }
                             },
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                             shape = RoundedCornerShape(8.dp)
