@@ -655,6 +655,20 @@ class GameEngine(private val context: Context) {
 
         addLog(message)
         updateState { it.copy() }
+        
+        if (character.affinityPoints >= 100 || character.oblibena || character.jeManzelkou) {
+            val lines = listOf(
+                "Můj pane, tvá vůle je mým zákonem.",
+                "Cokoliv si budeš přát.",
+                "Jsem jen a jen tvá, můj vládce.",
+                "Miluji tě, můj temný pane.",
+                "Moje tělo i duše patří jen tobě.",
+                "Jsem připravena na všechno, co si žádáš.",
+                "Z tvých rukou přijmu cokoliv."
+            )
+            com.example.haremdark.domain.VoiceManager.speak(lines.random())
+        }
+        
         return Pair(true, message)
     }
 
@@ -1453,19 +1467,37 @@ class GameEngine(private val context: Context) {
     }
 
     // --- COMBAT SYSTEM ---
-    fun startBossCombat(boss: Boss) {
-        val player = _gameState.value.player
+    fun startBossCombat(boss: Boss, characterId: String? = null) {
+        val current = _gameState.value
+        val player = current.player
+        
+        var fighterName = "Pán Dominia"
+        var fighterHp = player.hp
+        var fighterMaxHp = player.maxHp
+        
+        if (characterId != null) {
+            val char = current.characters.firstOrNull { it.id == characterId }
+            if (char != null) {
+                val hpBonus = char.equipment.values.filterNotNull().sumOf { it.hpBonus }
+                fighterName = char.name
+                fighterHp = char.hp
+                fighterMaxHp = char.maxHp + hpBonus
+            }
+        }
+        
         val initialEntry = CombatLogEntry(
             turn = 1,
             type = "system",
-            message = "⚔️ Vstoupil jsi do arény proti: ${boss.name} (${boss.phaseName})!"
+            message = "⚔️ $fighterName vstupuje do boje proti: ${boss.name} (${boss.phaseName})!"
         )
+        
         _combatState.value = CombatSession(
             boss = boss,
             bossHp = boss.hp,
             bossMaxHp = boss.maxHp,
-            playerHp = player.hp,
-            playerMaxHp = player.maxHp,
+            playerHp = fighterHp,
+            playerMaxHp = fighterMaxHp,
+            deployedCharacterId = characterId,
             turnCount = 1,
             isDefending = false,
             enemyBleedTurns = 0,
@@ -1483,80 +1515,83 @@ class GameEngine(private val context: Context) {
         val session = _combatState.value ?: return
         if (session.isOver) return
 
-        val player = _gameState.value.player
-        val weapon = player.weapons.getOrNull(player.equippedWeaponIndex) ?: player.weapons.firstOrNull() ?: Weapon("Pěsti temnoty", "kratka", 10, 0)
+        val currentGameState = _gameState.value
+        val player = currentGameState.player
+        
+        var weaponDamage = 10
+        var weaponName = "Holé pěsti"
+        var combatSkill = player.skills["boj"] ?: 0
+        var defenseSkill = player.skills["obrana"] ?: 0
+        
+        if (session.deployedCharacterId != null) {
+            val char = currentGameState.characters.firstOrNull { it.id == session.deployedCharacterId }
+            if (char != null) {
+                combatSkill = char.skills["combat"] ?: 0
+                defenseSkill = char.skills["defense"] ?: 0
+                
+                val combatBonus = char.equipment.values.filterNotNull().sumOf { it.combatBonus }
+                val defBonus = char.equipment.values.filterNotNull().sumOf { it.defenseBonus }
+                
+                combatSkill += combatBonus
+                defenseSkill += defBonus
+                
+                val eqWeapon = char.equipment["weapon"]
+                if (eqWeapon != null) {
+                    weaponDamage = eqWeapon.combatBonus
+                    weaponName = eqWeapon.name
+                }
+            }
+        } else {
+            val weapon = player.weapons.getOrNull(player.equippedWeaponIndex) ?: player.weapons.firstOrNull() ?: Weapon("Pěsti temnoty", "kratka", 10, 0)
+            weaponDamage = weapon.damage
+            weaponName = weapon.name
+        }
+        
         var newBossHp = session.bossHp
         var newPlayerHp = session.playerHp
         var newPlayerDark = player.darkEnergy
+        
         var newBleedTurns = session.enemyBleedTurns
         var newStunned = session.enemyStunned
         var isDefending = false
         var activeBuff = session.activeBuff
+        
         val newLogEntries = session.logEntries.toMutableList()
         val currentTurn = session.turnCount
+        
         var isOver = false
         var victory = false
         var lootInfo: String? = null
-
+        
         // 1. Process Player Action
-        val level5Count = _gameState.value.characters.count { it.affinityLevel >= 5 }
+        val level5Count = currentGameState.characters.count { it.affinityLevel >= 5 }
         val playerMultiplier = 1.0f + (0.25f * level5Count)
 
         when (action) {
             "attack", "slash" -> {
-                val isCrit = Random.nextInt(100) < (15 + (player.skills["boj"] ?: 0) * 2)
+                val isCrit = Random.nextInt(100) < (15 + combatSkill * 2)
                 val critMultiplier = if (isCrit) 1.65f else 1.0f
-                val rawDmg = weapon.damage + (player.skills["boj"] ?: 0) * 3 + Random.nextInt(-2, 5)
+                val rawDmg = weaponDamage + combatSkill * 3 + Random.nextInt(-2, 5)
                 val finalDmg = (((rawDmg - (session.boss.defense * 0.35f)) * critMultiplier) * playerMultiplier).toInt().coerceAtLeast(6)
                 newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
                 val critText = if (isCrit) " 💥 KRITICKÝ ZÁSAH!" else ""
                 newLogEntries.add(0, CombatLogEntry(
                     turn = currentTurn,
                     type = if (isCrit) "player_attack" else "player_attack",
-                    message = "🗡️ Sek zbraní ${weapon.name} udělil $finalDmg poškození!$critText"
+                    message = "🗡️ Útok pomocí $weaponName udělil $finalDmg poškození!$critText"
                 ))
             }
             "heavy_strike" -> {
                 val isCrit = Random.nextInt(100) < 25
                 val multiplier = if (isCrit) 2.2f else 1.5f
-                val rawDmg = (weapon.damage * 1.5f) + (player.skills["boj"] ?: 0) * 4 + Random.nextInt(2, 10)
+                val rawDmg = (weaponDamage * 1.5f) + combatSkill * 4 + Random.nextInt(2, 10)
                 val finalDmg = (((rawDmg - (session.boss.defense * 0.25f)) * multiplier) * playerMultiplier).toInt().coerceAtLeast(12)
                 newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
                 newLogEntries.add(0, CombatLogEntry(
                     turn = currentTurn,
-                    type = "player_attack",
-                    message = "⚡ Těžký drtivý úder zasadil $finalDmg drtivého poškození!" + (if (isCrit) " ⭐ Zničující dopad!" else "")
+                    type = "player_special",
+                    message = "⚔️ Těžký útok ubral ${finalDmg} HP!"
                 ))
-            }
-            "bleed_strike" -> {
-                val rawDmg = weapon.damage + (player.skills["boj"] ?: 0) * 2 + Random.nextInt(0, 4)
-                val finalDmg = ((rawDmg - (session.boss.defense * 0.3f)) * playerMultiplier).toInt().coerceAtLeast(5)
-                newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
-                newBleedTurns = 3
-                newLogEntries.add(0, CombatLogEntry(
-                    turn = currentTurn,
-                    type = "player_attack",
-                    message = "🩸 Krvavé bodnutí způsobilo $finalDmg zranění a otevřelo hluboké krvácející rány (3 kola)!"
-                ))
-            }
-            "dark_burst" -> {
-                if (player.darkEnergy >= 10) {
-                    player.darkEnergy -= 10
-                    newPlayerDark = player.darkEnergy
-                    val darkDmg = ((38 + (player.skills["temnota"] ?: 0) * 6 + (weapon.darkBonus) + Random.nextInt(2, 12)) * playerMultiplier).toInt()
-                    newBossHp = (newBossHp - darkDmg).coerceAtLeast(0)
-                    newLogEntries.add(0, CombatLogEntry(
-                        turn = currentTurn,
-                        type = "player_spell",
-                        message = "🔮 Temný výboj zasáhl cíl magickou silou za $darkDmg stínového poškození (-10 Temné energie)."
-                    ))
-                } else {
-                    newLogEntries.add(0, CombatLogEntry(
-                        turn = currentTurn,
-                        type = "system",
-                        message = "❌ Nemáš dostatek temné energie na výboj (vyžaduje 10)!"
-                    ))
-                }
             }
             "curse_shadow" -> {
                 if (player.darkEnergy >= 15) {
@@ -1708,7 +1743,29 @@ class GameEngine(private val context: Context) {
             player.gold += session.boss.rewardGold
             addPlayerXp(session.boss.rewardXp)
             player.killCount += 1
-            lootInfo = "+${session.boss.rewardGold} zlatých • +${session.boss.rewardXp} XP"
+            
+            var droppedItem: com.example.haremdark.models.InventoryItem? = null
+            if (Random.nextInt(100) < 35) { // 35% chance to drop item
+                val possibleDrops = listOf(
+                    com.example.haremdark.models.InventoryItem("hojivy_balzam", "Hojivý balzám", "Okamžitě uzdravuje 45 HP.", 1, 25, "combat", "🧪", "Běžný", "+45 HP", null, 0, 0, 0),
+                    com.example.haremdark.models.InventoryItem("krvavy_mec", "Krvavý meč", "Zvyšuje útok.", 1, 100, "equipment", "🗡️", "Vzácný", "+15 Boj", "weapon", 15, 0, 0),
+                    com.example.haremdark.models.InventoryItem("stribrna_zbroj", "Stříbrná zbroj", "Zvyšuje obranu.", 1, 120, "equipment", "🛡️", "Vzácný", "+10 Obrana", "armor", 0, 10, 0)
+                )
+                droppedItem = possibleDrops.random()
+                val items = player.items.toMutableList()
+                val existingItemIdx = items.indexOfFirst { it.id == droppedItem.id }
+                if (existingItemIdx != -1) {
+                    val ei = items[existingItemIdx]
+                    items[existingItemIdx] = ei.copy(count = ei.count + 1)
+                } else {
+                    items.add(droppedItem)
+                }
+                player.items = items
+            }
+            
+            val itemDropStr = if (droppedItem != null) " • Nalezeno: ${droppedItem.name}" else ""
+            lootInfo = "+${session.boss.rewardGold} zlatých • +${session.boss.rewardXp} XP$itemDropStr"
+            
             newLogEntries.add(0, CombatLogEntry(
                 turn = currentTurn,
                 type = "victory",
@@ -1728,7 +1785,7 @@ class GameEngine(private val context: Context) {
             } else {
                 val isSpecialAttack = (currentTurn % 3 == 0)
                 val baseEnemyAtk = session.boss.attack
-                val defenseReduction = (player.skills["obrana"] ?: 0) * 2
+                val defenseReduction = defenseSkill * 2.5f
 
                 val rawBossDmg = if (isSpecialAttack) {
                     (baseEnemyAtk * 1.45f).toInt() + Random.nextInt(1, 6)
@@ -1736,7 +1793,7 @@ class GameEngine(private val context: Context) {
                     baseEnemyAtk + Random.nextInt(-2, 4)
                 }
 
-                var finalEnemyDmg = (rawBossDmg - defenseReduction).coerceAtLeast(4)
+                var finalEnemyDmg = (rawBossDmg - defenseReduction).coerceAtLeast(4f).toInt()
                 finalEnemyDmg = (finalEnemyDmg * (1.0f / playerMultiplier)).toInt()
                 if (isDefending) {
                     finalEnemyDmg = (finalEnemyDmg * 0.35f).toInt().coerceAtLeast(2)
@@ -1759,18 +1816,27 @@ class GameEngine(private val context: Context) {
                 if (newPlayerHp <= 0) {
                     isOver = true
                     victory = false
-                    newPlayerHp = 25
+                    newPlayerHp = if (session.deployedCharacterId != null) 1 else 25
+                    val msgName = if (session.deployedCharacterId != null) "Tvá dívka padla v boji" else "Byl jsi v boji poražen"
                     newLogEntries.add(0, CombatLogEntry(
                         turn = currentTurn,
                         type = "defeat",
-                        message = "💀 Byl jsi v boji poražen! Tví poddaní tě odnesli zpět do bezpečí pevnosti."
+                        message = "💀 $msgName! Odnášíte zraněné do bezpečí pevnosti."
                     ))
-                    addLog("💀 Pán utrpěl porážku v boji proti ${session.boss.name}!")
+                    addLog("💀 Porážka v boji proti ${session.boss.name}!")
                 }
             }
         }
 
-        player.hp = newPlayerHp
+        if (session.deployedCharacterId != null) {
+            val updatedCharacters = currentGameState.characters.map { c ->
+                if (c.id == session.deployedCharacterId) c.copy(hp = newPlayerHp) else c
+            }
+            updateState { it.copy(characters = updatedCharacters) }
+        } else {
+            player.hp = newPlayerHp
+        }
+        
         _combatState.value = session.copy(
             bossHp = newBossHp,
             playerHp = newPlayerHp,
@@ -2232,6 +2298,85 @@ class GameEngine(private val context: Context) {
         }
         if (success) autoSave()
         return Pair(success, msg)
+    }
+
+
+    fun equipItemToCharacter(characterId: String, itemId: String, slotId: String) {
+        updateState { current ->
+            val player = current.player
+            val itemIndex = player.items.indexOfFirst { it.id == itemId && it.count > 0 }
+            if (itemIndex == -1) return@updateState current
+            
+            val itemToEquip = player.items[itemIndex]
+            
+            val updatedCharacters = current.characters.map { char ->
+                if (char.id == characterId) {
+                    val currentEquipped = char.equipment[slotId]
+                    
+                    // Put old item back in inventory if exists
+                    val newItems = player.items.toMutableList()
+                    if (currentEquipped != null) {
+                        val existingItemIdx = newItems.indexOfFirst { it.id == currentEquipped.id }
+                        if (existingItemIdx != -1) {
+                            val ei = newItems[existingItemIdx]
+                            newItems[existingItemIdx] = ei.copy(count = ei.count + 1)
+                        } else {
+                            newItems.add(currentEquipped.copy(count = 1))
+                        }
+                    }
+                    
+                    // Remove 1 from inventory for the new item
+                    val newEquipIdx = newItems.indexOfFirst { it.id == itemId }
+                    val ne = newItems[newEquipIdx]
+                    if (ne.count > 1) {
+                        newItems[newEquipIdx] = ne.copy(count = ne.count - 1)
+                    } else {
+                        newItems.removeAt(newEquipIdx)
+                    }
+                    
+                    // Equip
+                    val newEquipMap = char.equipment.toMutableMap()
+                    newEquipMap[slotId] = itemToEquip.copy(count = 1)
+                    
+                    current.player.items = newItems
+                    
+                    char.copy(equipment = newEquipMap)
+                } else char
+            }
+            current.copy(characters = updatedCharacters)
+        }
+        autoSave()
+    }
+    
+    fun unequipItemFromCharacter(characterId: String, slotId: String) {
+        updateState { current ->
+            val player = current.player
+            val updatedCharacters = current.characters.map { char ->
+                if (char.id == characterId) {
+                    val currentEquipped = char.equipment[slotId]
+                    if (currentEquipped != null) {
+                        val newItems = player.items.toMutableList()
+                        val existingItemIdx = newItems.indexOfFirst { it.id == currentEquipped.id }
+                        if (existingItemIdx != -1) {
+                            val ei = newItems[existingItemIdx]
+                            newItems[existingItemIdx] = ei.copy(count = ei.count + 1)
+                        } else {
+                            newItems.add(currentEquipped.copy(count = 1))
+                        }
+                        
+                        val newEquipMap = char.equipment.toMutableMap()
+                        newEquipMap[slotId] = null
+                        
+                        current.player.items = newItems
+                        char.copy(equipment = newEquipMap)
+                    } else {
+                        char
+                    }
+                } else char
+            }
+            current.copy(characters = updatedCharacters)
+        }
+        autoSave()
     }
 
 }

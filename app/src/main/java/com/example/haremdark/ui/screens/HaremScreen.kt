@@ -284,6 +284,10 @@ fun HaremScreen(
                                     CharacterGridCard(
                                         character = character,
                                         onClick = { haremViewModel.openProfile(character) },
+                                        onPinClick = {
+                                            val (success, res) = engine.togglePin(character.id)
+                                            Toast.makeText(context, res, Toast.LENGTH_SHORT).show()
+                                        },
                                         onFavoriteClick = {
                                             val res = engine.setFavorite(character.id)
                                             Toast.makeText(context, res, Toast.LENGTH_SHORT).show()
@@ -425,6 +429,10 @@ fun HaremScreen(
                                     character = character,
                                     onInteractClick = { haremViewModel.openInteraction(character) },
                                     onDetailClick = { haremViewModel.openProfile(character) },
+                                    onPinClick = {
+                                        val (success, res) = engine.togglePin(character.id)
+                                        Toast.makeText(context, res, Toast.LENGTH_SHORT).show()
+                                    },
                                     onFavoriteClick = {
                                         val res = engine.setFavorite(character.id)
                                         Toast.makeText(context, res, Toast.LENGTH_SHORT).show()

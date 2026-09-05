@@ -368,6 +368,7 @@ fun CharacterGridCard(
     character: Character,
     onClick: () -> Unit,
     onFavoriteClick: () -> Unit,
+    onPinClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val loyaltyTier = StaticData.getLoyaltyTier(character.loajalita)

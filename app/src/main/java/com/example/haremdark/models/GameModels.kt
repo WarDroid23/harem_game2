@@ -60,10 +60,14 @@ data class InventoryItem(
     val description: String,
     var count: Int = 1,
     val price: Int = 10,
-    val category: String = "potion", // "gift", "combat", "potion", "consumable", "quest", "artifact", "key", "alchemy"
+    val category: String = "potion", // "equipment", "gift", "combat", "potion", "consumable", "quest", "artifact", "key", "alchemy"
     val icon: String = "📦",
     val rarity: String = "Běžný", // "Běžný", "Vzácný", "Epický", "Legendární"
-    val effectDescription: String = ""
+    val effectDescription: String = "",
+    val equipSlot: String? = null, // "weapon", "armor", "accessory"
+    val combatBonus: Int = 0,
+    val defenseBonus: Int = 0,
+    val hpBonus: Int = 0
 )
 
 @Serializable
@@ -182,7 +186,9 @@ data class Character(
     var xp: Int = 0,
     var skillPoints: Int = 0,
     var skills: MutableMap<String, Int> = mutableMapOf("combat" to 0, "defense" to 0, "production" to 0, "rental" to 0),
-    var equippedWeapon: Weapon? = null
+    var equippedWeapon: Weapon? = null,
+    var equipment: MutableMap<String, InventoryItem?> = mutableMapOf("weapon" to null, "armor" to null, "accessory" to null)
+
 )
 
 
@@ -289,6 +295,9 @@ data class CombatSession(
     val bossMaxHp: Int,
     var playerHp: Int,
     val playerMaxHp: Int,
+    var deployedCharacterId: String? = null, // ID of the harem character deployed
+    var wave: Int = 1, // Waves of enemies
+    var maxWaves: Int = 1,
     var turnCount: Int = 1,
     var isDefending: Boolean = false,
     var enemyBleedTurns: Int = 0,
