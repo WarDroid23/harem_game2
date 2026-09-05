@@ -165,6 +165,7 @@ data class Character(
     var partnerka: Boolean = false,
     var jeManzelkou: Boolean = false,
     var oblibena: Boolean = false,
+    var isPinned: Boolean = false,
     var romanceBody: Int = 0,
     var affinityPoints: Int = 15,
     var affinityLevel: Int = 1,
@@ -177,8 +178,35 @@ data class Character(
     var najemZbyvaDni: Int = 0,
     var najemPrijemCelkem: Int = 0,
     var inventory: MutableList<InventoryItem> = mutableListOf(),
+    var level: Int = 1,
+    var xp: Int = 0,
+    var skillPoints: Int = 0,
+    var skills: MutableMap<String, Int> = mutableMapOf("combat" to 0, "defense" to 0, "production" to 0, "rental" to 0),
     var equippedWeapon: Weapon? = null
 )
+
+
+@Serializable
+data class Achievement(
+    val id: String,
+    val title: String,
+    val description: String,
+    val badgeIcon: String,
+    val isTitle: Boolean = false
+)
+
+object AchievementList {
+    val allAchievements = listOf(
+        Achievement("ach_harem_10", "Sběratel krásy", "Získej alespoň 10 dívek do svého harému.", "👥", true),
+        Achievement("ach_harem_20", "Pán harému", "Shromáždi ohromných 20 dívek ve svém harému.", "👑", true),
+        Achievement("ach_affinity_total", "Casanova podsvětí", "Dosáhni celkové náklonnosti (Affinity) 250 napříč harémem.", "💖", true),
+        Achievement("ach_boss_slayer", "Ničitel bossů", "Poraz alespoň 3 bosse ve výpravách.", "💀", true),
+        Achievement("ach_arena_champion", "Král Arény", "Dostaň tvou dívku na úroveň 10 pomocí arénových bojů.", "⚔️", true),
+        Achievement("ach_wealthy", "Midasův dotek", "Našetři alespoň 10 000 zlatých.", "💰", true),
+        Achievement("ach_domain_max", "Temný vládce", "Vylepši svou Pevnost na úroveň 5.", "🏰", true),
+        Achievement("ach_blood_sister", "Krvavá přísaha", "Získej dívku se vztahem 'Krvavá sestra'.", "🩸", true)
+    )
+}
 
 @Serializable
 data class Player(
@@ -221,6 +249,8 @@ data class Player(
     var cityTitle: String = "Neznámý vládce",
     var inquisitionInfluence: Int = 15,
     var equippedWeaponIndex: Int = 0,
+    var activeTitle: String? = null,
+    var unlockedAchievements: MutableList<String> = mutableListOf(),
     var weapons: MutableList<Weapon> = mutableListOf(
         Weapon("Dýka ze stříbra", "kratka", 15, 100),
         Weapon("Bič z dračí kůže", "bic", 25, 250)
@@ -315,5 +345,37 @@ data class GameSave(
     val dailyMissions: List<DailyMission> = emptyList(),
     val lastMissionUpdateDay: Int = 0,
     val gameLog: List<String> = emptyList(),
-    val activeBuffs: List<PartyBuff> = emptyList()
+    val activeBuffs: List<PartyBuff> = emptyList(),
+    val resourceHistory: List<DailyResourceStat> = emptyList()
 )
+
+@Serializable
+data class DailyResourceStat(
+    val day: Int,
+    val goldProduced: Int,
+    val manaProduced: Int,
+    val woodProduced: Int,
+    val stoneProduced: Int,
+    val ironProduced: Int
+)
+
+
+enum class RelStatus(val title: String, val buffType: String, val buffValue: Float, val description: String) {
+    BLOOD_SISTER("Krvavá sestra", "COMBAT_DMG", 0.15f, "+15% k poškození v boji (aktivní v aréně)"),
+    DEVOTED("Oddaná", "GLOBAL_RES", 0.05f, "+5% ke globální produkci surovin"),
+    IN_LOVE("Zamilovaná", "MORALE_RES", 0.10f, "+10% šance na pozitivní noční eventy a rychlé hojení"),
+    BROKEN("Zlomená otrokyně", "OBEDIENCE", 0.20f, "+20% zisk zlata ze všech pronájmů, nižší obrana"),
+    OBEDIENT("Poslušná", "RESOURCE", 0.02f, "+2% ke globální produkci surovin"),
+    REBELLIOUS("Rebelující", "PENALTY", -0.10f, "-10% poškození v boji"),
+    NEUTRAL("Neutrální", "NONE", 0f, "Žádný zvláštní efekt")
+}
+
+fun Character.getRelationship(): RelStatus {
+    if (fazeZkazenosti >= 5 && bloodlust >= 50) return RelStatus.BLOOD_SISTER
+    if (loajalita >= 80 && duvera >= 80 && romanceBody >= 50) return RelStatus.DEVOTED
+    if (oblibena || (romanceBody >= 30 && loajalita > 50)) return RelStatus.IN_LOVE
+    if (strach >= 70 && broken >= 40) return RelStatus.BROKEN
+    if (poslusnost >= 60 && strach >= 40) return RelStatus.OBEDIENT
+    if (loajalita <= 30 && strach <= 30) return RelStatus.REBELLIOUS
+    return RelStatus.NEUTRAL
+}

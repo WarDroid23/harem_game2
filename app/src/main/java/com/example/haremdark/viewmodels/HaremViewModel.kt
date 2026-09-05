@@ -48,9 +48,9 @@ class HaremViewModel(private val engine: GameEngine) : ViewModel() {
         }
 
         when (sort) {
-            "Náklonnost" -> list = list.sortedByDescending { it.affinityPoints }
-            "Rarita" -> list = list.sortedByDescending { it.rarity }
-            "Nedávno" -> list = list.sortedByDescending { it.lastInteractionDay }
+            "Náklonnost" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.affinityPoints })
+            "Rarita" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.rarity })
+            "Nedávno" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.lastInteractionDay })
         }
         list
     }.stateIn(

@@ -512,6 +512,10 @@ fun HaremScreen(
                 val (success, msg) = engine.rentSlave(currentConcubine.id, client, days)
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                 if (success) haremViewModel.openProfile(null)
+            },
+            onUpgradeSkill = { skill ->
+                val (success, msg) = engine.upgradeCharacterSkill(currentConcubine.id, skill)
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
             }
         )
     }

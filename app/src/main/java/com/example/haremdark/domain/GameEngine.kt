@@ -335,14 +335,26 @@ class GameEngine(private val context: Context) {
                 globalIncomeMultiplier += (resourceBuffs / 100f)
             }
             
+            // Add Relationship Buffs
+            var relResMultiplier = 0.0f
+            var skillResMultiplier = 0.0f
+            current.characters.forEach { c ->
+                val rel = c.getRelationship()
+                if (rel == com.example.haremdark.models.RelStatus.DEVOTED) relResMultiplier += rel.buffValue
+                if (rel == com.example.haremdark.models.RelStatus.OBEDIENT) relResMultiplier += rel.buffValue
+                skillResMultiplier += (c.skills["production"] ?: 0) * 0.02f
+            }
+            globalIncomeMultiplier += relResMultiplier + skillResMultiplier
+            
             val totalPassiveGold = (basePassiveGold * globalIncomeMultiplier).toInt()
 
             // Process slave rentals
             var rentalIncome = 0
             val updatedCharacters = current.characters.map { c ->
                 val copy = c.copy()
+                val rel = copy.getRelationship()
                 if (copy.naNajmu) {
-                    val dailyIncome = when (copy.klient) {
+                    var dailyIncome = when (copy.klient) {
                         "Místní měšťané" -> 10
                         "Cech bohatých kupců" -> 30
                         "Šlechtický dvůr" -> 50
@@ -355,6 +367,12 @@ class GameEngine(private val context: Context) {
                         "Inkviziční legie" -> 25
                         else -> 0
                     }
+                    
+                    if (rel == com.example.haremdark.models.RelStatus.BROKEN) {
+                        dailyIncome = (dailyIncome * (1.0f + rel.buffValue)).toInt()
+                    }
+                    dailyIncome += (copy.skills["rental"] ?: 0) * 15
+                    
                     if (dmg > 0) {
                         copy.hp = (copy.hp - dmg).coerceAtLeast(0)
                         if (copy.hp == 0) {
@@ -379,7 +397,9 @@ class GameEngine(private val context: Context) {
                     }
                 } else if (copy.hp > 0) {
                     val bathLevel = current.buildings.firstOrNull { it.type == "lazne" }?.level ?: 0
-                    copy.hp = (copy.hp + 10 + bathLevel * 5).coerceAtMost(copy.maxHp)
+                    var healAmount = 10 + bathLevel * 5
+                    if (rel == com.example.haremdark.models.RelStatus.IN_LOVE) healAmount += (copy.maxHp * rel.buffValue).toInt()
+                    copy.hp = (copy.hp + healAmount).coerceAtMost(copy.maxHp)
                 }
 
                 // Pregnancy progress
@@ -419,6 +439,18 @@ class GameEngine(private val context: Context) {
                         // Apply Domain Resources
             val modifiedYield = yield.copy(gold = totalPassiveGold + rentalIncome)
             resourceManager.applyYield(p, modifiedYield)
+            
+            // Record production history
+            val newStat = DailyResourceStat(
+                day = newDay,
+                goldProduced = modifiedYield.gold,
+                manaProduced = modifiedYield.mana,
+                woodProduced = modifiedYield.wood,
+                stoneProduced = modifiedYield.stone,
+                ironProduced = modifiedYield.iron
+            )
+            val newHistory = (current.resourceHistory + newStat).takeLast(14) // Keep last 14 days
+
             if (yield.wood > 0 || yield.stone > 0 || yield.iron > 0 || yield.mana > 0) {
                 addLog("🏘️ Dominium vyprodukovalo: +${yield.wood} dreva, +${yield.stone} kameni, +${yield.iron} zeleza, +${yield.mana} many. Populace vzrostla o ${yield.populationGrowth}.")
             }
@@ -446,7 +478,9 @@ class GameEngine(private val context: Context) {
             var bondingLog: String? = null
 
             // Random Bonding Event
-            if (updatedCharacters.size >= 2 && Math.random() < 0.3) {
+            val inLoveCount = updatedCharacters.count { it.getRelationship() == com.example.haremdark.models.RelStatus.IN_LOVE }
+            val bondingChance = 0.3 + (inLoveCount * 0.10)
+            if (updatedCharacters.size >= 2 && Math.random() < bondingChance) {
                 val shuffled = updatedCharacters.shuffled()
                 val c1 = shuffled[0]
                 val c2 = shuffled[1]
@@ -490,7 +524,8 @@ class GameEngine(private val context: Context) {
                 gameLog = logs,
                 dailyMissions = newMissions,
                 lastMissionUpdateDay = newDay,
-                activeBuffs = newBuffs
+                activeBuffs = newBuffs,
+                resourceHistory = newHistory
             )
         }
         autoSave()
@@ -1868,17 +1903,29 @@ class GameEngine(private val context: Context) {
         
         var teamHp = girlsInTeam.sumOf { it.hp }
         
-        var baseTeamDmg = girlsInTeam.sumOf { (it.loajalita / 10) + (it.bloodlust / 5) + 5 }
+        var baseTeamDmg = girlsInTeam.sumOf { (it.loajalita / 10) + (it.bloodlust / 5) + 5 + ((it.skills["combat"] ?: 0) * 5) }
         val damageBuffs = current.activeBuffs.filter { it.type == "DAMAGE" }.sumOf { it.value }
         if (damageBuffs > 0) {
             baseTeamDmg = (baseTeamDmg * (1.0f + (damageBuffs / 100f))).toInt()
         }
-        val teamDmg = baseTeamDmg
-        var baseDefense = girlsInTeam.sumOf { it.poslusnost / 15 + 2 }
+        
+        var relationshipDmgMultiplier = 1.0f
+        var relationshipDefMultiplier = 1.0f
+        
+        girlsInTeam.forEach { c ->
+            val rel = c.getRelationship()
+            if (rel == com.example.haremdark.models.RelStatus.BLOOD_SISTER) relationshipDmgMultiplier += rel.buffValue
+            if (rel == com.example.haremdark.models.RelStatus.REBELLIOUS) relationshipDmgMultiplier += rel.buffValue
+            if (rel == com.example.haremdark.models.RelStatus.BROKEN) relationshipDefMultiplier -= 0.10f
+        }
+        
+        val teamDmg = (baseTeamDmg * relationshipDmgMultiplier).toInt()
+        var baseDefense = girlsInTeam.sumOf { (it.poslusnost / 15) + 2 + ((it.skills["defense"] ?: 0) * 2) }
         val defenseBuffs = current.activeBuffs.filter { it.type == "DEFENSE" }.sumOf { it.value }
         if (defenseBuffs > 0) {
             baseDefense += defenseBuffs
         }
+        baseDefense = (baseDefense * relationshipDefMultiplier).toInt()
         val teamDefense = baseDefense
 
         logs.add("⚔️ Aréna začíná! Tým dívek vstupuje na písek arény.")
@@ -1887,20 +1934,45 @@ class GameEngine(private val context: Context) {
         var currentWave = 1
         var eHp = 0
         var enemyDmg = 0
+        var enemyName = ""
+
+        val difficultyScale = 1.0f + (player.level * 0.15f) + (current.haremLevel * 0.1f) + (current.characters.size * 0.05f)
+        
+        val enemyTypes = listOf(
+            Triple("Goblini otrokáři", 20, 8),
+            Triple("Žoldnéři Cechu", 35, 12),
+            Triple("Zbloudilá Inkvizice", 50, 18),
+            Triple("Krvaví kultisté", 70, 14),
+            Triple("Divocí vlkodlaci", 80, 22),
+            Triple("Stínoví démoni", 100, 25)
+        )
+        val bossTypes = listOf(
+            Triple("Velitel Inkvizice (Boss)", 250, 40),
+            Triple("Golemský Ničitel (Boss)", 350, 25),
+            Triple("Prastarý Upír (Boss)", 200, 50)
+        )
 
         while (teamHp > 0 && currentWave <= 10) {
-            logs.add("--- Vlna $currentWave ---")
-            eHp = 20 + (currentWave * 25)
-            enemyDmg = 8 + (currentWave * 6)
+            val isBoss = (currentWave % 5 == 0) // Boss on wave 5 and 10
+            
+            val baseEnemy = if (isBoss) bossTypes.random() else enemyTypes.random()
+            enemyName = baseEnemy.first
+            
+            // Procedural scaling: scales by difficulty factor + wave number
+            eHp = ((baseEnemy.second + (currentWave * 20)) * difficultyScale).toInt()
+            enemyDmg = ((baseEnemy.third + (currentWave * 4)) * difficultyScale).toInt()
+            
+            logs.add("--- Vlna $currentWave: $enemyName ---")
+            logs.add("⚔️ Nepřítel: Zdraví $eHp, Útok $enemyDmg")
 
             while (eHp > 0 && teamHp > 0) {
                 // Team attacks
-                val dmgDealt = (teamDmg + (0..6).random()).coerceAtLeast(1)
+                val dmgDealt = (teamDmg + (0..8).random()).coerceAtLeast(1)
                 eHp -= dmgDealt
                 
                 // Enemy attacks
                 if (eHp > 0) {
-                    val dmgTaken = (enemyDmg - teamDefense + (0..4).random()).coerceAtLeast(1)
+                    val dmgTaken = (enemyDmg - teamDefense + (0..5).random()).coerceAtLeast(1)
                     teamHp -= dmgTaken
                 }
             }
@@ -1934,11 +2006,30 @@ class GameEngine(private val context: Context) {
         // Apply damage to individual girls
         val damagePercentage = if (teamHp <= 0) 1.0f else 1.0f - (teamHp.toFloat() / girlsInTeam.sumOf { it.maxHp })
         
+        val xpGain = (currentWave - 1) * 20 + 10
+        logs.add("🌟 Každá přeživší dívka v týmu získala +$xpGain ZK!")
+        
         updateState { state ->
             val updatedGirls = state.characters.map { girl ->
                 if (girlIds.contains(girl.id)) {
                     val individualDmg = (girl.maxHp * damagePercentage).toInt()
-                    girl.copy(hp = (girl.hp - individualDmg).coerceAtLeast(1))
+                    var newXp = girl.xp + xpGain
+                    var newLevel = girl.level
+                    var newSp = girl.skillPoints
+                    
+                    while (newXp >= newLevel * 100) {
+                        newXp -= newLevel * 100
+                        newLevel++
+                        newSp++
+                        logs.add("✨ ${girl.name} dosáhla úrovně $newLevel a získala 1 Dovednostní bod!")
+                    }
+                    
+                    girl.copy(
+                        hp = (girl.hp - individualDmg).coerceAtLeast(1),
+                        xp = newXp,
+                        level = newLevel,
+                        skillPoints = newSp
+                    )
                 } else girl
             }
             
@@ -1955,4 +2046,192 @@ class GameEngine(private val context: Context) {
         autoSave()
         return logs
     }
+
+    fun upgradeCharacterSkill(characterId: String, skillName: String): Pair<Boolean, String> {
+        var result = Pair(false, "Chyba při vylepšení dovednosti.")
+        updateState { current ->
+            val charIndex = current.characters.indexOfFirst { it.id == characterId }
+            if (charIndex != -1) {
+                val char = current.characters[charIndex]
+                if (char.skillPoints > 0) {
+                    val updatedSkills = char.skills.toMutableMap()
+                    val currentVal = updatedSkills[skillName] ?: 0
+                    updatedSkills[skillName] = currentVal + 1
+                    
+                    val updatedChar = char.copy(
+                        skillPoints = char.skillPoints - 1,
+                        skills = updatedSkills
+                    )
+                    
+                    val newList = current.characters.toMutableList()
+                    newList[charIndex] = updatedChar
+                    
+                    result = Pair(true, "Dovednost vylepšena!")
+                    current.copy(characters = newList)
+                } else {
+                    result = Pair(false, "Nedostatek dovednostních bodů.")
+                    current
+                }
+            } else {
+                current
+            }
+        }
+        if (result.first) autoSave()
+        return result
+    }
+
+    fun checkAchievements(): List<String> {
+        val current = _gameState.value
+        val player = current.player
+        val newUnlocks = mutableListOf<String>()
+        val currentUnlocks = player.unlockedAchievements.toMutableList()
+
+        val allAchs = com.example.haremdark.models.AchievementList.allAchievements
+        
+        fun award(id: String) {
+            if (!currentUnlocks.contains(id)) {
+                currentUnlocks.add(id)
+                newUnlocks.add(id)
+            }
+        }
+
+        // Conditions
+        if (current.characters.size >= 10) award("ach_harem_10")
+        if (current.characters.size >= 20) award("ach_harem_20")
+        
+        val totalAffinity = current.characters.sumOf { it.affinityPoints }
+        if (totalAffinity >= 250) award("ach_affinity_total")
+        
+        if (current.defeatedBosses.size >= 3) award("ach_boss_slayer")
+        
+        if (current.characters.any { it.level >= 10 }) award("ach_arena_champion")
+        
+        if (player.gold >= 10000) award("ach_wealthy")
+        
+        val fortressLevel = current.buildings.firstOrNull { it.type == "pevnost" }?.level ?: 1
+        if (fortressLevel >= 5) award("ach_domain_max")
+        
+        if (current.characters.any { it.getRelationship() == com.example.haremdark.models.RelStatus.BLOOD_SISTER }) award("ach_blood_sister")
+        
+        if (newUnlocks.isNotEmpty()) {
+            val updatedPlayer = player.copy(unlockedAchievements = currentUnlocks)
+            updateState { it.copy(player = updatedPlayer) }
+            autoSave()
+        }
+        
+        return newUnlocks
+    }
+
+    fun setActiveTitle(titleId: String?): Boolean {
+        var success = false
+        updateState { state ->
+            if (titleId == null || state.player.unlockedAchievements.contains(titleId)) {
+                success = true
+                state.copy(player = state.player.copy(activeTitle = titleId))
+            } else {
+                state
+            }
+        }
+        if (success) autoSave()
+        return success
+    }
+
+
+    fun recruitCharacter(type: String): Pair<Boolean, String> {
+        var result = Pair(false, "Neznámý typ náboru.")
+        updateState { current ->
+            val p = current.player
+            
+            // Define cost based on type
+            val costGold: Int
+            val costMana: Int
+            val minRarity: Int
+            val title: String
+            
+            when (type) {
+                "basic" -> { costGold = 250; costMana = 0; minRarity = 1; title = "Běžný otrok" }
+                "advanced" -> { costGold = 600; costMana = 20; minRarity = 2; title = "Vzácný zajatec" }
+                "elite" -> { costGold = 1500; costMana = 50; minRarity = 3; title = "Exkluzivní trofej" }
+                else -> return@updateState current
+            }
+            
+            if (p.gold < costGold || p.mana < costMana) {
+                result = Pair(false, "Nedostatek surovin (Potřebuješ $costGold Zlata a $costMana Many).")
+                return@updateState current
+            }
+            
+            if (current.characters.size >= p.maxPopulation) {
+                result = Pair(false, "Tvůj harém je plný! (Kapacita: ${p.maxPopulation})")
+                return@updateState current
+            }
+            
+            // Generate char
+            val names = listOf("Lumia", "Sera", "Thalia", "Vex", "Kaelia", "Rina", "Myra", "Nyx", "Elaria", "Zora", "Lyra", "Tess", "Aria", "Morgana", "Lilith", "Carmilla", "Isolde", "Ophelia")
+            val randomName = names.random()
+            val archetypes = com.example.haremdark.data.StaticData.ARCHETYPES.keys.toList()
+            val chosenArchetype = archetypes.random()
+            val age = (18..26).random()
+            
+            // Stats based on type
+            val statBoost = minRarity * 15
+            
+            val newGirl = com.example.haremdark.models.Character(
+                id = "c_${java.util.UUID.randomUUID().toString().take(8)}",
+                name = randomName,
+                age = age,
+                archetypeId = chosenArchetype,
+                rarity = minRarity,
+                hp = 100 + (minRarity * 20),
+                maxHp = 100 + (minRarity * 20),
+                srdce = 50 + (0..statBoost).random(),
+                poslusnost = 20 + (0..statBoost).random(),
+                vlhkost = 40 + (0..statBoost).random(),
+                submisivita = 30 + (0..statBoost).random(),
+                loajalita = 20 + (0..statBoost).random(),
+                touha = 40 + (0..statBoost).random(),
+                level = minRarity,
+                xp = 0,
+                skillPoints = minRarity - 1,
+                skills = mutableMapOf("combat" to (0..minRarity).random(), "defense" to (0..minRarity).random(), "production" to (0..minRarity).random(), "rental" to (0..minRarity).random())
+            )
+            
+            val newPlayer = p.copy(
+                gold = p.gold - costGold,
+                mana = p.mana - costMana
+            )
+            
+            val newList = current.characters.toMutableList()
+            newList.add(newGirl)
+            
+            result = Pair(true, "Nábor úspěšný! Získal jsi novou dívku: $randomName.")
+            
+            current.copy(
+                player = newPlayer,
+                characters = newList,
+                gameLog = current.gameLog + "⛓️ Úspěšný nábor ($title): $randomName se přidává do harému!"
+            )
+        }
+        if (result.first) autoSave()
+        return result
+    }
+
+
+    fun togglePin(characterId: String): Pair<Boolean, String> {
+        var msg = ""
+        var success = false
+        updateState { current ->
+            val updated = current.characters.map { c ->
+                if (c.id == characterId) {
+                    val pinned = !c.isPinned
+                    msg = if (pinned) "${c.name} byla připnuta na vrch seznamu." else "${c.name} již není připnutá."
+                    success = true
+                    c.copy(isPinned = pinned)
+                } else c
+            }
+            current.copy(characters = updated)
+        }
+        if (success) autoSave()
+        return Pair(success, msg)
+    }
+
 }

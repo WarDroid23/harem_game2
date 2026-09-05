@@ -61,8 +61,13 @@ fun GameTopBar(
                         )
                     }
                     Column {
+                        var displayName = player.name
+                        if (player.activeTitle != null) {
+                            val tObj = com.example.haremdark.models.AchievementList.allAchievements.find { it.id == player.activeTitle }
+                            if (tObj != null) displayName = "${tObj.badgeIcon} " + displayName
+                        }
                         Text(
-                            text = player.name,
+                            text = displayName,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface

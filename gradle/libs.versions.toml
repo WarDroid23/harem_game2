@@ -1,4 +1,5 @@
 [versions]
+vico = "1.15.0"
 agp = "8.8.2"
 kotlin = "2.0.21"
 coreKtx = "1.15.0"
@@ -14,6 +15,9 @@ coil = "2.7.0"
 materialIconsExtended = "1.7.6"
 
 [libraries]
+vico-compose = { group = "com.patrykandpatrick.vico", name = "compose", version.ref = "vico" }
+vico-compose-m3 = { group = "com.patrykandpatrick.vico", name = "compose-m3", version.ref = "vico" }
+vico-core = { group = "com.patrykandpatrick.vico", name = "core", version.ref = "vico" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }

@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import com.example.haremdark.data.AffinityData
 import com.example.haremdark.data.StaticData
 import com.example.haremdark.models.Character
+import com.example.haremdark.models.getRelationship
 
 @Composable
 fun CharacterCard(
@@ -29,6 +30,7 @@ fun CharacterCard(
     onInteractClick: () -> Unit,
     onDetailClick: () -> Unit,
     onFavoriteClick: () -> Unit,
+    onPinClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val loyaltyTier = StaticData.getLoyaltyTier(character.loajalita)
@@ -114,6 +116,32 @@ fun CharacterCard(
                                     Text(
                                         text = "💍 Manželka",
                                         color = Color(0xFFE040FB),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            
+                            val rel = character.getRelationship()
+                            if (rel != com.example.haremdark.models.RelStatus.NEUTRAL) {
+                                val relColor = when(rel) {
+                                    com.example.haremdark.models.RelStatus.BLOOD_SISTER -> Color(0xFFD32F2F)
+                                    com.example.haremdark.models.RelStatus.DEVOTED -> Color(0xFF4CAF50)
+                                    com.example.haremdark.models.RelStatus.IN_LOVE -> Color(0xFFE91E63)
+                                    com.example.haremdark.models.RelStatus.BROKEN -> Color(0xFF9E9E9E)
+                                    com.example.haremdark.models.RelStatus.OBEDIENT -> Color(0xFF2196F3)
+                                    com.example.haremdark.models.RelStatus.REBELLIOUS -> Color(0xFFFF9800)
+                                    else -> Color.Gray
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = relColor.copy(alpha = 0.15f),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, relColor)
+                                ) {
+                                    Text(
+                                        text = rel.title,
+                                        color = relColor,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
@@ -451,21 +479,60 @@ fun CharacterGridCard(
                             )
                         }
                     }
+                    val rel = character.getRelationship()
+                    if (rel != com.example.haremdark.models.RelStatus.NEUTRAL) {
+                        val relColor = when(rel) {
+                            com.example.haremdark.models.RelStatus.BLOOD_SISTER -> Color(0xFFD32F2F)
+                            com.example.haremdark.models.RelStatus.DEVOTED -> Color(0xFF4CAF50)
+                            com.example.haremdark.models.RelStatus.IN_LOVE -> Color(0xFFE91E63)
+                            com.example.haremdark.models.RelStatus.BROKEN -> Color(0xFF9E9E9E)
+                            com.example.haremdark.models.RelStatus.OBEDIENT -> Color(0xFF2196F3)
+                            com.example.haremdark.models.RelStatus.REBELLIOUS -> Color(0xFFFF9800)
+                            else -> Color.Gray
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = relColor.copy(alpha = 0.8f)
+                        ) {
+                            Text(
+                                text = rel.title,
+                                color = Color.White,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                 }
 
                 // Favorite Toggle Button
-                IconButton(
-                    onClick = onFavoriteClick,
-                    modifier = Modifier
-                        .size(32.dp)
-                        .background(Color(0x88000000), CircleShape)
-                ) {
-                    Icon(
-                        imageVector = if (character.oblibena) Icons.Default.Star else Icons.Default.StarBorder,
-                        contentDescription = "Oblíbená",
-                        tint = if (character.oblibena) Color(0xFFFFD700) else Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IconButton(
+                        onClick = onFavoriteClick,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(Color(0x88000000), CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = if (character.oblibena) Icons.Default.Star else Icons.Default.StarBorder,
+                            contentDescription = "Oblíbená",
+                            tint = if (character.oblibena) Color(0xFFFFD700) else Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = onPinClick,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(Color(0x88000000), CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = if (character.isPinned) Icons.Default.PushPin else Icons.Default.LocationOn,
+                            contentDescription = "Připnout",
+                            tint = if (character.isPinned) MaterialTheme.colorScheme.primary else Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
 

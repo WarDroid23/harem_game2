@@ -46,7 +46,8 @@ fun CharacterDetailDialog(
     onExecuteInteraction: (GameInteraction) -> Unit,
     onCourtRomance: () -> Unit,
     onMarry: () -> Unit,
-    onRent: (String, Int) -> Unit
+    onRent: (String, Int) -> Unit,
+    onUpgradeSkill: (String) -> Unit
 ) {
     val loyalty = StaticData.getLoyaltyTier(character.loajalita)
     val archetype = StaticData.ARCHETYPES[character.archetypeId]
@@ -54,7 +55,7 @@ fun CharacterDetailDialog(
     val portraitRes = StaticData.getPortraitForArchetype(character.archetypeId)
 
     var selectedSection by remember { mutableIntStateOf(0) }
-    val sectionTabs = listOf("📊 Profil", "💖 Náklonnost", "🎁 Dary", "⚡ Akce")
+    val sectionTabs = listOf("📊 Profil", "💖 Náklonnost", "🎁 Dary", "⚡ Akce", "✨ Dovednosti")
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -203,8 +204,10 @@ fun CharacterDetailDialog(
                             onExecuteInteraction = onExecuteInteraction,
                             onCourtRomance = onCourtRomance,
                             onMarry = onMarry,
-                            onRent = onRent
+                            onRent = onRent,
+                            onUpgradeSkill = onUpgradeSkill
                         )
+                        4 -> SkillTreeTab(character = character, onUpgradeSkill = onUpgradeSkill)
                     }
                 }
             }
@@ -752,7 +755,8 @@ fun InteractionsSectionTab(
     onExecuteInteraction: (GameInteraction) -> Unit,
     onCourtRomance: () -> Unit,
     onMarry: () -> Unit,
-    onRent: (String, Int) -> Unit
+    onRent: (String, Int) -> Unit,
+    onUpgradeSkill: (String) -> Unit
 ) {
     var subTab by remember { mutableIntStateOf(0) }
     val subTabs = listOf("Odměny", "Tresty", "Intimita", "Romance", "Nájem")
@@ -819,7 +823,8 @@ fun InteractionDialog(
     onExecuteInteraction: (GameInteraction) -> Unit,
     onCourtRomance: () -> Unit,
     onMarry: () -> Unit,
-    onRent: (String, Int) -> Unit
+    onRent: (String, Int) -> Unit,
+    onUpgradeSkill: (String) -> Unit
 ) {
     CharacterDetailDialog(
         character = character,
@@ -830,7 +835,8 @@ fun InteractionDialog(
         onExecuteInteraction = onExecuteInteraction,
         onCourtRomance = onCourtRomance,
         onMarry = onMarry,
-        onRent = onRent
+        onRent = onRent,
+        onUpgradeSkill = onUpgradeSkill
     )
 }
 
@@ -1118,5 +1124,107 @@ fun StatRow(name: String, value: String) {
     ) {
         Text(name, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
         Text(value, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+@Composable
+fun SkillTreeTab(character: Character, onUpgradeSkill: (String) -> Unit) {
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = PaddingValues(bottom = 20.dp)
+    ) {
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
+                    Text("Úroveň: ${character.level}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text("ZK: ${character.xp} / ${character.level * 100}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text("Dostupné body (SP): ${character.skillPoints}", fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                    Text("Získávej ZK účastí v Aréně, abys odemkl další body dovedností.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f), modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+        
+        item {
+            Text("⚔️ Bojové dovednosti", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        }
+        
+        item {
+            SkillRow(
+                title = "Útok (Síla Krve)",
+                desc = "+5 základní poškození v aréně za úroveň.",
+                level = character.skills["combat"] ?: 0,
+                canUpgrade = character.skillPoints > 0,
+                onUpgrade = { onUpgradeSkill("combat") }
+            )
+        }
+        item {
+            SkillRow(
+                title = "Obrana (Odolnost)",
+                desc = "+2 základní obrana v aréně za úroveň.",
+                level = character.skills["defense"] ?: 0,
+                canUpgrade = character.skillPoints > 0,
+                onUpgrade = { onUpgradeSkill("defense") }
+            )
+        }
+        
+        item {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("💰 Správa dominia", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        }
+        
+        item {
+            SkillRow(
+                title = "Produkce surovin",
+                desc = "+2% ke globální produkci dominia (pokud není v nájmu).",
+                level = character.skills["production"] ?: 0,
+                canUpgrade = character.skillPoints > 0,
+                onUpgrade = { onUpgradeSkill("production") }
+            )
+        }
+        item {
+            SkillRow(
+                title = "Expert na nájmy",
+                desc = "+15 zlatých k dennímu příjmu z pronájmu.",
+                level = character.skills["rental"] ?: 0,
+                canUpgrade = character.skillPoints > 0,
+                onUpgrade = { onUpgradeSkill("rental") }
+            )
+        }
+    }
+}
+
+@Composable
+fun SkillRow(title: String, desc: String, level: Int, canUpgrade: Boolean, onUpgrade: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.Bold)
+                Text(desc, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), lineHeight = 14.sp)
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Úr. $level", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Button(
+                    onClick = onUpgrade,
+                    enabled = canUpgrade,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.height(30.dp)
+                ) {
+                    Text("+", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
     }
 }
