@@ -68,8 +68,8 @@ fun HaremScreen(
     val filteredList by haremViewModel.filteredList.collectAsState()
 
     val haremTabs = listOf("🔲 Mřížka", "🛏️ Komnaty", "👑 Hierarchie", "👶 Dynastie", "👗 Garderóba", "📚 Archiv")
-    val filters = listOf("Všechny", "★ Oblíbená", "💍 Vztahy", "💰 Na nájmu", "🤰 Březí")
-    val sortOptions = listOf("Náklonnost", "Rarita", "Nedávno")
+    val filters = listOf("Všechny", "★ Oblíbená", "💍 Vztahy", "💰 Na nájmu", "🤰 Březí", "⚔️ Válečnice", "🔮 Mágyně", "👑 Intrikánky", "🔗 Služky")
+    val sortOptions = listOf("Náklonnost", "Rarita / Úroveň", "Role (Archetyp)", "Bojová síla", "Nedávno")
     var sortExpanded by remember { mutableStateOf(false) }
     Box(modifier = modifier.fillMaxSize()) {
         Column(
@@ -524,6 +524,14 @@ fun HaremScreen(
             onUpgradeSkill = { skill ->
                 val (success, msg) = engine.upgradeCharacterSkill(currentConcubine.id, skill)
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            },
+            onEquipItem = { itemId, slotId ->
+                engine.equipItemToCharacter(currentConcubine.id, itemId, slotId)
+                Toast.makeText(context, "Předmět vybaven.", Toast.LENGTH_SHORT).show()
+            },
+            onUnequipItem = { slotId ->
+                engine.unequipItemFromCharacter(currentConcubine.id, slotId)
+                Toast.makeText(context, "Předmět odepnut.", Toast.LENGTH_SHORT).show()
             }
         )
     }

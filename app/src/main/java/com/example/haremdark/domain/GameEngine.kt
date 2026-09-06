@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.encodeToString
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
+import com.example.haremdark.models.InventoryItem
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -24,6 +27,14 @@ import java.util.*
 import kotlin.random.Random
 
 val Context.dataStore by preferencesDataStore(name = "harem_dark_saves")
+
+
+data class DailyRewardState(
+    val consecutiveDays: Int,
+    val rewardGold: Int,
+    val rewardMana: Int,
+    val itemReward: InventoryItem?
+)
 
 class GameEngine(private val context: Context) {
 
@@ -42,10 +53,95 @@ class GameEngine(private val context: Context) {
     private val _currentTheme = MutableStateFlow("Temné dominium")
     val currentTheme: StateFlow<String> = _currentTheme.asStateFlow()
 
+
+    private val _dailyRewardAvailable = MutableStateFlow<DailyRewardState?>(null)
+    val dailyRewardAvailable: StateFlow<DailyRewardState?> = _dailyRewardAvailable.asStateFlow()
+
+    fun checkDailyLogin() {
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            val lastLoginKey = longPreferencesKey("last_login_epoch_day")
+            val streakKey = intPreferencesKey("consecutive_login_days")
+            val prefs = context.dataStore.data.first()
+            
+            val lastLoginEpochDay = prefs[lastLoginKey] ?: 0L
+            val consecutiveDays = prefs[streakKey] ?: 0
+            
+            val currentEpochDay = System.currentTimeMillis() / (1000 * 60 * 60 * 24)
+            
+            if (currentEpochDay > lastLoginEpochDay) {
+                val isConsecutive = (currentEpochDay - lastLoginEpochDay) == 1L
+                val newStreak = if (isConsecutive) consecutiveDays + 1 else 1
+                
+                val rewardGold = 100 + (newStreak * 20).coerceAtMost(400)
+                val rewardMana = 20 + (newStreak * 5).coerceAtMost(100)
+                
+                val itemReward = if (newStreak % 5 == 0) {
+                    InventoryItem(
+                        id = "daily_gift_epic",
+                        name = "Epický dar za věrnost",
+                        description = "Cenný předmět pro tvůj harém. (Dárek)",
+                        count = 1,
+                        price = 250,
+                        category = "gift",
+                        icon = "🎁",
+                        rarity = "Epický",
+                        effectDescription = "Velmi zvyšuje náklonnost"
+                    )
+                } else null
+                
+                _dailyRewardAvailable.value = DailyRewardState(
+                    consecutiveDays = newStreak,
+                    rewardGold = rewardGold,
+                    rewardMana = rewardMana,
+                    itemReward = itemReward
+                )
+            }
+        }
+    }
+
+    fun claimDailyReward() {
+        val reward = _dailyRewardAvailable.value ?: return
+        _dailyRewardAvailable.value = null
+        
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            val lastLoginKey = longPreferencesKey("last_login_epoch_day")
+            val streakKey = intPreferencesKey("consecutive_login_days")
+            val currentEpochDay = System.currentTimeMillis() / (1000 * 60 * 60 * 24)
+            
+            context.dataStore.edit { prefs ->
+                prefs[lastLoginKey] = currentEpochDay
+                prefs[streakKey] = reward.consecutiveDays
+            }
+            
+            updateState { state ->
+                val p = state.player
+                val newItems = p.items.toMutableList()
+                if (reward.itemReward != null) {
+                    val existingIdx = newItems.indexOfFirst { it.id == reward.itemReward.id }
+                    if (existingIdx != -1) {
+                        val ex = newItems[existingIdx]
+                        newItems[existingIdx] = ex.copy(count = ex.count + 1)
+                    } else {
+                        newItems.add(reward.itemReward)
+                    }
+                }
+                
+                state.copy(
+                    player = p.copy(
+                        gold = p.gold + reward.rewardGold,
+                        darkEnergy = (p.darkEnergy + reward.rewardMana).coerceAtMost(p.maxDarkEnergy),
+                        items = newItems
+                    )
+                )
+            }
+            autoSave()
+        }
+    }
+
     init {
         _currentTheme.value = _gameState.value.currentTheme
         
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             val savedState = loadStateSuspend("save_slot_autosave") 
                 ?: loadStateSuspend("save_slot_1")
             
@@ -53,6 +149,8 @@ class GameEngine(private val context: Context) {
                 _gameState.value = savedState
                 _currentTheme.value = savedState.currentTheme
             }
+            
+            checkDailyLogin()
         }
         
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
@@ -1508,7 +1606,7 @@ class GameEngine(private val context: Context) {
         if (characterId != null) {
             val char = current.characters.firstOrNull { it.id == characterId }
             if (char != null) {
-                val hpBonus = char.equipment.values.filterNotNull().sumOf { it.hpBonus }
+                val hpBonus = char.equipment.values.filterNotNull().sumOf { it.hpBonus } + ((char.skills["vitality"] ?: 0) * 10)
                 fighterName = char.name
                 fighterHp = char.hp
                 fighterMaxHp = char.maxHp + hpBonus
@@ -1794,7 +1892,8 @@ class GameEngine(private val context: Context) {
             }
             
             val itemDropStr = if (droppedItem != null) " • Nalezeno: ${droppedItem.name}" else ""
-            lootInfo = "+${session.boss.rewardGold} zlatých • +${session.boss.rewardXp} XP$itemDropStr"
+            val charExpStr = if (session.deployedCharacterId != null) " • Dívka +${session.boss.rewardXp} ZK" else ""
+            lootInfo = "+${session.boss.rewardGold} zlatých • +${session.boss.rewardXp} XP$charExpStr$itemDropStr"
             
             newLogEntries.add(0, CombatLogEntry(
                 turn = currentTurn,
@@ -1858,14 +1957,36 @@ class GameEngine(private val context: Context) {
             }
         }
 
+
         if (session.deployedCharacterId != null) {
             val updatedCharacters = currentGameState.characters.map { c ->
-                if (c.id == session.deployedCharacterId) c.copy(hp = newPlayerHp) else c
+                if (c.id == session.deployedCharacterId) {
+                    var newXp = c.xp + session.boss.rewardXp
+                    var newLevel = c.level
+                    var newSp = c.skillPoints
+                    var newMaxHp = c.maxHp
+                    var newHp = newPlayerHp
+                    var nextLevelXp = newLevel * 100
+                    
+                    while (newXp >= nextLevelXp) {
+                        newXp -= nextLevelXp
+                        newLevel++
+                        newSp++
+                        newMaxHp += 5
+                        newHp = newMaxHp // Full heal on level up
+                        nextLevelXp = newLevel * 100
+                    }
+                    if (newPlayerHp > 0 && newHp < newMaxHp) {
+                        newHp = newPlayerHp // Keep current damage if no level up
+                    }
+                    c.copy(hp = newHp, maxHp = newMaxHp, xp = newXp, level = newLevel, skillPoints = newSp)
+                } else c
             }
             updateState { it.copy(characters = updatedCharacters) }
         } else {
             player.hp = newPlayerHp
         }
+
         
         _combatState.value = session.copy(
             bossHp = newBossHp,

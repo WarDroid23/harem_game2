@@ -239,6 +239,7 @@ data class Player(
     var killCount: Int = 0,
     var day: Int = 1,
     var skillPoints: Int = 2,
+    var unlockedCodexIds: Set<String> = emptySet(),
     var skills: MutableMap<String, Int> = mutableMapOf(
         "svadeni" to 0,
         "obchod" to 0,

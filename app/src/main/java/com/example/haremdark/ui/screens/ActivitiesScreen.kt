@@ -37,7 +37,7 @@ fun ActivitiesScreen(
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("🗺️ Mapa dominií", "🏹 Lov", "🏛️ Dražba", "⚔️ Souboje", "🧪 Alchymie", "📜 Úkoly")
+    val tabs = listOf("🗺️ Mapa", "🏹 Lov", "🏛️ Dražba", "⚔️ Souboje", "🧪 Alchymie", "📜 Úkoly", "📚 Kodex")
 
     Column(
         modifier = modifier
@@ -70,6 +70,7 @@ fun ActivitiesScreen(
             3 -> CombatTab(gameState, combatSession, engine)
             4 -> AlchemyTab(gameState, engine)
             5 -> QuestsTab(gameState, engine)
+            6 -> CodexTab(gameState, engine)
         }
     }
 }

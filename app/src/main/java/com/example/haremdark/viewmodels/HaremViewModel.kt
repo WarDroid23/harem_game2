@@ -35,11 +35,15 @@ class HaremViewModel(private val engine: GameEngine) : ViewModel() {
         searchQuery,
         selectedSort
     ) { gameState, filter, query, sort ->
-        var list = when (filter) {
+                var list = when (filter) {
             1 -> gameState.characters.filter { it.oblibena }
             2 -> gameState.characters.filter { it.jeManzelkou || it.partnerka }
             3 -> gameState.characters.filter { it.naNajmu }
             4 -> gameState.characters.filter { it.tehotna }
+            5 -> gameState.characters.filter { it.archetypeId in listOf("odvazna", "vzdorna", "krvava_subka", "zlomena") } // Bojovnice
+            6 -> gameState.characters.filter { it.archetypeId in listOf("touha", "nymfomanka", "posedla", "hysterialni") } // Kouzelnice
+            7 -> gameState.characters.filter { it.archetypeId in listOf("slechticna", "manipulativni", "chladna") } // Intrikánky
+            8 -> gameState.characters.filter { it.archetypeId in listOf("subka", "ustrasena", "ticha_panenka") } // Submisivní
             else -> gameState.characters
         }
 
@@ -47,10 +51,12 @@ class HaremViewModel(private val engine: GameEngine) : ViewModel() {
             list = list.filter { it.name.contains(query, ignoreCase = true) || it.archetypeId.contains(query, ignoreCase = true) }
         }
 
-        when (sort) {
+                when (sort) {
             "Náklonnost" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.affinityPoints })
-            "Rarita" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.rarity })
+            "Rarita / Úroveň" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.rarity }.thenByDescending { it.affinityLevel })
             "Nedávno" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.lastInteractionDay })
+            "Role (Archetyp)" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenBy { it.archetypeId })
+            "Bojová síla" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.hp + it.maxHp })
         }
         list
     }.stateIn(

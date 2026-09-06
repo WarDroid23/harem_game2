@@ -51,7 +51,9 @@ fun CharacterDetailDialog(
     onCourtRomance: () -> Unit,
     onMarry: () -> Unit,
     onRent: (String, Int) -> Unit,
-    onUpgradeSkill: (String) -> Unit
+    onUpgradeSkill: (String) -> Unit,
+    onEquipItem: (String, String) -> Unit,
+    onUnequipItem: (String) -> Unit
 ) {
     val loyalty = StaticData.getLoyaltyTier(character.loajalita)
     val archetype = StaticData.ARCHETYPES[character.archetypeId]
@@ -224,14 +226,15 @@ fun CharacterDetailDialog(
                 ) {
                     when (selectedSection) {
                         0 -> ProfileAndStatsTab(character = character, loyaltyTier = loyalty, archetype = archetype, phase = phase)
-                        1 -> AffinityAndDialogueTab(character = character)
-                        2 -> GiftingAndItemsTab(
+                        1 -> EquipmentTab(character = character, player = player, onEquip = onEquipItem, onUnequip = onUnequipItem)
+                        2 -> AffinityAndDialogueTab(character = character)
+                        3 -> GiftingAndItemsTab(
                             character = character,
                             player = player,
                             onGiveDirectGift = onGiveDirectGift,
                             onUseInventoryItem = onUseInventoryItem
                         )
-                        3 -> InteractionsSectionTab(
+                        4 -> InteractionsSectionTab(
                             character = character,
                             player = player,
                             onExecuteInteraction = onExecuteInteraction,
@@ -240,7 +243,7 @@ fun CharacterDetailDialog(
                             onRent = onRent,
                             onUpgradeSkill = onUpgradeSkill
                         )
-                        4 -> SkillTreeTab(character = character, onUpgradeSkill = onUpgradeSkill)
+                        5 -> SkillTreeTab(character = character, onUpgradeSkill = onUpgradeSkill)
                     }
                 }
             }
@@ -869,7 +872,9 @@ fun InteractionDialog(
         onCourtRomance = onCourtRomance,
         onMarry = onMarry,
         onRent = onRent,
-        onUpgradeSkill = onUpgradeSkill
+        onUpgradeSkill = onUpgradeSkill,
+        onEquipItem = { _, _ -> },
+        onUnequipItem = { _ -> }
     )
 }
 
@@ -1162,105 +1167,179 @@ fun StatRow(name: String, value: String) {
 
 @Composable
 fun SkillTreeTab(character: Character, onUpgradeSkill: (String) -> Unit) {
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(bottom = 20.dp)
-    ) {
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                shape = RoundedCornerShape(12.dp)
+    var selectedBranch by remember { mutableStateOf("Boj") }
+    val branches = listOf("Boj", "Podpora")
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Header with level, xp, and available points
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
-                    Text("Úroveň: ${character.level}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Column {
+                    Text("Úroveň ${character.level}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
                     Text("ZK: ${character.xp} / ${character.level * 100}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text("Dostupné body (SP): ${character.skillPoints}", fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
-                    Text("Získávej ZK účastí v Aréně, abys odemkl další body dovedností.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f), modifier = Modifier.padding(top = 4.dp))
                 }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("${character.skillPoints} SP", fontWeight = FontWeight.ExtraBold, fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
+                    Text("Dostupné body", fontSize = 10.sp, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
+                }
+            }
+            LinearProgressIndicator(
+                progress = (character.xp.toFloat() / (character.level * 100).coerceAtLeast(1).toFloat()).coerceIn(0f, 1f),
+                modifier = Modifier.fillMaxWidth().height(4.dp),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)
+            )
+        }
+
+        // Branch Selection
+        TabRow(
+            selectedTabIndex = branches.indexOf(selectedBranch),
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.primary
+        ) {
+            branches.forEach { branch ->
+                Tab(
+                    selected = selectedBranch == branch,
+                    onClick = { selectedBranch = branch },
+                    text = { Text(branch, fontWeight = FontWeight.Bold) }
+                )
             }
         }
         
-        item {
-            Text("⚔️ Bojové dovednosti", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            if (selectedBranch == "Boj") {
+                SkillTreeLayout(
+                    character = character,
+                    onUpgradeSkill = onUpgradeSkill,
+                    skills = listOf(
+                        SkillNodeData("combat", "Útok", "🗡️", "+5 Poškození v boji", 0),
+                        SkillNodeData("defense", "Obrana", "🛡️", "+2 Obrana v boji", 1),
+                        SkillNodeData("vitality", "Vitalita", "❤️", "+10 Zdraví", 1),
+                        SkillNodeData("bloodlust", "Krvavá žízeň", "🩸", "Šance na krvácení", 2, req = "combat", reqLvl = 3),
+                        SkillNodeData("iron_skin", "Železná kůže", "🧱", "Šance blokovat útok", 2, req = "defense", reqLvl = 3)
+                    )
+                )
+            } else {
+                SkillTreeLayout(
+                    character = character,
+                    onUpgradeSkill = onUpgradeSkill,
+                    skills = listOf(
+                        SkillNodeData("production", "Produkce", "⚒️", "+2% Produkce surovin", 0),
+                        SkillNodeData("rental", "Nájmy", "💰", "+15 Zlata z nájmů", 0),
+                        SkillNodeData("charm", "Šarm", "✨", "+10% Zisk náklonnosti", 1, req = "rental", reqLvl = 2),
+                        SkillNodeData("efficiency", "Efektivita", "⚙️", "Sníží únavu z práce", 1, req = "production", reqLvl = 2),
+                        SkillNodeData("loyalty_boost", "Oddanost", "💖", "Zabraňuje ztrátě důvěry", 2, req = "charm", reqLvl = 3)
+                    )
+                )
+            }
         }
-        
-        item {
-            SkillRow(
-                title = "Útok (Síla Krve)",
-                desc = "+5 základní poškození v aréně za úroveň.",
-                level = character.skills["combat"] ?: 0,
-                canUpgrade = character.skillPoints > 0,
-                onUpgrade = { onUpgradeSkill("combat") }
-            )
-        }
-        item {
-            SkillRow(
-                title = "Obrana (Odolnost)",
-                desc = "+2 základní obrana v aréně za úroveň.",
-                level = character.skills["defense"] ?: 0,
-                canUpgrade = character.skillPoints > 0,
-                onUpgrade = { onUpgradeSkill("defense") }
-            )
-        }
-        
-        item {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("💰 Správa dominia", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-        }
-        
-        item {
-            SkillRow(
-                title = "Produkce surovin",
-                desc = "+2% ke globální produkci dominia (pokud není v nájmu).",
-                level = character.skills["production"] ?: 0,
-                canUpgrade = character.skillPoints > 0,
-                onUpgrade = { onUpgradeSkill("production") }
-            )
-        }
-        item {
-            SkillRow(
-                title = "Expert na nájmy",
-                desc = "+15 zlatých k dennímu příjmu z pronájmu.",
-                level = character.skills["rental"] ?: 0,
-                canUpgrade = character.skillPoints > 0,
-                onUpgrade = { onUpgradeSkill("rental") }
-            )
+    }
+}
+
+data class SkillNodeData(
+    val id: String,
+    val name: String,
+    val icon: String,
+    val desc: String,
+    val tier: Int,
+    val req: String? = null,
+    val reqLvl: Int = 0
+)
+
+@Composable
+fun SkillTreeLayout(character: Character, onUpgradeSkill: (String) -> Unit, skills: List<SkillNodeData>) {
+    val maxTier = skills.maxOfOrNull { it.tier } ?: 0
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(32.dp)
+    ) {
+        for (tier in 0..maxTier) {
+            val tierSkills = skills.filter { it.tier == tier }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                tierSkills.forEach { skill ->
+                    val currentLvl = character.skills[skill.id] ?: 0
+                    val reqMet = skill.req == null || (character.skills[skill.req] ?: 0) >= skill.reqLvl
+                    val canUpgrade = character.skillPoints > 0 && reqMet
+                    
+                    SkillNode(
+                        skill = skill,
+                        currentLvl = currentLvl,
+                        canUpgrade = canUpgrade,
+                        reqMet = reqMet,
+                        onUpgrade = { onUpgradeSkill(skill.id) }
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-fun SkillRow(title: String, desc: String, level: Int, canUpgrade: Boolean, onUpgrade: () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth()
+fun SkillNode(
+    skill: SkillNodeData,
+    currentLvl: Int,
+    canUpgrade: Boolean,
+    reqMet: Boolean,
+    onUpgrade: () -> Unit
+) {
+    val bgColor = if (currentLvl > 0) MaterialTheme.colorScheme.primary 
+                  else if (reqMet) MaterialTheme.colorScheme.surfaceVariant 
+                  else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                  
+    val contentColor = if (currentLvl > 0) MaterialTheme.colorScheme.onPrimary 
+                       else if (reqMet) MaterialTheme.colorScheme.onSurface 
+                       else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .width(100.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = canUpgrade) { onUpgrade() }
+            .background(bgColor)
+            .padding(8.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(12.dp).fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.Bold)
-                Text(desc, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f), lineHeight = 14.sp)
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Úr. $level", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                Button(
-                    onClick = onUpgrade,
-                    enabled = canUpgrade,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    modifier = Modifier.height(30.dp)
-                ) {
-                    Text("+", fontWeight = FontWeight.Bold)
-                }
+        Text(skill.icon, fontSize = 24.sp, modifier = Modifier.padding(bottom = 4.dp))
+        Text(skill.name, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = contentColor, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Text("Lvl $currentLvl", fontSize = 10.sp, color = contentColor)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(skill.desc, fontSize = 9.sp, color = contentColor.copy(alpha = 0.8f), textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 10.sp)
+        
+        if (!reqMet) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("Vyžaduje:", fontSize = 8.sp, color = MaterialTheme.colorScheme.error)
+            Text("${skill.req} Lvl ${skill.reqLvl}", fontSize = 8.sp, color = MaterialTheme.colorScheme.error)
+        } else if (canUpgrade) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Surface(
+                color = MaterialTheme.colorScheme.secondary,
+                shape = RoundedCornerShape(4.dp)
+            ) {
+                Text("Vylepšit", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSecondary, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
             }
         }
     }
 }
+
 
 
 @Composable
@@ -1384,5 +1463,270 @@ fun CharacterEquipmentTab(character: Character, player: Player, engine: GameEngi
                 }
             }
         }
+    }
+}
+
+@Composable
+fun AffinityProgressBarComponent(character: Character, modifier: Modifier = Modifier) {
+    val tier = AffinityData.getTierForPoints(character.affinityPoints)
+    val nextTier = AffinityData.TIERS.firstOrNull { it.level == tier.level + 1 }
+    
+    val progressInTier = if (nextTier != null) {
+        val currentSpan = (character.affinityPoints - tier.minPoints).toFloat()
+        val totalSpan = (nextTier.minPoints - tier.minPoints).toFloat()
+        (currentSpan / totalSpan).coerceIn(0f, 1f)
+    } else 1.0f
+
+    val pointsNeeded = if (nextTier != null) nextTier.minPoints - character.affinityPoints else 0
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(tier.icon, fontSize = 18.sp)
+                    Column {
+                        Text(
+                            text = "Úr. ${tier.level} • ${tier.title}",
+                            fontWeight = FontWeight.Bold,
+                            color = Color(tier.colorHex),
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = "${character.affinityPoints} bodů náklonnosti",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+                if (nextTier != null) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "Do Úr. ${nextTier.level}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Zbývá $pointsNeeded pts",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "👑 Max",
+                        fontSize = 12.sp,
+                        color = Color(0xFFFFD700),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            
+            // Custom Visual Progress Bar
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progressInTier)
+                        .fillMaxHeight()
+                        .background(Color(tier.colorHex))
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "💭 \"${AffinityData.getRandomActiveDialogue(character.affinityPoints, character.archetypeId)}\"", 
+                style = MaterialTheme.typography.bodySmall, 
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f), 
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+
+@Composable
+fun EquipmentTab(
+    character: Character,
+    player: Player,
+    onEquip: (String, String) -> Unit,
+    onUnequip: (String) -> Unit
+) {
+    val slots = listOf(
+        Pair("weapon", "🗡️ Zbraň"),
+        Pair("armor", "🛡️ Zbroj"),
+        Pair("accessory", "💍 Doplněk")
+    )
+    
+    var expandedSlot by remember { mutableStateOf<String?>(null) }
+    
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = PaddingValues(bottom = 20.dp)
+    ) {
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Bojová Výbava", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text("Vybavte dívku nalezenými předměty pro zvýšení jejích šancí v aréně.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
+                }
+            }
+        }
+        
+        items(slots) { (slotId, slotName) ->
+            val equippedItem = character.equipment[slotId]
+            val isExpanded = expandedSlot == slotId
+            
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expandedSlot = if (isExpanded) null else slotId }
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(slotName, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            if (equippedItem != null) {
+                                Text(equippedItem.name, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                                Text(equippedItem.effectDescription, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                            } else {
+                                Text("Žádný předmět", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                            }
+                        }
+                        
+                        if (equippedItem != null) {
+                            Button(
+                                onClick = { onUnequip(slotId) },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text("Odepnout", fontSize = 11.sp)
+                            }
+                        } else {
+                            Icon(
+                                imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Rozbalit",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    
+                    if (isExpanded && equippedItem == null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Divider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        val availableItems = player.items.filter { it.category == "equipment" && it.equipSlot == slotId && it.count > 0 }
+                        
+                        if (availableItems.isEmpty()) {
+                            Text("Nemáte v inventáři žádné vhodné předměty pro tento slot.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+                        } else {
+                            availableItems.forEach { item ->
+                                EquipmentItemRow(item = item, character = character, onEquip = { onEquip(item.id, slotId); expandedSlot = null })
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EquipmentItemRow(item: InventoryItem, character: Character, onEquip: () -> Unit) {
+    // Calculate stat diffs
+    val baseHp = character.maxHp
+    val hpBonus = character.equipment.values.filterNotNull().sumOf { it.hpBonus } + ((character.skills["vitality"] ?: 0) * 10)
+    val totalHp = baseHp + hpBonus
+    
+    val combatSkill = character.skills["combat"] ?: 0
+    val combatBonus = character.equipment.values.filterNotNull().sumOf { it.combatBonus }
+    var totalCombat = combatSkill + combatBonus + (combatSkill * 5)
+    if (character.archetypeId in listOf("odvazna", "vzdorna", "krvava_subka", "zlomena")) {
+        totalCombat = (totalCombat * 1.2).toInt()
+    }
+    
+    val defSkill = character.skills["defense"] ?: 0
+    val defBonus = character.equipment.values.filterNotNull().sumOf { it.defenseBonus }
+    val totalDef = defSkill + defBonus + (defSkill * 2)
+    
+    // New stats
+    val newHp = totalHp + item.hpBonus
+    
+    var newCombat = combatSkill + combatBonus + item.combatBonus + (combatSkill * 5)
+    if (character.archetypeId in listOf("odvazna", "vzdorna", "krvava_subka", "zlomena")) {
+        newCombat = (newCombat * 1.2).toInt()
+    }
+    
+    val newDef = totalDef + item.defenseBonus
+    
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
+            .padding(8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("${item.icon} ${item.name}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Text(item.effectDescription, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+            
+            // Stat diff tooltip
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+                if (item.hpBonus > 0) StatDiff("HP", totalHp, newHp)
+                if (item.combatBonus > 0) StatDiff("Boj", totalCombat, newCombat)
+                if (item.defenseBonus > 0) StatDiff("Obrana", totalDef, newDef)
+            }
+        }
+        
+        Button(
+            onClick = onEquip,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+            modifier = Modifier.height(32.dp)
+        ) {
+            Text("Vybavit", fontSize = 11.sp)
+        }
+    }
+}
+
+@Composable
+fun StatDiff(label: String, oldVal: Int, newVal: Int) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("$label: $oldVal ", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+        Icon(Icons.Default.ArrowForward, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(10.dp))
+        Text(" $newVal", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
     }
 }

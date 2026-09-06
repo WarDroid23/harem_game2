@@ -11,6 +11,9 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -35,6 +38,7 @@ class MainActivity : ComponentActivity() {
             val gameState by engine.gameState.collectAsState()
             val combatSession by engine.combatState.collectAsState()
             val currentTheme by engine.currentTheme.collectAsState()
+            val dailyReward by engine.dailyRewardAvailable.collectAsState()
             val context = LocalContext.current
             
             val navController = rememberNavController()
@@ -139,6 +143,62 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+                }
+
+                                // Daily Login Reward Dialog
+                dailyReward?.let { reward ->
+                    AlertDialog(
+                        onDismissRequest = { /* forced claim */ },
+                        title = { 
+                            Text(
+                                "🎁 Denní odměna", 
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            ) 
+                        },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Přihlášení v řadě: ${reward.consecutiveDays} dní", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                Text("Tvá věrnost dominiu je odměněna, můj pane:")
+                                
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("💰", fontSize = 24.sp)
+                                    Text("+${reward.rewardGold} Zlatých")
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("🔮", fontSize = 24.sp)
+                                    Text("+${reward.rewardMana} Temné energie")
+                                }
+                                
+                                if (reward.itemReward != null) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("Vzácný dar k jubileu:", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), RoundedCornerShape(8.dp)).padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(reward.itemReward.icon, fontSize = 32.sp)
+                                        Column {
+                                            Text(reward.itemReward.name, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                            Text(reward.itemReward.effectDescription, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.7f))
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = { 
+                                    engine.claimDailyReward() 
+                                    Toast.makeText(context, "Denní odměna vybrána!", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Vybrat odměnu")
+                            }
+                        }
+                    )
                 }
 
                 // Next Day Rest Confirmation Dialog
