@@ -1,17 +1,9 @@
-package com.example.haremdark.viewmodels
+import re
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import com.example.haremdark.domain.GameEngine
-import com.example.haremdark.models.Character
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
+with open('app/src/main/java/com/example/haremdark/viewmodels/HaremViewModel.kt', 'r') as f:
+    text = f.read()
 
-data class HaremFilterCriteria(
+new_class_and_state = """data class HaremFilterCriteria(
     val status: String = "Všechny",
     val role: String = "Všechny",
     val affinityLevel: String = "Všechny"
@@ -114,3 +106,15 @@ class HaremViewModel(private val engine: GameEngine) : ViewModel() {
         selectedCharacterForInteraction.value = character
     }
 }
+"""
+
+start_idx = text.find("class HaremViewModel")
+if start_idx != -1:
+    old_section = text[start_idx:]
+    text = text.replace(old_section, new_class_and_state)
+    with open('app/src/main/java/com/example/haremdark/viewmodels/HaremViewModel.kt', 'w') as f:
+        f.write(text)
+    print("Replaced ViewModel successfully!")
+else:
+    print("Could not find ViewModel class.")
+

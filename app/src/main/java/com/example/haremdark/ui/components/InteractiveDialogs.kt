@@ -522,41 +522,13 @@ fun AffinityAndDialogueTab(character: Character) {
             }
         }
 
-        // Perks & Relationship Benefits
-        Text("✨ Výhody a pasivní bonusy vztahu:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-        Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                tier.unlockedPerks.forEach { perk ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            tint = Color(tier.colorHex),
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = perk,
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-            }
-        }
+        // Roadmap of Milestones & Rewards
+        Text("🗺️ Cesta náklonnosti a odměny:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
 
-        // Unlocked Dialogue Tree Breakdown
-        Text("📜 Rejstřík pasivních dialogů:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
         AffinityData.TIERS.forEach { t ->
             val isUnlocked = character.affinityPoints >= t.minPoints
+            val isCurrent = t.level == tier.level
+
             Card(
                 colors = CardDefaults.cardColors(
                     containerColor = if (isUnlocked) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
@@ -566,8 +538,9 @@ fun AffinityAndDialogueTab(character: Character) {
             ) {
                 Column(
                     modifier = Modifier.padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    // Header: Level, Title, Status
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -581,7 +554,7 @@ fun AffinityAndDialogueTab(character: Character) {
                             Text(
                                 text = "Úroveň ${t.level}: ${t.title}",
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
+                                fontSize = 13.sp,
                                 color = if (isUnlocked) Color(t.colorHex) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                             )
                         }
@@ -596,19 +569,71 @@ fun AffinityAndDialogueTab(character: Character) {
                         }
                     }
 
-                    if (isUnlocked) {
-                        val lines = AffinityData.PASSIVE_DIALOGUES[t.level] ?: emptyList()
-                        lines.take(2).forEach { line ->
-                            Text(
-                                text = "• „$line“",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                    // Progress Bar for current tier
+                    if (isCurrent && nextTier != null) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            LinearProgressIndicator(
+                                progress = { progressInTier },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                color = Color(t.colorHex)
                             )
+                            Text(
+                                text = "${character.affinityPoints} / ${nextTier.minPoints} pts k další úrovni",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                modifier = Modifier.align(Alignment.End)
+                            )
+                        }
+                    }
+
+                    androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+
+                    // Rewards Section
+                    if (isUnlocked || isCurrent || t.level == tier.level + 1) {
+                        // Cosmetic Reward
+                        t.cosmeticReward?.let { cosmetic ->
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Icon(Icons.Default.CardGiftcard, contentDescription = null, tint = Color(0xFFFFD700), modifier = Modifier.size(14.dp))
+                                Text(
+                                    text = "Kosmetický předmět: $cosmetic",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (isUnlocked) Color(0xFFFFD700) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+                        
+                        // Perks
+                        t.unlockedPerks.forEach { perk ->
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Icon(Icons.Default.Star, contentDescription = null, tint = if (isUnlocked) Color(t.colorHex) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), modifier = Modifier.size(12.dp))
+                                Text(
+                                    text = perk,
+                                    fontSize = 11.sp,
+                                    color = if (isUnlocked) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+
+                        // Dialogues
+                        if (isUnlocked) {
+                            val lines = AffinityData.PASSIVE_DIALOGUES[t.level] ?: emptyList()
+                            if (lines.isNotEmpty()) {
+                                Text(
+                                    text = "• „${lines.first()}“",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
                         }
                     } else {
                         Text(
-                            text = "🔒 Vyšší intimita a oddanost odhalí hlubší promluvy a tajná přání této dívky.",
+                            text = "🔒 Odměny jsou skryty, dokud se dívka více nepřiblíží této úrovni.",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )

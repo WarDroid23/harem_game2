@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,16 +61,21 @@ fun HaremScreen(
     )
 
     val selectedHaremTab by haremViewModel.selectedHaremTab.collectAsState()
-    val selectedFilter by haremViewModel.selectedFilter.collectAsState()
+    val filterCriteria by haremViewModel.filterCriteria.collectAsState()
     val selectedSort by haremViewModel.selectedSort.collectAsState()
     val searchQuery by haremViewModel.searchQuery.collectAsState()
     val selectedCharacterForProfile by haremViewModel.selectedCharacterForProfile.collectAsState()
     val selectedCharacterForInteraction by haremViewModel.selectedCharacterForInteraction.collectAsState()
     val filteredList by haremViewModel.filteredList.collectAsState()
 
-    val haremTabs = listOf("🔲 Mřížka", "🛏️ Komnaty", "👑 Hierarchie", "👶 Dynastie", "👗 Garderóba", "📚 Archiv")
-    val filters = listOf("Všechny", "★ Oblíbená", "💍 Vztahy", "💰 Na nájmu", "🤰 Březí", "⚔️ Válečnice", "🔮 Mágyně", "👑 Intrikánky", "🔗 Služky")
-    val sortOptions = listOf("Náklonnost", "Rarita / Úroveň", "Role (Archetyp)", "Bojová síla", "Nedávno")
+    val haremTabs = listOf("🔲 Mřížka", "🛏️ Komnaty", "👑 Hierarchie", "👶 Dynastie", "👗 Garderóba", "📚 Archiv", "🖼️ Galerie")
+    
+    var filterSheetExpanded by remember { mutableStateOf(false) }
+
+    // legacy variables to prevent unresolved references during transition
+    val selectedFilter = 0
+    val filters = listOf("Všechny")
+    val sortOptions = listOf("Náklonnost")
     var sortExpanded by remember { mutableStateOf(false) }
     Box(modifier = modifier.fillMaxSize()) {
         Column(
@@ -221,23 +227,27 @@ fun HaremScreen(
                             }
                         }
 
-                        // Filter Chips
+                        // Active Filter Summaries
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            filters.forEachIndexed { index, filter ->
-                                FilterChip(
-                                    selected = selectedFilter == index,
-                                    onClick = { haremViewModel.setFilter(index) },
-                                    label = { Text(filter, fontSize = 11.sp, fontWeight = if (selectedFilter == index) FontWeight.Bold else FontWeight.Normal) },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                                    )
-                                )
+                            val activeFilters = buildList {
+                                if (filterCriteria.status != "Všechny") add("Status: ${filterCriteria.status}")
+                                if (filterCriteria.role != "Všechny") add("Role: ${filterCriteria.role}")
+                                if (filterCriteria.affinityLevel != "Všechny") add("Vztah: ${filterCriteria.affinityLevel}")
+                                add("Řazení: $selectedSort")
+                            }
+                            activeFilters.forEach { f ->
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                ) {
+                                    Text(f, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), color = MaterialTheme.colorScheme.onSurface)
+                                }
                             }
                         }
 
@@ -374,7 +384,7 @@ fun HaremScreen(
                             }
                         }
 
-                        // Filter Chips
+                        // Active Filter Summaries
                         item {
                             Row(
                                 modifier = Modifier
@@ -382,16 +392,20 @@ fun HaremScreen(
                                     .horizontalScroll(rememberScrollState()),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                filters.forEachIndexed { index, filter ->
-                                    FilterChip(
-                                        selected = selectedFilter == index,
-                                        onClick = { haremViewModel.setFilter(index) },
-                                        label = { Text(filter, fontSize = 11.sp, fontWeight = if (selectedFilter == index) FontWeight.Bold else FontWeight.Normal) },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                                        )
-                                    )
+                                val activeFilters = buildList {
+                                    if (filterCriteria.status != "Všechny") add("Status: ${filterCriteria.status}")
+                                    if (filterCriteria.role != "Všechny") add("Role: ${filterCriteria.role}")
+                                    if (filterCriteria.affinityLevel != "Všechny") add("Vztah: ${filterCriteria.affinityLevel}")
+                                    add("Řazení: $selectedSort")
+                                }
+                                activeFilters.forEach { f ->
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        modifier = Modifier.padding(vertical = 2.dp)
+                                    ) {
+                                        Text(f, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), color = MaterialTheme.colorScheme.onSurface)
+                                    }
                                 }
                             }
                         }
@@ -461,6 +475,10 @@ fun HaremScreen(
                 5 -> {
                     // --- TAB 5: EMBEDDED ARCHIVE ---
                     HaremArchiveTab(gameState = gameState)
+                }
+                6 -> {
+                    // --- TAB 6: EMBEDDED GALLERY ---
+                    HaremGalleryTab(gameState = gameState)
                 }
             }
             }
@@ -535,9 +553,115 @@ fun HaremScreen(
             }
         )
     }
+    if (filterSheetExpanded) {
+        AlertDialog(
+            onDismissRequest = { filterSheetExpanded = false },
+            title = { Text("Filtrovat a Řadit", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    val statusOptions = listOf("Všechny", "Oblíbená", "Ve vztahu", "Na nájmu", "Březí")
+                    val roleOptions = listOf("Všechny", "Služky", "Válečnice", "Mágyně", "Intrikánky")
+                    val affinityOptions = listOf("Všechny", "Úroveň 1-2", "Úroveň 3-4", "Úroveň 5+")
+                    val sortOptionsList = listOf("Náklonnost", "Rarita / Úroveň", "Role (Archetyp)", "Bojová síla", "Nedávno")
+
+                    // Status
+                    Column {
+                        Text("Stav (Status):", fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
+                        statusOptions.chunked(3).forEach { rowOps ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                rowOps.forEach { op ->
+                                    FilterChip(
+                                        selected = filterCriteria.status == op,
+                                        onClick = { haremViewModel.setFilterCriteria(filterCriteria.copy(status = op)) },
+                                        label = { Text(op, fontSize = 11.sp) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Role
+                    Column {
+                        Text("Role / Frakce:", fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
+                        roleOptions.chunked(3).forEach { rowOps ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                rowOps.forEach { op ->
+                                    FilterChip(
+                                        selected = filterCriteria.role == op,
+                                        onClick = { haremViewModel.setFilterCriteria(filterCriteria.copy(role = op)) },
+                                        label = { Text(op, fontSize = 11.sp) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Affinity Level
+                    Column {
+                        Text("Náklonnost:", fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
+                        affinityOptions.chunked(3).forEach { rowOps ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                rowOps.forEach { op ->
+                                    FilterChip(
+                                        selected = filterCriteria.affinityLevel == op,
+                                        onClick = { haremViewModel.setFilterCriteria(filterCriteria.copy(affinityLevel = op)) },
+                                        label = { Text(op, fontSize = 11.sp) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    androidx.compose.material3.HorizontalDivider()
+
+                    // Sort By
+                    Column {
+                        Text("Seřadit podle:", fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
+                        sortOptionsList.chunked(2).forEach { rowOps ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                rowOps.forEach { op ->
+                                    FilterChip(
+                                        selected = selectedSort == op,
+                                        onClick = { haremViewModel.setSort(op) },
+                                        label = { Text(op, fontSize = 11.sp) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { filterSheetExpanded = false }) {
+                    Text("Zavřít")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { 
+                        haremViewModel.setFilterCriteria(com.example.haremdark.viewmodels.HaremFilterCriteria())
+                        haremViewModel.setSort("Náklonnost")
+                    }
+                ) {
+                    Text("Resetovat")
+                }
+            }
+        )
+    }
+
 }
 
-@Composable
+
+    @Composable
 fun HaremHierarchyTab(gameState: GameSave, engine: GameEngine) {
     val context = LocalContext.current
     val characters = gameState.characters

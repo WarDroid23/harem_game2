@@ -11,7 +11,8 @@ data class AffinityTierInfo(
     val perkDescription: String,
     val icon: String,
     val colorHex: Long = 0xFFE91E63,
-    val unlockedPerks: List<String> = listOf(perkDescription)
+    val unlockedPerks: List<String> = listOf(perkDescription),
+    val cosmeticReward: String? = null
 )
 
 object AffinityData {
@@ -37,7 +38,8 @@ object AffinityData {
             perkDescription = "+10% zisk zlata ze správy komnat.",
             icon = "🗝️",
             colorHex = 0xFF4CAF50,
-            unlockedPerks = listOf("+10% zisk zlata ze správy komnat", "Odemčena nová pasivní vyznání a myšlenky")
+            unlockedPerks = listOf("+10% zisk zlata ze správy komnat", "Odemčena nová pasivní vyznání a myšlenky"),
+            cosmeticReward = "🎀 Stužka poslušnosti"
         ),
         AffinityTierInfo(
             level = 3,
@@ -48,7 +50,8 @@ object AffinityData {
             perkDescription = "+15% efektivita intimních rituálů.",
             icon = "💎",
             colorHex = 0xFF00BCD4,
-            unlockedPerks = listOf("+15% efektivita intimních rituálů", "+10% zisk temné energie při rozkoši")
+            unlockedPerks = listOf("+15% efektivita intimních rituálů", "+10% zisk temné energie při rozkoši"),
+            cosmeticReward = "💍 Ocelový prsten oddanosti"
         ),
         AffinityTierInfo(
             level = 4,
@@ -59,7 +62,8 @@ object AffinityData {
             perkDescription = "+20% šance na zplození dědice a +10 SE.",
             icon = "🔥",
             colorHex = 0xFFFF4081,
-            unlockedPerks = listOf("+20% šance na zplození dědice", "+10 max Sexuální energie v harému", "Svěřování nejhlubších tajemství")
+            unlockedPerks = listOf("+20% šance na zplození dědice", "+10 max Sexuální energie v harému", "Svěřování nejhlubších tajemství"),
+            cosmeticReward = "👑 Hedvábný závoj milenky"
         ),
         AffinityTierInfo(
             level = 5,
@@ -70,7 +74,8 @@ object AffinityData {
             perkDescription = "+25% obrana a útok pána v soubojích.",
             icon = "💖",
             colorHex = 0xFFE040FB,
-            unlockedPerks = listOf("+25% bonus k útoku v soubojích", "+30% loajalita a imunita vůči vzpourám")
+            unlockedPerks = listOf("+25% bonus k útoku v soubojích", "+30% loajalita a imunita vůči vzpourám"),
+            cosmeticReward = "✨ Očarovaný náhrdelník duší"
         ),
         AffinityTierInfo(
             level = 6,
