@@ -1,4 +1,8 @@
 package com.example.haremdark.ui.components
+
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+
 import androidx.compose.foundation.clickable
 
 import androidx.compose.foundation.Image
@@ -18,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
@@ -62,6 +67,8 @@ fun CharacterDetailDialog(
 
     var selectedSection by remember { mutableIntStateOf(0) }
     val sectionTabs = listOf("📊 Profil", "🛡️ Výbava", "💖 Náklonnost", "🎁 Dary", "⚡ Akce", "✨ Dovednosti")
+    var activeEmote by remember { mutableStateOf<String?>(null) }
+    var emoteKey by remember { mutableLongStateOf(0L) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -1728,5 +1735,40 @@ fun StatDiff(label: String, oldVal: Int, newVal: Int) {
         Text("$label: $oldVal ", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
         Icon(Icons.Default.ArrowForward, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(10.dp))
         Text(" $newVal", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+    }
+}
+
+@Composable
+fun FloatingEmoteAnimation(emote: String) {
+    val offsetY = remember { androidx.compose.animation.core.Animatable(50f) }
+    val alpha = remember { androidx.compose.animation.core.Animatable(0f) }
+    
+    LaunchedEffect(Unit) {
+        launch {
+            alpha.animateTo(1f, animationSpec = androidx.compose.animation.core.tween(300))
+            delay(800)
+            alpha.animateTo(0f, animationSpec = androidx.compose.animation.core.tween(400))
+        }
+        launch {
+            offsetY.animateTo(-40f, animationSpec = androidx.compose.animation.core.tween(1500, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
+        }
+    }
+    
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = emote,
+            fontSize = 42.sp,
+            modifier = Modifier.offset(y = offsetY.value.dp).alpha(alpha.value),
+            style = androidx.compose.ui.text.TextStyle(
+                shadow = androidx.compose.ui.graphics.Shadow(
+                    color = Color.Black.copy(alpha = 0.5f),
+                    offset = androidx.compose.ui.geometry.Offset(2f, 2f),
+                    blurRadius = 4f
+                )
+            )
+        )
     }
 }

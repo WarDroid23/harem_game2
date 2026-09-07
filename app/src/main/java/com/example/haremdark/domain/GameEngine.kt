@@ -776,6 +776,10 @@ class GameEngine(private val context: Context) {
             addLog("★ ${character.name} postoupila do fáze zkázanosti: ${phaseInfo?.name ?: "$newPhase"}!")
         }
 
+        // Affinity increase on interaction
+        character.affinityPoints += 1
+        character.affinityLevel = com.example.haremdark.data.AffinityData.getLevelForPoints(character.affinityPoints)
+        
         // Add player XP & harem EXP
         addPlayerXp(12)
         addHaremExp(8)

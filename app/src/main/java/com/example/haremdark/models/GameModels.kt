@@ -308,7 +308,8 @@ data class CombatSession(
     val log: List<String> = emptyList(),
     var isOver: Boolean = false,
     var victory: Boolean = false,
-    var lootGained: String? = null
+    var lootGained: String? = null,
+    var skillCooldowns: Map<String, Int> = emptyMap()
 )
 
 @Serializable

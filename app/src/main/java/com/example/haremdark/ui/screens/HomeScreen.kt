@@ -45,14 +45,16 @@ fun HomeScreen(
     val context = LocalContext.current
     val player = gameState.player
     val favorite = gameState.characters.firstOrNull { it.oblibena }
+    val showEventLog = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = PaddingValues(top = 10.dp, bottom = 90.dp)
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(top = 10.dp, bottom = 220.dp)
+        ) {
         // Hero Image Banner
         item {
             Box(
@@ -377,44 +379,82 @@ fun HomeScreen(
             }
         }
 
-        // Activity Log
-        item {
-            Text(
-                text = "Kronika dominia (Záznamy)",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(top = 8.dp)
+    }
+        
+        // Event Log Widget
+        if (showEventLog.value) {
+            EventLogWidget(
+                logs = gameState.gameLog,
+                onClose = { showEventLog.value = false },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 80.dp) // Leave space for navigation bar
             )
         }
+    }
+}
 
-        items(gameState.gameLog.take(8)) { log ->
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+@Composable
+fun EventLogWidget(logs: List<String>, onClose: () -> Unit = {}, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(140.dp)
+            .padding(horizontal = 8.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp).fillMaxSize()) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.HistoryEdu, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Kronika dominia", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+                IconButton(onClick = onClose, modifier = Modifier.size(20.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "Zavřít", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                }
+            }
+            
+            androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+            Spacer(modifier = Modifier.height(6.dp))
+            
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.HistoryEdu,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = log,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
-                    )
+                items(logs.take(30), key = { it + System.identityHashCode(it) }) { log ->
+                    LogEntryRow(log)
                 }
             }
         }
     }
 }
+
+@Composable
+fun LogEntryRow(log: String) {
+    val visibleState = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        visibleState.value = true
+    }
+    androidx.compose.animation.AnimatedVisibility(
+        visible = visibleState.value,
+        enter = androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(500)) + androidx.compose.animation.expandVertically(),
+        exit = androidx.compose.animation.fadeOut()
+    ) {
+        Row(verticalAlignment = Alignment.Top, modifier = Modifier.padding(vertical = 2.dp)) {
+            Text("•", color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(end = 6.dp), fontSize = 12.sp)
+            Text(
+                text = log,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 14.sp
+            )
+        }
+    }
+}
+
 
 @Composable
 fun ResourceItem(icon: ImageVector, color: Color, label: String, value: String, progress: Float? = null) {
