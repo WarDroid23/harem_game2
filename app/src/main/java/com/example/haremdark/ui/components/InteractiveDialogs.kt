@@ -44,6 +44,12 @@ import com.example.haremdark.models.Character
 import com.example.haremdark.models.InventoryItem
 import com.example.haremdark.models.Player
 import com.example.haremdark.domain.GameEngine
+import com.example.haremdark.domain.VoiceManager
+import com.example.haremdark.domain.VoiceTriggerType
+import com.example.haremdark.models.EquipmentLoadout
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.BorderStroke
+import android.widget.Toast
 
 @Composable
 fun CharacterDetailDialog(
@@ -58,7 +64,8 @@ fun CharacterDetailDialog(
     onRent: (String, Int) -> Unit,
     onUpgradeSkill: (String) -> Unit,
     onEquipItem: (String, String) -> Unit,
-    onUnequipItem: (String) -> Unit
+    onUnequipItem: (String) -> Unit,
+    engine: GameEngine? = null
 ) {
     val loyalty = StaticData.getLoyaltyTier(character.loajalita)
     val archetype = StaticData.ARCHETYPES[character.archetypeId]
@@ -233,7 +240,7 @@ fun CharacterDetailDialog(
                 ) {
                     when (selectedSection) {
                         0 -> ProfileAndStatsTab(character = character, loyaltyTier = loyalty, archetype = archetype, phase = phase)
-                        1 -> EquipmentTab(character = character, player = player, onEquip = onEquipItem, onUnequip = onUnequipItem)
+                        1 -> EquipmentTab(character = character, player = player, onEquip = onEquipItem, onUnequip = onUnequipItem, engine = engine)
                         2 -> AffinityAndDialogueTab(character = character)
                         3 -> GiftingAndItemsTab(
                             character = character,
@@ -1682,8 +1689,10 @@ fun EquipmentTab(
     character: Character,
     player: Player,
     onEquip: (String, String) -> Unit,
-    onUnequip: (String) -> Unit
+    onUnequip: (String) -> Unit,
+    engine: GameEngine? = null
 ) {
+    val context = LocalContext.current
     val slots = listOf(
         Pair("weapon", "🗡️ Zbraň"),
         Pair("armor", "🛡️ Zbroj"),
@@ -1691,10 +1700,14 @@ fun EquipmentTab(
     )
     
     var expandedSlot by remember { mutableStateOf<String?>(null) }
+    var showSaveLoadoutDialog by remember { mutableStateOf(false) }
+    var newLoadoutName by remember { mutableStateOf("") }
+    var selectedSituation by remember { mutableStateOf("DPS") }
+    var selectedIcon by remember { mutableStateOf("⚔️") }
     
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(bottom = 20.dp)
     ) {
         item {
@@ -1703,9 +1716,93 @@ fun EquipmentTab(
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Bojová Výbava", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                    Text("Vybavte dívku nalezenými předměty pro zvýšení jejích šancí v aréně.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Bojová Výbava & Sety", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            // Voice Trigger Button: Combat War Cry
+                            IconButton(
+                                onClick = {
+                                    val line = VoiceManager.playTriggerVoice(VoiceTriggerType.COMBAT_START, character)
+                                    Toast.makeText(context, "📣 ${character.name}: „$line“", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.Default.VolumeUp, contentDescription = "Bojový pokřik", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
+                            }
+                            // Voice Trigger Button: Affinity Chime
+                            IconButton(
+                                onClick = {
+                                    val line = VoiceManager.playTriggerVoice(VoiceTriggerType.AFFINITY_LEVEL_UP, character)
+                                    Toast.makeText(context, "💖 ${character.name}: „$line“", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.Default.Favorite, contentDescription = "Hlas pouta", tint = Color(0xFFE91E63), modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
+                    Text("Přepínejte mezi specializovanými sety výbavy pro různé situace v boji nebo uložte vlastní set.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f))
+                }
+            }
+        }
+
+        // Quick Loadouts Carousel
+        if (engine != null) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("⚔️ Bojové sety pro situace:", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFFFFD700))
+                        TextButton(
+                            onClick = {
+                                newLoadoutName = "Bojový set ${character.name}"
+                                showSaveLoadoutDialog = true
+                            },
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("+ Uložit set", fontSize = 11.sp)
+                        }
+                    }
+
+                    val allLoadouts = engine.getAllLoadouts()
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(allLoadouts) { loadout ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                border = BorderStroke(1.dp, Color(0xFFCE93D8).copy(alpha = 0.4f)),
+                                modifier = Modifier.clickable {
+                                    val (success, msg) = engine.applyLoadout(loadout.id, character.id)
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Text(loadout.icon, fontSize = 13.sp)
+                                    Column {
+                                        Text(loadout.name, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                        Text(loadout.situationTag, fontSize = 9.sp, color = Color(0xFFFF80AB))
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1773,6 +1870,73 @@ fun EquipmentTab(
                 }
             }
         }
+    }
+
+    if (showSaveLoadoutDialog && engine != null) {
+        AlertDialog(
+            onDismissRequest = { showSaveLoadoutDialog = false },
+            title = { Text("💾 Uložit set výbavy") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Uloží aktuální výbavu dívky ${character.name} do bojového loadoutu pro rychlé přepínání před bojem.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    )
+                    OutlinedTextField(
+                        value = newLoadoutName,
+                        onValueChange = { newLoadoutName = it },
+                        label = { Text("Název setu") },
+                        placeholder = { Text("např. Smrtící dýka") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text("Bojové zaměření:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    val situations = listOf("DPS", "TANK", "DARK_MAGIC", "BLEED", "BALANCED", "CUSTOM")
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        items(situations) { tag ->
+                            FilterChip(
+                                selected = selectedSituation == tag,
+                                onClick = { selectedSituation = tag },
+                                label = { Text(tag, fontSize = 10.sp) }
+                            )
+                        }
+                    }
+                    Text("Ikona setu:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    val icons = listOf("⚔️", "🛡️", "🔮", "🩸", "⚖️", "👑", "🏹")
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(icons) { ic ->
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (selectedIcon == ic) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.clickable { selectedIcon = ic }.padding(2.dp)
+                            ) {
+                                Text(ic, fontSize = 18.sp, modifier = Modifier.padding(6.dp))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val saved = engine.saveCurrentLoadout(
+                        name = newLoadoutName.ifBlank { "Bojový set ${character.name}" },
+                        situationTag = selectedSituation,
+                        icon = selectedIcon,
+                        characterId = character.id
+                    )
+                    Toast.makeText(context, "Set '${saved.name}' byl úspěšně uložen!", Toast.LENGTH_SHORT).show()
+                    showSaveLoadoutDialog = false
+                }) {
+                    Text("Uložit")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSaveLoadoutDialog = false }) {
+                    Text("Zrušit")
+                }
+            }
+        )
     }
 }
 

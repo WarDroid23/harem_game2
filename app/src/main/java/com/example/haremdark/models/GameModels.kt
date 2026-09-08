@@ -277,6 +277,11 @@ data class Player(
         InventoryItem("kralovska_listina", "Královská výsadní listina", "Listina s puncem královského rodu pro jednání s inkvizicí.", 1, 350, "quest", "⚜️", "Legendární", "+25 Reputace v metropoli")
     ),
     var bankGold: Int = 0,
+    var toxicity: Int = 0,
+    var maxToxicity: Int = 100,
+    var haremHarmony: Int = 85,
+    var drugsCraftedTotal: Int = 0,
+    var drugsSoldTotal: Int = 0,
     var agents: MutableList<Agent> = mutableListOf(
         Agent("Vesper, Noční stín", 1, 75, "vymahač")
     )
@@ -337,6 +342,21 @@ data class PartyBuff(
 )
 
 @Serializable
+data class EquipmentLoadout(
+    val id: String,
+    val name: String,
+    val icon: String = "⚔️",
+    val description: String = "",
+    val situationTag: String = "DPS", // "DPS", "TANK", "DARK_MAGIC", "BLEED", "BALANCED", "CUSTOM"
+    val weaponItem: InventoryItem? = null,
+    val armorItem: InventoryItem? = null,
+    val accessoryItem: InventoryItem? = null,
+    val playerWeaponIndex: Int = 0,
+    val targetCharacterId: String? = null,
+    val isDefaultPreset: Boolean = false
+)
+
+@Serializable
 data class GameSave(
     val version: String = "22.1-dark",
     val saveDate: String,
@@ -357,7 +377,9 @@ data class GameSave(
     val lastMissionUpdateDay: Int = 0,
     val gameLog: List<String> = emptyList(),
     val activeBuffs: List<PartyBuff> = emptyList(),
-    val resourceHistory: List<DailyResourceStat> = emptyList()
+    val resourceHistory: List<DailyResourceStat> = emptyList(),
+    val savedLoadouts: List<EquipmentLoadout> = emptyList(),
+    val activeLoadoutId: String? = null
 )
 
 @Serializable

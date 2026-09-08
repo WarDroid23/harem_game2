@@ -578,7 +578,8 @@ fun HaremScreen(
             onUnequipItem = { slotId ->
                 engine.unequipItemFromCharacter(currentConcubine.id, slotId)
                 Toast.makeText(context, "Předmět odepnut.", Toast.LENGTH_SHORT).show()
-            }
+            },
+            engine = engine
         )
     }
     if (filterSheetExpanded) {

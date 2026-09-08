@@ -3,6 +3,8 @@ package com.example.haremdark.domain
 import android.content.Context
 import com.example.haremdark.data.AffinityData
 import com.example.haremdark.data.DomainData
+import com.example.haremdark.data.DrugData
+import com.example.haremdark.data.DrugDefinition
 import com.example.haremdark.data.GameContent
 import com.example.haremdark.data.GameInteraction
 import com.example.haremdark.data.StaticData
@@ -588,6 +590,17 @@ class GameEngine(private val context: Context) {
             p.sexEnergy = newMaxSex
             p.darkEnergy = newMaxDark
             p.hp = p.maxHp
+            p.toxicity = (p.toxicity - 8).coerceAtLeast(0)
+
+            // Process Harem Roles perks
+            val firstLady = updatedCharacters.firstOrNull { it.role == "Paní harému (První dáma)" }
+            if (firstLady != null) {
+                p.haremHarmony = (p.haremHarmony + 5).coerceAtMost(100)
+            }
+            val companion = updatedCharacters.firstOrNull { it.role == "Důvěrná společnice" }
+            if (companion != null) {
+                p.sexEnergy = (p.sexEnergy + 15).coerceAtMost(p.maxSexEnergy)
+            }
 
             // Random Jealousy / Night incident check if favorite exists
             if (favorites.isNotEmpty() && updatedCharacters.size > 1 && Random.nextFloat() < 0.35f) {
@@ -596,6 +609,7 @@ class GameEngine(private val context: Context) {
                 if (other != null) {
                     other.strach = (other.strach + 4).coerceAtMost(100)
                     other.humiliation = (other.humiliation + 3).coerceAtMost(100)
+                    p.haremHarmony = (p.haremHarmony - 3).coerceAtLeast(10)
                     addLog("★ Noční incident: Ostatní dívky žárlí na oblíbenkyni ${fav.name}. ${other.name} cítí tlak v harému.")
                 }
             }
@@ -804,7 +818,14 @@ class GameEngine(private val context: Context) {
         addLog(fullMessage)
         updateState { it.copy() }
         
-        com.example.haremdark.domain.VoiceManager.speak(unlockedDialogue)
+        if (newAffinityLevel > prevAffinityLevel) {
+            com.example.haremdark.domain.VoiceManager.playTriggerVoice(
+                com.example.haremdark.domain.VoiceTriggerType.AFFINITY_LEVEL_UP,
+                character
+            )
+        } else {
+            com.example.haremdark.domain.VoiceManager.speak(unlockedDialogue, character.archetypeId)
+        }
         
         return Pair(true, fullMessage)
     }
@@ -1311,6 +1332,364 @@ class GameEngine(private val context: Context) {
         return Pair(true, msg)
     }
 
+    // --- UNDERWORLD DRUGS & CARTEL SYSTEM ---
+
+    fun craftDrug(drugId: String): Pair<Boolean, String> {
+        val drug = DrugData.getDrugById(drugId) ?: return Pair(false, "Neznámá substance.")
+        val current = _gameState.value
+        val p = current.player
+
+        if (p.gold < drug.goldCost) {
+            return Pair(false, "Nedostatek zlata pro syntézu (${p.gold}/${drug.goldCost} zlatých)!")
+        }
+        if (p.darkEnergy < drug.darkCost) {
+            return Pair(false, "Nedostatek temné energie (${p.darkEnergy}/${drug.darkCost} TE)!")
+        }
+        if (p.wood < drug.woodCost) {
+            return Pair(false, "Nedostatek bylin a organických esencí (${p.wood}/${drug.woodCost} bylin)!")
+        }
+        if (p.mana < drug.manaCost) {
+            return Pair(false, "Nedostatek many (${p.mana}/${drug.manaCost} many)!")
+        }
+
+        // Harem role perk: Správkyně laboratoře gives +50% extra yield
+        val hasLabOverseer = current.characters.any { it.role == "Správkyně laboratoře" }
+        val yield = if (hasLabOverseer) (drug.yieldCount * 1.5).toInt().coerceAtLeast(drug.yieldCount + 1) else drug.yieldCount
+
+        val item = DrugData.toInventoryItem(drug, count = yield)
+        val overseerNote = if (hasLabOverseer) " (Bonus Správkyně laboratoře: +${yield - drug.yieldCount} dávka!)" else ""
+        val msg = "⚗️ V laboratoři jsi syntetizoval ${yield}x ${drug.name} [${drug.streetName}]$overseerNote!"
+
+        updateState { state ->
+            val newItems = state.player.items.map { it.copy() }.toMutableList()
+            val existing = newItems.firstOrNull { it.id == drug.id }
+            if (existing != null) {
+                existing.count += yield
+            } else {
+                newItems.add(item)
+            }
+
+            val newP = state.player.copy(
+                gold = (state.player.gold - drug.goldCost).coerceAtLeast(0),
+                darkEnergy = (state.player.darkEnergy - drug.darkCost).coerceAtLeast(0),
+                wood = (state.player.wood - drug.woodCost).coerceAtLeast(0),
+                mana = (state.player.mana - drug.manaCost).coerceAtLeast(0),
+                drugsCraftedTotal = state.player.drugsCraftedTotal + yield,
+                items = newItems
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newP, gameLog = logs)
+        }
+        addPlayerXp(20)
+        return Pair(true, msg)
+    }
+
+    fun useDrugOnPlayer(drugId: String): Pair<Boolean, String> {
+        val drug = DrugData.getDrugById(drugId) ?: return Pair(false, "Neznámá substance.")
+        val current = _gameState.value
+        val item = current.player.items.firstOrNull { it.id == drugId && it.count > 0 }
+            ?: return Pair(false, "Tuto substanci nemáš v zásobách!")
+
+        val msg = "🌿 ${drug.name}: ${drug.flavorMessagePlayer}"
+
+        updateState { state ->
+            val p = state.player
+            var newHp = p.hp
+            var newSex = p.sexEnergy
+            var newDark = p.darkEnergy
+            var newDominance = p.dominance
+            var newToxicity = (p.toxicity + drug.toxicityGain).coerceIn(0, p.maxToxicity)
+
+            when (drugId) {
+                "drug_cerny_lotos" -> {
+                    newDark = (p.darkEnergy + 50).coerceAtMost(p.maxDarkEnergy)
+                    newSex = (p.sexEnergy + 35).coerceAtMost(p.maxSexEnergy)
+                }
+                "drug_krvavy_prach" -> {
+                    newHp = (p.hp + 25).coerceAtMost(p.maxHp)
+                    newDominance += 3
+                }
+                "drug_stinove_opium" -> {
+                    newHp = (p.hp + 60).coerceAtMost(p.maxHp)
+                }
+                "drug_krystalicka_extaze" -> {
+                    newSex = (p.sexEnergy + 45).coerceAtMost(p.maxSexEnergy)
+                    newDominance += 2
+                }
+                "drug_nocni_bes" -> {
+                    newDark = (p.darkEnergy + 25).coerceAtMost(p.maxDarkEnergy)
+                    newHp = (p.hp + 20).coerceAtMost(p.maxHp)
+                }
+                "drug_esence_zapomneni" -> {
+                    newDark = (p.darkEnergy + 40).coerceAtMost(p.maxDarkEnergy)
+                }
+                "drug_cistici_elixir" -> {
+                    newHp = (p.hp + 35).coerceAtMost(p.maxHp)
+                    newToxicity = (p.toxicity - 40).coerceAtLeast(0)
+                }
+            }
+
+            val updatedItems = p.items.mapNotNull { itm ->
+                if (itm.id == drugId) {
+                    val remaining = itm.count - 1
+                    if (remaining > 0) itm.copy(count = remaining) else null
+                } else itm.copy()
+            }.toMutableList()
+
+            val newPlayer = p.copy(
+                hp = newHp,
+                sexEnergy = newSex,
+                darkEnergy = newDark,
+                dominance = newDominance,
+                toxicity = newToxicity,
+                items = updatedItems
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newPlayer, gameLog = logs)
+        }
+
+        // If in combat, apply combat boost
+        val session = _combatState.value
+        if (session != null && !session.isOver) {
+            when (drugId) {
+                "drug_krvavy_prach" -> {
+                    session.logEntries.add(CombatLogEntry(
+                        turn = session.turnCount,
+                        type = "buff",
+                        message = "🩸 Krvavý amok! Útok pána vzrostl o +25 bodů a v očích mu planou démonické plameny!"
+                    ))
+                }
+                "drug_nocni_bes" -> {
+                    session.logEntries.add(CombatLogEntry(
+                        turn = session.turnCount,
+                        type = "buff",
+                        message = "🐍 Reflexy stínové zmije! Obrana pána vzrostla o +15 bodů a uhýbá úderům!"
+                    ))
+                }
+                "drug_stinove_opium", "drug_cistici_elixir" -> {
+                    session.playerHp = (session.playerHp + 45).coerceAtMost(session.playerMaxHp)
+                }
+            }
+        }
+
+        addPlayerXp(12)
+        return Pair(true, msg)
+    }
+
+    fun administerDrugToConcubine(drugId: String, characterId: String): Pair<Boolean, String> {
+        val drug = DrugData.getDrugById(drugId) ?: return Pair(false, "Neznámá substance.")
+        val current = _gameState.value
+        val item = current.player.items.firstOrNull { it.id == drugId && it.count > 0 }
+            ?: return Pair(false, "Tuto substanci nemáš v zásobách!")
+        val character = current.characters.firstOrNull { it.id == characterId }
+            ?: return Pair(false, "Dívka nenalezena.")
+
+        var msg = "${character.name} ${drug.flavorMessageConcubine}"
+
+        updateState { state ->
+            val updatedItems = state.player.items.mapNotNull { itm ->
+                if (itm.id == drugId) {
+                    val remaining = itm.count - 1
+                    if (remaining > 0) itm.copy(count = remaining) else null
+                } else itm.copy()
+            }.toMutableList()
+
+            val updatedCharacters = state.characters.map { c ->
+                if (c.id == characterId) {
+                    if (drugId == "drug_cistici_elixir") {
+                        val newAddiction = (c.zavislost - 35).coerceAtLeast(0)
+                        val newType = if (newAddiction == 0) null else c.typZavislosti
+                        c.copy(
+                            zavislost = newAddiction,
+                            typZavislosti = newType,
+                            hp = (c.hp + 30).coerceAtMost(c.maxHp),
+                            duvera = (c.duvera + 12).coerceAtMost(100),
+                            lastInteractionDay = state.player.day
+                        )
+                    } else {
+                        val newAddiction = (c.zavislost + drug.addictionGain).coerceAtMost(100)
+                        var newTouha = c.touha
+                        var newVlhkost = c.vlhkost
+                        var newLoajalita = c.loajalita
+                        var newPoslusnost = c.poslusnost
+                        var newStrach = c.strach
+                        var newSubmisivita = c.submisivita
+                        var newBloodlust = c.bloodlust
+                        var newDuvera = c.duvera
+                        var extraAffinity = 15
+
+                        when (drugId) {
+                            "drug_cerny_lotos" -> {
+                                newTouha = (newTouha + 35).coerceAtMost(100)
+                                newVlhkost = (newVlhkost + 30).coerceAtMost(100)
+                                newLoajalita = (newLoajalita + 20).coerceAtMost(100)
+                                extraAffinity = 18
+                            }
+                            "drug_krvavy_prach" -> {
+                                newTouha = (newTouha + 30).coerceAtMost(100)
+                                newBloodlust = (newBloodlust + 25).coerceAtMost(100)
+                                extraAffinity = 14
+                            }
+                            "drug_stinove_opium" -> {
+                                newStrach = (newStrach - 30).coerceAtLeast(0)
+                                newPoslusnost = (newPoslusnost + 25).coerceAtMost(100)
+                                newSubmisivita = (newSubmisivita + 25).coerceAtMost(100)
+                                extraAffinity = 12
+                            }
+                            "drug_krystalicka_extaze" -> {
+                                newTouha = (newTouha + 45).coerceAtMost(100)
+                                newVlhkost = (newVlhkost + 40).coerceAtMost(100)
+                                newLoajalita = (newLoajalita + 25).coerceAtMost(100)
+                                extraAffinity = 22
+                            }
+                            "drug_nocni_bes" -> {
+                                newBloodlust = (newBloodlust + 15).coerceAtMost(100)
+                                newPoslusnost = (newPoslusnost + 15).coerceAtMost(100)
+                                extraAffinity = 12
+                            }
+                            "drug_esence_zapomneni" -> {
+                                newStrach = (newStrach - 40).coerceAtLeast(0)
+                                newDuvera = (newDuvera + 35).coerceAtMost(100)
+                                newLoajalita = (newLoajalita + 30).coerceAtMost(100)
+                                newSubmisivita = (newSubmisivita + 25).coerceAtMost(100)
+                                extraAffinity = 25
+                            }
+                        }
+
+                        val newAff = c.affinityPoints + extraAffinity
+                        c.copy(
+                            zavislost = newAddiction,
+                            typZavislosti = drug.name,
+                            touha = newTouha,
+                            vlhkost = newVlhkost,
+                            loajalita = newLoajalita,
+                            poslusnost = newPoslusnost,
+                            strach = newStrach,
+                            submisivita = newSubmisivita,
+                            bloodlust = newBloodlust,
+                            duvera = newDuvera,
+                            affinityPoints = newAff,
+                            affinityLevel = AffinityData.getLevelForPoints(newAff),
+                            lastInteractionDay = state.player.day
+                        )
+                    }
+                } else c
+            }
+
+            val newPlayer = state.player.copy(items = updatedItems)
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newPlayer, characters = updatedCharacters, gameLog = logs)
+        }
+
+        addPlayerXp(15)
+        return Pair(true, msg)
+    }
+
+    fun distributeDrugsOnTerritory(drugId: String, territoryId: String, quantity: Int = 1): Pair<Boolean, String> {
+        val drug = DrugData.getDrugById(drugId) ?: return Pair(false, "Neznámá substance.")
+        val current = _gameState.value
+        val item = current.player.items.firstOrNull { it.id == drugId && it.count >= quantity }
+            ?: return Pair(false, "Nemáš dostatek této substance pro distribuci (${quantity}x)!")
+        val territory = current.mafiaTerritories.firstOrNull { it.id == territoryId }
+            ?: return Pair(false, "Území nebylo nalezeno.")
+
+        // Calculate sale profit
+        val basePrice = drug.streetPrice * quantity
+        val courierConcubine = current.characters.firstOrNull { it.role == "Mafiánská kurýrka" }
+        val courierBonusMultiplier = if (courierConcubine != null) 1.35f else 1.0f
+        val territoryMultiplier = 1.0f + (territory.level * 0.10f)
+
+        val totalGold = (basePrice * courierBonusMultiplier * territoryMultiplier).toInt()
+        val darkGain = 5 * quantity
+
+        val courierNote = if (courierConcubine != null) " (Kurýrka ${courierConcubine.name}: +35% bonus!)" else ""
+        val msg = "💰 Na černém trhu území '${territory.name}' bylo prodáno ${quantity}x ${drug.name} za $totalGold zlatých a +$darkGain TE$courierNote."
+
+        updateState { state ->
+            val updatedItems = state.player.items.mapNotNull { itm ->
+                if (itm.id == drugId) {
+                    val rem = itm.count - quantity
+                    if (rem > 0) itm.copy(count = rem) else null
+                } else itm.copy()
+            }.toMutableList()
+
+            val updatedTerritories = state.mafiaTerritories.map { t ->
+                if (t.id == territoryId) {
+                    t.copy(securityLevel = (t.securityLevel + (2 * quantity)).coerceAtMost(100))
+                } else t
+            }
+
+            val newPlayer = state.player.copy(
+                gold = state.player.gold + totalGold,
+                darkEnergy = (state.player.darkEnergy + darkGain).coerceAtMost(state.player.maxDarkEnergy),
+                drugsSoldTotal = state.player.drugsSoldTotal + quantity,
+                items = updatedItems
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(
+                player = newPlayer,
+                mafiaTerritories = updatedTerritories,
+                gameLog = logs
+            )
+        }
+        addPlayerXp(16 * quantity)
+        return Pair(true, msg)
+    }
+
+    fun assignHaremRole(characterId: String, roleTitle: String): Pair<Boolean, String> {
+        val current = _gameState.value
+        val char = current.characters.firstOrNull { it.id == characterId }
+            ?: return Pair(false, "Dívka nenalezena.")
+
+        val msg = "👑 ${char.name} byla jmenována do role: $roleTitle!"
+
+        updateState { state ->
+            val updated = state.characters.map { c ->
+                if (roleTitle == "Paní harému (První dáma)" && c.role == "Paní harému (První dáma)" && c.id != characterId) {
+                    c.copy(role = "členka harému")
+                } else if (c.id == characterId) {
+                    c.copy(role = roleTitle)
+                } else c
+            }
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(characters = updated, gameLog = logs)
+        }
+        return Pair(true, msg)
+    }
+
+    fun hostHaremBanquet(): Pair<Boolean, String> {
+        val current = _gameState.value
+        val p = current.player
+        val costGold = 60
+        val costSex = 10
+
+        if (p.gold < costGold) return Pair(false, "Nedostatek zlata na uspořádání hostiny ($costGold zlatých)!")
+        if (p.sexEnergy < costSex) return Pair(false, "Nedostatek sexuální energie ($costSex SE)!")
+        if (current.characters.isEmpty()) return Pair(false, "V harému nemáš žádné dívky!")
+
+        val msg = "🥂 Uspořádal jsi velkolepou noční hostinu plnou vína a vybraných lahůdek pro celý svůj harém. Harmonie vzrostla na maximum (+20 harmonie, +6 loajalita všech dívek)!"
+
+        updateState { state ->
+            val updatedCharacters = state.characters.map { c ->
+                c.copy(
+                    loajalita = (c.loajalita + 6).coerceAtMost(100),
+                    touha = (c.touha + 6).coerceAtMost(100),
+                    duvera = (c.duvera + 4).coerceAtMost(100),
+                    hp = (c.hp + 20).coerceAtMost(c.maxHp)
+                )
+            }
+            val newPlayer = state.player.copy(
+                gold = state.player.gold - costGold,
+                sexEnergy = state.player.sexEnergy - costSex,
+                haremHarmony = (state.player.haremHarmony + 20).coerceAtMost(100)
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newPlayer, characters = updatedCharacters, gameLog = logs)
+        }
+        addPlayerXp(25)
+        return Pair(true, msg)
+    }
+
     fun giveDirectGift(giftId: String, characterId: String): Pair<Boolean, String> {
         val current = _gameState.value
         val gift = GameContent.DIRECT_GIFTS.firstOrNull { it.id == giftId }
@@ -1365,13 +1744,24 @@ class GameEngine(private val context: Context) {
                 gameLog = logs
             )
         }
-        com.example.haremdark.domain.VoiceManager.speak(unlockedDialogue)
+        if (newAffinityLvl > prevAffinityLevel) {
+            val charForVoice = _gameState.value.characters.firstOrNull { it.id == characterId } ?: character
+            com.example.haremdark.domain.VoiceManager.playTriggerVoice(
+                com.example.haremdark.domain.VoiceTriggerType.AFFINITY_LEVEL_UP,
+                charForVoice
+            )
+        } else {
+            com.example.haremdark.domain.VoiceManager.speak(unlockedDialogue, character.archetypeId)
+        }
         addPlayerXp(12)
         progressMission("GIFT", 1)
         return Pair(true, msg)
     }
 
     fun useItemOnConcubine(itemId: String, characterId: String): Pair<Boolean, String> {
+        if (itemId.startsWith("drug_")) {
+            return administerDrugToConcubine(itemId, characterId)
+        }
         val current = _gameState.value
         val item = current.player.items.firstOrNull { it.id == itemId && it.count > 0 }
             ?: return Pair(false, "Předmět není v inventáři.")
@@ -1482,6 +1872,9 @@ class GameEngine(private val context: Context) {
     }
 
     fun useCombatConsumableOnPlayer(itemId: String): Pair<Boolean, String> {
+        if (itemId.startsWith("drug_")) {
+            return useDrugOnPlayer(itemId)
+        }
         val current = _gameState.value
         val item = current.player.items.firstOrNull { it.id == itemId && it.count > 0 }
             ?: return Pair(false, "Předmět není k dispozici v brašně.")
@@ -1635,11 +2028,23 @@ class GameEngine(private val context: Context) {
             fighterHp = (player.hp + haremAffinityHpBonus).coerceAtMost(fighterMaxHp)
         }
         
+        val fighterChar = current.characters.firstOrNull { it.id == characterId }
+        val warCry = com.example.haremdark.domain.VoiceManager.playTriggerVoice(
+            com.example.haremdark.domain.VoiceTriggerType.COMBAT_START,
+            fighterChar,
+            fighterName
+        )
+
         val initialEntries = mutableListOf<CombatLogEntry>()
         initialEntries.add(CombatLogEntry(
             turn = 1,
             type = "system",
             message = "⚔️ $fighterName vstupuje do boje proti: ${boss.name} (${boss.phaseName})!"
+        ))
+        initialEntries.add(CombatLogEntry(
+            turn = 1,
+            type = "player_support",
+            message = "📣 ${fighterChar?.name ?: "Pán Dominia"}: „$warCry“"
         ))
 
         if (characterId != null) {
@@ -2664,6 +3069,158 @@ class GameEngine(private val context: Context) {
             current.copy(characters = updatedCharacters)
         }
         autoSave()
+    }
+
+    // --- EQUIPMENT LOADOUT SYSTEM ---
+    val defaultCombatLoadouts: List<EquipmentLoadout> = listOf(
+        EquipmentLoadout(
+            id = "preset_dps",
+            name = "Agresivní útok",
+            icon = "⚔️",
+            description = "Maximalizuje útočné poškození a kritické zásahy pro rychlé zničení tuhých bossů.",
+            situationTag = "DPS",
+            weaponItem = InventoryItem("krvavy_mec_loadout", "Krvavý meč zkázy", "Masivní zvýšení útoku.", 1, 150, "equipment", "🗡️", "Epický", "+18 Boj, +8% Šance na kritický zásah", "weapon", 18, 0, 0),
+            armorItem = InventoryItem("lehka_kuze_loadout", "Bitevní kožená zbroj", "Zvyšuje rychlost a obratnost.", 1, 100, "equipment", "🥋", "Vzácný", "+6 Boj, +4 Obrana", "armor", 6, 4, 10),
+            accessoryItem = InventoryItem("prsten_hnevu_loadout", "Prsten krvavého hněvu", "Posiluje každý zásah smrtící zuřivostí.", 1, 120, "equipment", "💍", "Epický", "+10 Boj, +12% Průraznost", "accessory", 10, 0, 0),
+            playerWeaponIndex = 0,
+            isDefaultPreset = true
+        ),
+        EquipmentLoadout(
+            id = "preset_tank",
+            name = "Obranný štít",
+            icon = "🛡️",
+            description = "Zaměřeno na absorpci drtivých úderů, vysokou obranu a velké množství životů.",
+            situationTag = "TANK",
+            weaponItem = InventoryItem("tezky_palcat_loadout", "Těžký rytířský palcát", "Pevná zbraň schopná omráčit nepřítele.", 1, 120, "equipment", "🔨", "Vzácný", "+10 Boj, +3 Obrana", "weapon", 10, 3, 0),
+            armorItem = InventoryItem("stribrna_zbroj_loadout", "Stříbrná plátová zbroj", "Masivní pláty chránící před smrtícími údery.", 1, 180, "equipment", "🛡️", "Epický", "+16 Obrana, +40 HP", "armor", 0, 16, 40),
+            accessoryItem = InventoryItem("stozar_strazce_loadout", "Amulet železného strážce", "Snižuje veškeré příchozí poškození o 15%.", 1, 140, "equipment", "📿", "Epický", "+8 Obrana, +25 HP", "accessory", 0, 8, 25),
+            playerWeaponIndex = 0,
+            isDefaultPreset = true
+        ),
+        EquipmentLoadout(
+            id = "preset_magic",
+            name = "Temná magie",
+            icon = "🔮",
+            description = "Posiluje temnou energii, vysávání životů (lifesteal) a sílu stínových kouzel.",
+            situationTag = "DARK_MAGIC",
+            weaponItem = InventoryItem("stinova_hul_loadout", "Hůl nočních stínů", "Koncentruje temnou energii do drtivých výbojů.", 1, 160, "equipment", "🪄", "Epický", "+14 Boj, +25 Temná energie", "weapon", 14, 2, 0),
+            armorItem = InventoryItem("temna_roba_loadout", "Róba stínového kněze", "Chrání před kouzly a urychluje doplňování many.", 1, 130, "equipment", "👘", "Vzácný", "+6 Boj, +8 Obrana, +20 HP", "armor", 6, 8, 20),
+            accessoryItem = InventoryItem("oko_temnoty_loadout", "Oko prázdnoty", "Převádí způsobené zranění zpět do léčení.", 1, 150, "equipment", "🧿", "Legendární", "+8 Boj, +5 Obrana, +15 HP", "accessory", 8, 5, 15),
+            playerWeaponIndex = 1,
+            isDefaultPreset = true
+        ),
+        EquipmentLoadout(
+            id = "preset_bleed",
+            name = "Krvácivá dýka",
+            icon = "🩸",
+            description = "Rychlé zásahy způsobující nepříteli těžké krvácení a postupné oslabování.",
+            situationTag = "BLEED",
+            weaponItem = InventoryItem("otravena_dyka_loadout", "Otrávená dýka stínů", "Čepel napuštěná jedem působícím poškození každé kolo.", 1, 140, "equipment", "🗡️", "Epický", "+15 Boj, Krvácení (3 kola)", "weapon", 15, 0, 0),
+            armorItem = InventoryItem("kape_stinu_loadout", "Kápě tichého asasína", "Umožňuje vyhnout se nejtěžším úderům.", 1, 110, "equipment", "🥷", "Vzácný", "+5 Boj, +7 Obrana", "armor", 5, 7, 0),
+            accessoryItem = InventoryItem("zub_bestie_loadout", "Zub noční bestie", "Zvyšuje šanci na krvácivý zásah o 25%.", 1, 95, "equipment", "🦷", "Vzácný", "+8 Boj, +10 HP", "accessory", 8, 2, 10),
+            playerWeaponIndex = 0,
+            isDefaultPreset = true
+        ),
+        EquipmentLoadout(
+            id = "preset_balanced",
+            name = "Vyvážený šermíř",
+            icon = "⚖️",
+            description = "Univerzální kombinace útoku, obrany a výdrže vhodná pro všechny běžné expedice.",
+            situationTag = "BALANCED",
+            weaponItem = InventoryItem("vyvazeny_mec_loadout", "Ocelový meč velitele", "Dobře vyvážená čepel pro útok i krytí.", 1, 110, "equipment", "⚔️", "Vzácný", "+11 Boj, +4 Obrana", "weapon", 11, 4, 0),
+            armorItem = InventoryItem("krouzkova_kosile_loadout", "Vyztužená kroužková košile", "Spolehlivá ochrana celého trupu.", 1, 100, "equipment", "🛡️", "Běžný", "+8 Obrana, +20 HP", "armor", 0, 8, 20),
+            accessoryItem = InventoryItem("amulet_odvahy_loadout", "Amulet odvahy a cti", "Dodává klid a rozvahu v boji.", 1, 90, "equipment", "🏅", "Běžný", "+4 Boj, +4 Obrana, +10 HP", "accessory", 4, 4, 10),
+            playerWeaponIndex = 0,
+            isDefaultPreset = true
+        )
+    )
+
+    fun getAllLoadouts(): List<EquipmentLoadout> {
+        val userSaved = _gameState.value.savedLoadouts
+        return defaultCombatLoadouts + userSaved
+    }
+
+    fun saveCurrentLoadout(name: String, situationTag: String, icon: String, characterId: String?): EquipmentLoadout {
+        val current = _gameState.value
+        val char = if (characterId != null) {
+            current.characters.firstOrNull { it.id == characterId }
+        } else {
+            current.characters.firstOrNull()
+        }
+
+        val weapon = char?.equipment?.get("weapon")
+        val armor = char?.equipment?.get("armor")
+        val accessory = char?.equipment?.get("accessory")
+
+        val newLoadout = EquipmentLoadout(
+            id = "custom_loadout_${System.currentTimeMillis()}",
+            name = name.ifBlank { "Vlastní set" },
+            icon = icon.ifBlank { "⚔️" },
+            description = "Uložený set výbavy (${if (char != null) char.name else "Pán"})",
+            situationTag = situationTag,
+            weaponItem = weapon,
+            armorItem = armor,
+            accessoryItem = accessory,
+            playerWeaponIndex = current.player.equippedWeaponIndex,
+            targetCharacterId = characterId
+        )
+
+        updateState { state ->
+            val updatedLoadouts = state.savedLoadouts.filter { it.id != newLoadout.id } + newLoadout
+            state.copy(
+                savedLoadouts = updatedLoadouts,
+                activeLoadoutId = newLoadout.id
+            )
+        }
+        autoSave()
+        return newLoadout
+    }
+
+    fun applyLoadout(loadoutId: String, characterId: String?): Pair<Boolean, String> {
+        val all = getAllLoadouts()
+        val loadout = all.firstOrNull { it.id == loadoutId }
+            ?: return Pair(false, "Loadout nebyl nalezen.")
+
+        var targetName = "Tým"
+        updateState { current ->
+            val targetCharId = characterId ?: loadout.targetCharacterId ?: current.characters.firstOrNull()?.id
+            val updatedCharacters = current.characters.map { char ->
+                if (char.id == targetCharId) {
+                    targetName = char.name
+                    val newEquipMap = char.equipment.toMutableMap()
+                    if (loadout.weaponItem != null) newEquipMap["weapon"] = loadout.weaponItem
+                    if (loadout.armorItem != null) newEquipMap["armor"] = loadout.armorItem
+                    if (loadout.accessoryItem != null) newEquipMap["accessory"] = loadout.accessoryItem
+                    char.copy(equipment = newEquipMap)
+                } else char
+            }
+
+            val newPlayer = current.player.copy(
+                equippedWeaponIndex = loadout.playerWeaponIndex.coerceIn(0, (current.player.weapons.size - 1).coerceAtLeast(0))
+            )
+
+            current.copy(
+                player = newPlayer,
+                characters = updatedCharacters,
+                activeLoadoutId = loadout.id
+            )
+        }
+        autoSave()
+        return Pair(true, "Aktivován loadout '${loadout.name}' (${loadout.situationTag}) pro $targetName!")
+    }
+
+    fun deleteCustomLoadout(loadoutId: String): Boolean {
+        var removed = false
+        updateState { current ->
+            val filtered = current.savedLoadouts.filter { it.id != loadoutId }
+            if (filtered.size != current.savedLoadouts.size) {
+                removed = true
+                val newActive = if (current.activeLoadoutId == loadoutId) null else current.activeLoadoutId
+                current.copy(savedLoadouts = filtered, activeLoadoutId = newActive)
+            } else current
+        }
+        if (removed) autoSave()
+        return removed
     }
 
 }

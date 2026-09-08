@@ -33,10 +33,14 @@ import kotlin.math.roundToInt
 import com.example.haremdark.R
 import com.example.haremdark.data.GameContent
 import com.example.haremdark.domain.GameEngine
+import com.example.haremdark.domain.VoiceManager
+import com.example.haremdark.domain.VoiceTriggerType
 import com.example.haremdark.models.Boss
 import com.example.haremdark.models.CombatLogEntry
 import com.example.haremdark.models.CombatSession
 import com.example.haremdark.models.GameSave
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.lazy.LazyRow
 
 @Composable
 fun TurnBasedCombatModule(
@@ -136,6 +140,44 @@ fun ActiveCombatView(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+
+                        // Active Loadout Badge
+                        val currentLoadout = engine.getAllLoadouts().firstOrNull { it.id == gameState.activeLoadoutId }
+                            ?: engine.defaultCombatLoadouts.first()
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF2E1C2B),
+                            border = BorderStroke(1.dp, Color(0xFFCE93D8).copy(alpha = 0.5f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(currentLoadout.icon, fontSize = 11.sp)
+                                Text(
+                                    text = currentLoadout.situationTag,
+                                    color = Color(0xFFFF80AB),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        // Battle Cry Audio Trigger Button
+                        IconButton(
+                            onClick = {
+                                VoiceManager.playTriggerVoice(VoiceTriggerType.COMBAT_START, deployedChar)
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.VolumeUp,
+                                contentDescription = "Bojový pokřik",
+                                tint = Color(0xFFFF80AB),
+                                modifier = Modifier.size(18.dp)
                             )
                         }
 
@@ -1139,8 +1181,76 @@ fun EnemyRosterView(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Koho chceš vyslat do boje proti ${boss.name}?", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Příprava na boj: ${boss.name}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    Text("Vyber bojový loadout a šampiona pro tento střet.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    
+                    // --- QUICK LOADOUT SELECTION CAROUSEL ---
+                    Text("⚔️ Bojový Loadout (přepnout set výbavy):", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = Color(0xFFFFD700))
+                    Spacer(modifier = Modifier.height(6.dp))
+                    
+                    val allLoadouts = remember(gameState.savedLoadouts) { engine.getAllLoadouts() }
+                    val activeId = gameState.activeLoadoutId ?: engine.defaultCombatLoadouts.first().id
+                    
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    ) {
+                        items(allLoadouts) { loadout ->
+                            val isSelected = (loadout.id == activeId)
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) Color(0xFF5E1738) else MaterialTheme.colorScheme.surfaceVariant,
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) Color(0xFFFF80AB) else Color.White.copy(alpha = 0.15f)
+                                ),
+                                modifier = Modifier.clickable {
+                                    engine.applyLoadout(loadout.id, null)
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(loadout.icon, fontSize = 13.sp)
+                                    Column {
+                                        Text(
+                                            text = loadout.name,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            fontSize = 11.sp,
+                                            color = if (isSelected) Color(0xFFFFD700) else MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = loadout.situationTag,
+                                            fontSize = 9.sp,
+                                            color = if (isSelected) Color(0xFFFF80AB) else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    val selectedLoadoutObj = allLoadouts.firstOrNull { it.id == activeId }
+                    if (selectedLoadoutObj != null) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0x33000000),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+                        ) {
+                            Text(
+                                text = "ℹ️ ${selectedLoadoutObj.description}",
+                                fontSize = 10.sp,
+                                color = Color(0xFFE1BEE7),
+                                modifier = Modifier.padding(6.dp)
+                            )
+                        }
+                    }
+
+                    Text("Koho chceš vyslat do boje?", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                    Spacer(modifier = Modifier.height(8.dp))
                     
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         item {

@@ -260,6 +260,37 @@ object GameContent {
                 c.touha = (c.touha + 12).coerceAtMost(100)
                 "💍 Tvá manželka ${c.name} v tvém náručí znovu stvrdila slib věrnosti na život a na smrt."
             }
+        ),
+        GameInteraction(
+            id = "nocni_rozhovor",
+            name = "Důvěrná noční rozmluva 🕯️",
+            type = "odmena",
+            description = "Dlouhý intimní rozhovor o jejích tajných touhách, snech a minulosti při svíčkách.",
+            energyCost = 6,
+            effectDescription = "+16 Důvěra, +12 Srdce, +10 Loajalita, -12 Strach",
+            applyEffect = { c, _ ->
+                c.duvera = (c.duvera + 16).coerceAtMost(100)
+                c.srdce = (c.srdce + 12).coerceAtMost(100)
+                c.loajalita = (c.loajalita + 10).coerceAtMost(100)
+                c.strach = (c.strach - 12).coerceAtLeast(0)
+                "${c.name} ti za svitu svíce s pohnutím otevřela své srdce a svěřila své nejhlubší obavy."
+            }
+        ),
+        GameInteraction(
+            id = "spolecna_lazen_harem",
+            name = "Velká lázeň harému 🛁",
+            type = "odmena",
+            description = "Společná lázeň v horkých pramenech s omamnými silicemi posilující harmonii a pouta.",
+            energyCost = 14,
+            goldCost = 35,
+            effectDescription = "+15 Harmonie harému, +12 Loajalita, +10 Vlhkost, regenerace HP",
+            applyEffect = { c, p ->
+                c.loajalita = (c.loajalita + 12).coerceAtMost(100)
+                c.vlhkost = (c.vlhkost + 10).coerceAtMost(100)
+                c.hp = (c.hp + 25).coerceAtMost(c.maxHp)
+                p.haremHarmony = (p.haremHarmony + 8).coerceAtMost(100)
+                "${c.name} si v horkých vodách vonných lázní užívala tvou přítomnost po boku ostatních dívek."
+            }
         )
     )
 
@@ -393,6 +424,59 @@ object GameContent {
                 c.submisivita = (c.submisivita + 15).coerceAtMost(100)
                 c.loajalita = (c.loajalita + 10).coerceAtMost(100)
                 "${c.name} v transu opakuje tvé jméno jako jedinou modlitbu."
+            }
+        ),
+        GameInteraction(
+            id = "narkoticka_masaz",
+            name = "Narkotická masáž těla 🌺",
+            type = "intimni",
+            description = "Vtírání vonných olejů z Černého lotosu do jejího těla s pomalým drážděním.",
+            energyCost = 10,
+            darkCost = 5,
+            goldCost = 15,
+            effectDescription = "+18 Touha, +20 Vlhkost, +14 Důvěra, +12 Loajalita, -10 Strach",
+            applyEffect = { c, _ ->
+                c.touha = (c.touha + 18).coerceAtMost(100)
+                c.vlhkost = (c.vlhkost + 20).coerceAtMost(100)
+                c.duvera = (c.duvera + 14).coerceAtMost(100)
+                c.loajalita = (c.loajalita + 12).coerceAtMost(100)
+                c.strach = (c.strach - 10).coerceAtLeast(0)
+                "${c.name} se pod teplým narkotickým olejem zcela uvolnila, její kůže zrůžověla a vzdychá blahem."
+            }
+        ),
+        GameInteraction(
+            id = "drogovy_trans",
+            name = "Drogový trans rozkoše 💎",
+            type = "intimni",
+            description = "Společné požití omamného Hvězdného třpytu pro nekontrolovatelnou vlnu euforie a touhy.",
+            energyCost = 15,
+            darkCost = 10,
+            goldCost = 25,
+            effectDescription = "+28 Touha, +25 Vlhkost, +20 Loajalita, +15 Závislost, stav omámení",
+            applyEffect = { c, _ ->
+                c.touha = (c.touha + 28).coerceAtMost(100)
+                c.vlhkost = (c.vlhkost + 25).coerceAtMost(100)
+                c.loajalita = (c.loajalita + 20).coerceAtMost(100)
+                c.zavislost = (c.zavislost + 15).coerceAtMost(100)
+                c.typZavislosti = "Krystalická extáze"
+                "${c.name} se ocitla v extatickém rauši. Ztrácí jakýkoli pojem o čase a dožaduje se tvého doteku."
+            }
+        ),
+        GameInteraction(
+            id = "krvava_prisaha",
+            name = "Krvavá přísaha věrnosti 🩸",
+            type = "intimni",
+            description = "Smísení krve s runami stínů. Trvale pečetí pouto na život a na smrt.",
+            energyCost = 20,
+            darkCost = 18,
+            minPhase = 2,
+            effectDescription = "+30 Loajalita, +25 Poslušnost, +20 Krvelačnost, Pouto krve",
+            applyEffect = { c, _ ->
+                c.loajalita = (c.loajalita + 30).coerceAtMost(100)
+                c.poslusnost = (c.poslusnost + 25).coerceAtMost(100)
+                c.bloodlust = (c.bloodlust + 20).coerceAtMost(100)
+                c.fazeZkazenosti = (c.fazeZkazenosti + 1).coerceAtMost(6)
+                "${c.name} ti podala ruku se zkrvavenou dlaní a políbila tvé rty. Vaše duše jsou nyní nerozlučně spojeny."
             }
         )
     )

@@ -41,6 +41,11 @@ import com.example.haremdark.domain.GameEngine
 import com.example.haremdark.models.Character
 import com.example.haremdark.models.GameSave
 import com.example.haremdark.models.InventoryItem
+import com.example.haremdark.models.EquipmentLoadout
+import com.example.haremdark.domain.VoiceManager
+import com.example.haremdark.domain.VoiceTriggerType
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.lazy.LazyRow
 
 enum class ItemSortOption(val title: String) {
     COUNT_DESC("Největší počet"),
@@ -240,7 +245,7 @@ fun InventoryScreen(
         // --- CATEGORY SELECTOR TABS ---
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             CategoryTabChip(
                 title = "Dary",
@@ -278,143 +283,157 @@ fun InventoryScreen(
                 onClick = { selectedTab = 3 },
                 modifier = Modifier.weight(0.85f)
             )
+            CategoryTabChip(
+                title = "Sety",
+                count = engine.getAllLoadouts().size,
+                icon = "⚔️",
+                selected = selectedTab == 4,
+                accentColor = Color(0xFF00BCD4),
+                onClick = { selectedTab = 4 },
+                modifier = Modifier.weight(1f)
+            )
         }
 
-        // --- SEARCH BAR & SORTING ROW ---
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Hledat v inventáři...", fontSize = 12.sp) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = "Vymazat", modifier = Modifier.size(16.dp))
+        if (selectedTab == 4) {
+            // --- LOADOUT MANAGEMENT VIEW ---
+            LoadoutsInventoryTab(gameState = gameState, engine = engine)
+        } else {
+            // --- SEARCH BAR & SORTING ROW ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Hledat v inventáři...", fontSize = 12.sp) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Vymazat", modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                    ),
+                    modifier = Modifier.weight(1f).height(50.dp)
+                )
+
+                // Sort Menu Box
+                var sortMenuExpanded by remember { mutableStateOf(false) }
+                Box {
+                    OutlinedButton(
+                        onClick = { sortMenuExpanded = true },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.height(50.dp)
+                    ) {
+                        Icon(Icons.Default.Sort, contentDescription = "Řazení", modifier = Modifier.size(18.dp))
+                    }
+                    DropdownMenu(
+                        expanded = sortMenuExpanded,
+                        onDismissRequest = { sortMenuExpanded = false }
+                    ) {
+                        ItemSortOption.values().forEach { option ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        option.title,
+                                        fontWeight = if (selectedSort == option) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (selectedSort == option) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                },
+                                onClick = {
+                                    selectedSort = option
+                                    sortMenuExpanded = false
+                                }
+                            )
                         }
                     }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                ),
-                modifier = Modifier.weight(1f).height(50.dp)
-            )
-
-            // Sort Menu Box
-            var sortMenuExpanded by remember { mutableStateOf(false) }
-            Box {
-                OutlinedButton(
-                    onClick = { sortMenuExpanded = true },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.height(50.dp)
-                ) {
-                    Icon(Icons.Default.Sort, contentDescription = "Řazení", modifier = Modifier.size(18.dp))
                 }
-                DropdownMenu(
-                    expanded = sortMenuExpanded,
-                    onDismissRequest = { sortMenuExpanded = false }
+            }
+
+            // --- EMPTY STATE / ITEMS LIST ---
+            if (filteredItems.isEmpty()) {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth().padding(top = 20.dp)
                 ) {
-                    ItemSortOption.values().forEach { option ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    option.title,
-                                    fontWeight = if (selectedSort == option) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (selectedSort == option) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                )
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = when (selectedTab) {
+                                0 -> "🎁 V této kategorii nemáš žádné dary pro harém."
+                                1 -> "🧪 Žádné bojové lektvary v brašně."
+                                2 -> "📜 Žádné úkolové předměty nenalezeny."
+                                else -> "🎒 Brašna je v této sekci prázdná."
                             },
-                            onClick = {
-                                selectedSort = option
-                                sortMenuExpanded = false
+                            style = MaterialTheme.typography.titleSmall,
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = when (selectedTab) {
+                                0 -> "Dary můžeš zakoupit na tržnici nebo získat z průzkumu dominií a úkolů."
+                                1 -> "Lektvary můžeš uvařit v Alchymistické laboratoři v Pevnosti nebo vybojovat v aréně."
+                                2 -> "Úkolové předměty získáš plněním misí mafie, zkoumáním mapy a lovem bossů."
+                                else -> "Získej nové předměty bojem, alchymií nebo misemi."
+                            },
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (selectedTab == 1 && onNavigateToActivities != null) {
+                                Button(
+                                    onClick = onNavigateToActivities,
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Icon(Icons.Default.Science, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Do Alchymie")
+                                }
                             }
+                        }
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(bottom = 90.dp)
+                ) {
+                    items(filteredItems, key = { it.id }) { item ->
+                        val catType = getItemCategoryType(item)
+                        InventoryItemCard(
+                            item = item,
+                            categoryType = catType,
+                            onGiftClick = { selectedItemForGift = item },
+                            onUseCombatClick = {
+                                val (success, msg) = engine.useCombatConsumableOnPlayer(item.id)
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            },
+                            onInspectQuestClick = {
+                                val (success, lore) = engine.inspectQuestItem(item.id)
+                                inspectedQuestLore = Pair(item.name, lore)
+                            },
+                            onDetailsClick = { selectedItemForDetails = item },
+                            onSellClick = { selectedItemForSell = item }
                         )
                     }
-                }
-            }
-        }
-
-        // --- EMPTY STATE / ITEMS LIST ---
-        if (filteredItems.isEmpty()) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-                modifier = Modifier.fillMaxWidth().padding(top = 20.dp)
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(28.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text(
-                        text = when (selectedTab) {
-                            0 -> "🎁 V této kategorii nemáš žádné dary pro harém."
-                            1 -> "🧪 Žádné bojové lektvary v brašně."
-                            2 -> "📜 Žádné úkolové předměty nenalezeny."
-                            else -> "🎒 Brašna je v této sekci prázdná."
-                        },
-                        style = MaterialTheme.typography.titleSmall,
-                        textAlign = TextAlign.Center,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = when (selectedTab) {
-                            0 -> "Dary můžeš zakoupit na tržnici nebo získat z průzkumu dominií a úkolů."
-                            1 -> "Lektvary můžeš uvařit v Alchymistické laboratoři v Pevnosti nebo vybojovat v aréně."
-                            2 -> "Úkolové předměty získáš plněním misí mafie, zkoumáním mapy a lovem bossů."
-                            else -> "Získej nové předměty bojem, alchymií nebo misemi."
-                        },
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (selectedTab == 1 && onNavigateToActivities != null) {
-                            Button(
-                                onClick = onNavigateToActivities,
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Icon(Icons.Default.Science, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Do Alchymie")
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(bottom = 90.dp)
-            ) {
-                items(filteredItems, key = { it.id }) { item ->
-                    val catType = getItemCategoryType(item)
-                    InventoryItemCard(
-                        item = item,
-                        categoryType = catType,
-                        onGiftClick = { selectedItemForGift = item },
-                        onUseCombatClick = {
-                            val (success, msg) = engine.useCombatConsumableOnPlayer(item.id)
-                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                        },
-                        onInspectQuestClick = {
-                            val (success, lore) = engine.inspectQuestItem(item.id)
-                            inspectedQuestLore = Pair(item.name, lore)
-                        },
-                        onDetailsClick = { selectedItemForDetails = item },
-                        onSellClick = { selectedItemForSell = item }
-                    )
                 }
             }
         }
@@ -973,5 +992,421 @@ fun GiftToCharacterModal(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun LoadoutsInventoryTab(
+    gameState: GameSave,
+    engine: GameEngine
+) {
+    val context = LocalContext.current
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var selectedLoadoutToApply by remember { mutableStateOf<EquipmentLoadout?>(null) }
+    var newName by remember { mutableStateOf("") }
+    var selectedSituation by remember { mutableStateOf("DPS") }
+    var selectedIcon by remember { mutableStateOf("⚔️") }
+    var sourceCharacterId by remember { mutableStateOf<String?>(null) }
+
+    val allLoadouts = remember(gameState.savedLoadouts) { engine.getAllLoadouts() }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(bottom = 90.dp)
+    ) {
+        // Hero Header Banner
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "⚔️ Bojové Sety & Loadouty",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFFD700)
+                            )
+                            Text(
+                                text = "Přednastavené konfigurace výbavy pro různé situace v boji.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                newName = "Vlastní set #${allLoadouts.size + 1}"
+                                showCreateDialog = true
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Uložit set", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0x33000000),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "💡 Taktický tip: Přepínejte mezi vysokým poškozením (DPS), obranou (Tank) nebo temnou magií před každým bossem jediným klepnutím!",
+                            fontSize = 11.sp,
+                            color = Color(0xFFCE93D8),
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        items(allLoadouts, key = { it.id }) { loadout ->
+            val isActive = loadout.id == gameState.activeLoadoutId
+
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isActive) Color(0xFF2E1C2B) else MaterialTheme.colorScheme.surfaceVariant
+                ),
+                border = BorderStroke(
+                    1.5.dp,
+                    if (isActive) Color(0xFFFF80AB) else Color.White.copy(alpha = 0.08f)
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // Header Row: Icon, Name, Situation Badge, Status
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(loadout.icon, fontSize = 22.sp)
+                            Column {
+                                Text(
+                                    text = loadout.name,
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = if (isActive) Color(0xFFFFD700) else MaterialTheme.colorScheme.onSurface
+                                )
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color(0xFF9C27B0).copy(alpha = 0.3f)
+                                ) {
+                                    Text(
+                                        text = "Situace: ${loadout.situationTag}",
+                                        color = Color(0xFFFF80AB),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        if (isActive) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFF4CAF50).copy(alpha = 0.25f)
+                            ) {
+                                Text(
+                                    text = "✅ AKTIVNÍ",
+                                    color = Color(0xFF81C784),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Description
+                    Text(
+                        text = loadout.description,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 16.sp
+                    )
+
+                    // Equipment slots breakdown
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0x22000000),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("🗡️ Zbraň:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                                Text(
+                                    loadout.weaponItem?.name ?: "Základní zbraň",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFFFFCC80)
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("🛡️ Zbroj:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                                Text(
+                                    loadout.armorItem?.name ?: "Žádná zbroj",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF90CAF9)
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("💍 Doplněk:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                                Text(
+                                    loadout.accessoryItem?.name ?: "Žádný amulet",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFFCE93D8)
+                                )
+                            }
+                        }
+                    }
+
+                    // Action buttons row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Sound test button
+                        IconButton(
+                            onClick = {
+                                val deployed = gameState.characters.firstOrNull()
+                                val line = VoiceManager.playTriggerVoice(VoiceTriggerType.COMBAT_START, deployed)
+                                Toast.makeText(context, "📣 Bojový pokřik: „$line“", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(Icons.Default.VolumeUp, contentDescription = "Bojový pokřik", tint = Color(0xFFFF80AB))
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            // Delete button if custom
+                            if (!loadout.isDefaultPreset) {
+                                OutlinedButton(
+                                    onClick = {
+                                        val removed = engine.deleteCustomLoadout(loadout.id)
+                                        val msg = if (removed) "Set '${loadout.name}' byl smazán." else "Set nelze smazat."
+                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text("Smazat", fontSize = 11.sp)
+                                }
+                            }
+
+                            // Quick Apply button
+                            Button(
+                                onClick = {
+                                    selectedLoadoutToApply = loadout
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text("⚡ Aktivovat set", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Modal to choose who to equip with the loadout
+    selectedLoadoutToApply?.let { loadout ->
+        Dialog(onDismissRequest = { selectedLoadoutToApply = null }) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Aktivovat ${loadout.name}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Vyberte, komu chcete tuto bojovou konfiguraci nasadit:",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.weight(1f, fill = false)
+                    ) {
+                        item {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    val (success, msg) = engine.applyLoadout(loadout.id, null)
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                    selectedLoadoutToApply = null
+                                }
+                            ) {
+                                Row(modifier = Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("👑", fontSize = 20.sp)
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text("Pán Dominia (Ty)", fontWeight = FontWeight.Bold)
+                                        Text("Aktivovat zbraň a nastavit jako hlavní bojový profil", fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
+
+                        items(gameState.characters) { girl ->
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    val (success, msg) = engine.applyLoadout(loadout.id, girl.id)
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                    selectedLoadoutToApply = null
+                                }
+                            ) {
+                                Row(modifier = Modifier.padding(10.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("⚔️", fontSize = 18.sp)
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(girl.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text("Boj: ${girl.skills["combat"] ?: 0} | HP: ${girl.hp}/${girl.maxHp}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Button(
+                        onClick = { selectedLoadoutToApply = null },
+                        modifier = Modifier.align(Alignment.End),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Zavřít")
+                    }
+                }
+            }
+        }
+    }
+
+    // Modal to create/save a new loadout
+    if (showCreateDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreateDialog = false },
+            title = { Text("💾 Uložit nový bojový set") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Vytvoří nový loadout z aktuálně nasazené výbavy hráče nebo vybrané dívky.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    )
+                    OutlinedTextField(
+                        value = newName,
+                        onValueChange = { newName = it },
+                        label = { Text("Název loadoutu") },
+                        placeholder = { Text("např. Elitní assasin") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Text("Zdroj výbavy:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        item {
+                            FilterChip(
+                                selected = sourceCharacterId == null,
+                                onClick = { sourceCharacterId = null },
+                                label = { Text("👑 Pán", fontSize = 11.sp) }
+                            )
+                        }
+                        items(gameState.characters) { char ->
+                            FilterChip(
+                                selected = sourceCharacterId == char.id,
+                                onClick = { sourceCharacterId = char.id },
+                                label = { Text(char.name, fontSize = 11.sp) }
+                            )
+                        }
+                    }
+
+                    Text("Bojová situace / Typ:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    val situations = listOf("DPS", "TANK", "DARK_MAGIC", "BLEED", "BALANCED", "CUSTOM")
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        items(situations) { tag ->
+                            FilterChip(
+                                selected = selectedSituation == tag,
+                                onClick = { selectedSituation = tag },
+                                label = { Text(tag, fontSize = 10.sp) }
+                            )
+                        }
+                    }
+
+                    Text("Ikona:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    val icons = listOf("⚔️", "🛡️", "🔮", "🩸", "⚖️", "👑", "🏹")
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(icons) { ic ->
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (selectedIcon == ic) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.clickable { selectedIcon = ic }.padding(2.dp)
+                            ) {
+                                Text(ic, fontSize = 18.sp, modifier = Modifier.padding(6.dp))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val saved = engine.saveCurrentLoadout(
+                        name = newName.ifBlank { "Vlastní set #${allLoadouts.size + 1}" },
+                        situationTag = selectedSituation,
+                        icon = selectedIcon,
+                        characterId = sourceCharacterId
+                    )
+                    Toast.makeText(context, "Bojový set '${saved.name}' byl vytvořen!", Toast.LENGTH_SHORT).show()
+                    showCreateDialog = false
+                }) {
+                    Text("Uložit")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateDialog = false }) {
+                    Text("Zrušit")
+                }
+            }
+        )
     }
 }
