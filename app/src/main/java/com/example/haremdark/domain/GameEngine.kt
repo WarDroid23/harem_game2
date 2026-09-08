@@ -776,32 +776,37 @@ class GameEngine(private val context: Context) {
             addLog("★ ${character.name} postoupila do fáze zkázanosti: ${phaseInfo?.name ?: "$newPhase"}!")
         }
 
-        // Affinity increase on interaction
-        character.affinityPoints += 1
-        character.affinityLevel = com.example.haremdark.data.AffinityData.getLevelForPoints(character.affinityPoints)
+        // Affinity increase on interaction based on interaction depth and bond
+        val prevAffinityLevel = character.affinityLevel
+        val affinityGain = when (interaction.type) {
+            "intimni" -> 8 + if (character.oblibena || character.jeManzelkou) 4 else 0
+            "rozmluva" -> 5 + if (character.oblibena || character.jeManzelkou) 3 else 0
+            else -> 4 + if (character.oblibena || character.jeManzelkou) 2 else 0
+        }
+        character.affinityPoints += affinityGain
+        val newAffinityLevel = com.example.haremdark.data.AffinityData.getLevelForPoints(character.affinityPoints)
+        character.affinityLevel = newAffinityLevel
+
+        val tierInfo = com.example.haremdark.data.AffinityData.getTierForPoints(character.affinityPoints)
+        val levelUpAnnouncement = if (newAffinityLevel > prevAffinityLevel) {
+            "\n🌟 Pouto posíleno! ${character.name} dosáhla úrovně vztahu ${tierInfo.level}: ${tierInfo.title}! ${tierInfo.combatBonusDescription}"
+        } else ""
+
+        // Unique unlocked dialogue based on affinity tier & archetype
+        val unlockedDialogue = com.example.haremdark.data.AffinityData.getRandomActiveDialogue(character)
         
         // Add player XP & harem EXP
         addPlayerXp(12)
         addHaremExp(8)
         progressMission("INTERACT", 1)
 
-        addLog(message)
+        val fullMessage = "$message (+$affinityGain náklonnost)\n💬 ${character.name}: „$unlockedDialogue“$levelUpAnnouncement"
+        addLog(fullMessage)
         updateState { it.copy() }
         
-        if (character.affinityPoints >= 100 || character.oblibena || character.jeManzelkou) {
-            val lines = listOf(
-                "Můj pane, tvá vůle je mým zákonem.",
-                "Cokoliv si budeš přát.",
-                "Jsem jen a jen tvá, můj vládce.",
-                "Miluji tě, můj temný pane.",
-                "Moje tělo i duše patří jen tobě.",
-                "Jsem připravena na všechno, co si žádáš.",
-                "Z tvých rukou přijmu cokoliv."
-            )
-            com.example.haremdark.domain.VoiceManager.speak(lines.random())
-        }
+        com.example.haremdark.domain.VoiceManager.speak(unlockedDialogue)
         
-        return Pair(true, message)
+        return Pair(true, fullMessage)
     }
 
     fun setFavorite(characterId: String): String {
@@ -1318,7 +1323,16 @@ class GameEngine(private val context: Context) {
         }
 
         val affinityGain = (gift.loyaltyBoost + gift.trustBoost + gift.romanceBoost) / 2 + 10
-        val msg = "🎁 ${character.name} ${gift.flavorMessage} (+${gift.loyaltyBoost} loajalita, +${gift.desireBoost} touha, +$affinityGain náklonnost)"
+        val prevAffinityLevel = character.affinityLevel
+        val newAffinity = character.affinityPoints + affinityGain
+        val newAffinityLvl = AffinityData.getLevelForPoints(newAffinity)
+        val tierInfo = AffinityData.getTierForPoints(newAffinity)
+        val levelUpAnnouncement = if (newAffinityLvl > prevAffinityLevel) {
+            "\n🌟 Pouto posíleno! ${character.name} dosáhla úrovně vztahu ${tierInfo.level}: ${tierInfo.title}! ${tierInfo.combatBonusDescription}"
+        } else ""
+        val unlockedDialogue = AffinityData.getRandomActiveDialogue(character.copy(affinityPoints = newAffinity))
+        val msg = "🎁 ${character.name} ${gift.flavorMessage} (+${gift.loyaltyBoost} loajalita, +${gift.desireBoost} touha, +$affinityGain náklonnost)\n💬 ${character.name}: „$unlockedDialogue“$levelUpAnnouncement"
+
         updateState { state ->
             val updatedCharacters = state.characters.map { c ->
                 if (c.id == characterId) {
@@ -1328,8 +1342,6 @@ class GameEngine(private val context: Context) {
                     val newTrust = (c.duvera + gift.trustBoost).coerceAtMost(100)
                     val newRomance = (c.romanceBody + gift.romanceBoost).coerceAtMost(100)
                     val isPartner = c.partnerka || newRomance >= 50
-                    val newAffinity = c.affinityPoints + affinityGain
-                    val newAffinityLvl = AffinityData.getLevelForPoints(newAffinity)
                     c.copy(
                         loajalita = newLoyalty,
                         touha = newDesire,
@@ -1353,6 +1365,7 @@ class GameEngine(private val context: Context) {
                 gameLog = logs
             )
         }
+        com.example.haremdark.domain.VoiceManager.speak(unlockedDialogue)
         addPlayerXp(12)
         progressMission("GIFT", 1)
         return Pair(true, msg)
@@ -1611,17 +1624,46 @@ class GameEngine(private val context: Context) {
             val char = current.characters.firstOrNull { it.id == characterId }
             if (char != null) {
                 val hpBonus = char.equipment.values.filterNotNull().sumOf { it.hpBonus } + ((char.skills["vitality"] ?: 0) * 10)
+                val affinityBonus = com.example.haremdark.data.AffinityData.getAffinityCombatBonuses(char.affinityLevel)
                 fighterName = char.name
-                fighterHp = char.hp
-                fighterMaxHp = char.maxHp + hpBonus
+                fighterMaxHp = char.maxHp + hpBonus + affinityBonus.hpBonus
+                fighterHp = fighterMaxHp
             }
+        } else {
+            val haremAffinityHpBonus = current.characters.sumOf { com.example.haremdark.data.AffinityData.getAffinityCombatBonuses(it.affinityLevel).hpBonus / 4 }
+            fighterMaxHp = player.maxHp + haremAffinityHpBonus
+            fighterHp = (player.hp + haremAffinityHpBonus).coerceAtMost(fighterMaxHp)
         }
         
-        val initialEntry = CombatLogEntry(
+        val initialEntries = mutableListOf<CombatLogEntry>()
+        initialEntries.add(CombatLogEntry(
             turn = 1,
             type = "system",
             message = "⚔️ $fighterName vstupuje do boje proti: ${boss.name} (${boss.phaseName})!"
-        )
+        ))
+
+        if (characterId != null) {
+            val char = current.characters.firstOrNull { it.id == characterId }
+            if (char != null && char.affinityLevel >= 2) {
+                val tier = com.example.haremdark.data.AffinityData.getTierForPoints(char.affinityPoints)
+                initialEntries.add(CombatLogEntry(
+                    turn = 1,
+                    type = "buff",
+                    message = "💖 Pouto oddanosti (${tier.title}): ${tier.combatBonusDescription}"
+                ))
+            }
+        } else {
+            val highAffinityCount = current.characters.count { it.affinityLevel >= 2 }
+            if (highAffinityCount > 0) {
+                val totalRegen = current.characters.sumOf { com.example.haremdark.data.AffinityData.getAffinityCombatBonuses(it.affinityLevel).regenBonus }
+                val totalDef = current.characters.sumOf { com.example.haremdark.data.AffinityData.getAffinityCombatBonuses(it.affinityLevel).defenseBonus / 3 }
+                initialEntries.add(CombatLogEntry(
+                    turn = 1,
+                    type = "buff",
+                    message = "💖 Pasivní podpora harému ($highAffinityCount oddaných dívek): +$totalDef obrana, +$totalRegen HP/kolo!"
+                ))
+            }
+        }
         
         _combatState.value = CombatSession(
             boss = boss,
@@ -1635,8 +1677,8 @@ class GameEngine(private val context: Context) {
             enemyBleedTurns = 0,
             enemyStunned = false,
             activeBuff = null,
-            logEntries = listOf(initialEntry),
-            log = listOf(initialEntry.message),
+            logEntries = initialEntries,
+            log = initialEntries.map { it.message },
             isOver = false,
             victory = false,
             lootGained = null
@@ -1695,16 +1737,22 @@ class GameEngine(private val context: Context) {
         var victory = false
         var lootInfo: String? = null
         
-        // 1. Process Player Action
-        val level5Count = currentGameState.characters.count { it.affinityLevel >= 5 }
-        val playerMultiplier = 1.0f + (0.25f * level5Count)
+        // 1. Process Player Action with Affinity Passive Combat Bonuses
+        val deployedChar = currentGameState.characters.firstOrNull { it.id == session.deployedCharacterId }
+        val deployedAffinityBonus = deployedChar?.let { com.example.haremdark.data.AffinityData.getAffinityCombatBonuses(it.affinityLevel) }
+            ?: com.example.haremdark.data.AffinityCombatBonus(0, 0f, 0, 0, 0, 0)
+        
+        val haremCritBonus = currentGameState.characters.sumOf { com.example.haremdark.data.AffinityData.getAffinityCombatBonuses(it.affinityLevel).critBonus / 3 } + deployedAffinityBonus.critBonus
+        val haremDefenseBonus = currentGameState.characters.sumOf { com.example.haremdark.data.AffinityData.getAffinityCombatBonuses(it.affinityLevel).defenseBonus / 3 } + deployedAffinityBonus.defenseBonus
+        val haremDmgPercent = currentGameState.characters.sumOf { (com.example.haremdark.data.AffinityData.getAffinityCombatBonuses(it.affinityLevel).dmgMultiplierBonus * 0.4).toDouble() }.toFloat() + deployedAffinityBonus.dmgMultiplierBonus
+        val totalAffinityMultiplier = 1.0f + haremDmgPercent
 
         when (action) {
             "attack", "slash" -> {
-                val isCrit = Random.nextInt(100) < (15 + combatSkill * 2)
+                val isCrit = Random.nextInt(100) < (15 + combatSkill * 2 + haremCritBonus)
                 val critMultiplier = if (isCrit) 1.65f else 1.0f
                 val rawDmg = weaponDamage + combatSkill * 3 + Random.nextInt(-2, 5)
-                val finalDmg = (((rawDmg - (session.boss.defense * 0.35f)) * critMultiplier) * playerMultiplier).toInt().coerceAtLeast(6)
+                val finalDmg = (((rawDmg - (session.boss.defense * 0.35f)) * critMultiplier) * totalAffinityMultiplier).toInt().coerceAtLeast(6)
                 newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
                 val critText = if (isCrit) " 💥 KRITICKÝ ZÁSAH!" else ""
                 newLogEntries.add(0, CombatLogEntry(
@@ -1714,10 +1762,10 @@ class GameEngine(private val context: Context) {
                 ))
             }
             "heavy_strike" -> {
-                val isCrit = Random.nextInt(100) < 25
+                val isCrit = Random.nextInt(100) < (25 + haremCritBonus)
                 val multiplier = if (isCrit) 2.2f else 1.5f
                 val rawDmg = (weaponDamage * 1.5f) + combatSkill * 4 + Random.nextInt(2, 10)
-                val finalDmg = (((rawDmg - (session.boss.defense * 0.25f)) * multiplier) * playerMultiplier).toInt().coerceAtLeast(12)
+                val finalDmg = (((rawDmg - (session.boss.defense * 0.25f)) * multiplier) * totalAffinityMultiplier).toInt().coerceAtLeast(12)
                 newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
                 newLogEntries.add(0, CombatLogEntry(
                     turn = currentTurn,
@@ -1725,11 +1773,44 @@ class GameEngine(private val context: Context) {
                     message = "⚔️ Těžký útok ubral ${finalDmg} HP!"
                 ))
             }
+            "bleed_strike" -> {
+                val isCrit = Random.nextInt(100) < (30 + haremCritBonus)
+                val multiplier = if (isCrit) 1.8f else 1.3f
+                val rawDmg = weaponDamage + combatSkill * 3 + Random.nextInt(4, 12)
+                val finalDmg = (((rawDmg - (session.boss.defense * 0.2f)) * multiplier) * totalAffinityMultiplier).toInt().coerceAtLeast(10)
+                newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
+                newBleedTurns = 3
+                newLogEntries.add(0, CombatLogEntry(
+                    turn = currentTurn,
+                    type = "player_special",
+                    message = "🩸 Krvavé bodnutí zasadilo ${finalDmg} zranění a otevřelo ránu krvácející 3 kola!"
+                ))
+            }
+            "dark_burst" -> {
+                if (player.darkEnergy >= 10) {
+                    player.darkEnergy -= 10
+                    newPlayerDark = player.darkEnergy
+                    val rawDmg = 28 + (player.skills["temnota"] ?: 0) * 5 + Random.nextInt(6, 14)
+                    val finalDmg = (rawDmg * totalAffinityMultiplier).toInt().coerceAtLeast(18)
+                    newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "player_spell",
+                        message = "🔮 Temný výboj stínové energie prorazil obranu nepřítele za ${finalDmg} poškození (-10 TE)!"
+                    ))
+                } else {
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "system",
+                        message = "❌ Nemáš dostatek temné energie na Temný výboj (vyžaduje 10)!"
+                    ))
+                }
+            }
             "curse_shadow" -> {
                 if (player.darkEnergy >= 15) {
                     player.darkEnergy -= 15
                     newPlayerDark = player.darkEnergy
-                    val curseDmg = ((25 + (player.skills["temnota"] ?: 0) * 4) * playerMultiplier).toInt()
+                    val curseDmg = ((25 + (player.skills["temnota"] ?: 0) * 4) * totalAffinityMultiplier).toInt()
                     newBossHp = (newBossHp - curseDmg).coerceAtLeast(0)
                     activeBuff = "Prokletí stínů (Nepřítel oslaben)"
                     newLogEntries.add(0, CombatLogEntry(
@@ -1799,6 +1880,27 @@ class GameEngine(private val context: Context) {
                         message = "❌ V tvém harému není žádná otrokyně, která by ti dodala sílu!"
                     ))
                 }
+            }
+            "char_special" -> {
+                val deployedChar = currentGameState.characters.firstOrNull { it.id == session.deployedCharacterId }
+                val charName = deployedChar?.name ?: "Bojovnice z harému"
+                val charCombat = (deployedChar?.skills?.get("combat") ?: 1) + 4
+                val isCrit = Random.nextInt(100) < (35 + haremCritBonus)
+                val mult = if (isCrit) 2.2f else 1.6f
+                val rawDmg = (weaponDamage * 1.6f) + charCombat * 5 + Random.nextInt(8, 18)
+                val finalDmg = (((rawDmg - (session.boss.defense * 0.2f)) * mult) * totalAffinityMultiplier).toInt().coerceAtLeast(16)
+                newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
+                val stunSuccess = Random.nextInt(100) < 35
+                if (stunSuccess) {
+                    newStunned = true
+                }
+                val stunText = if (stunSuccess) " • Protivník byl OMRÁČEN!" else ""
+                val voiceShout = deployedChar?.let { com.example.haremdark.data.AffinityData.getRandomActiveDialogue(it) } ?: "Za mého pána!"
+                newLogEntries.add(0, CombatLogEntry(
+                    turn = currentTurn,
+                    type = "player_special",
+                    message = "✨ $charName: „$voiceShout“ aktivovala speciální techniku a zasadila $finalDmg poškození!$stunText"
+                ))
             }
             "item" -> {
                 val targetItemId = itemId ?: "hojivy_balzam"
@@ -1918,7 +2020,7 @@ class GameEngine(private val context: Context) {
             } else {
                 val isSpecialAttack = (currentTurn % 3 == 0)
                 val baseEnemyAtk = session.boss.attack
-                val defenseReduction = defenseSkill * 2.5f
+                val defenseReduction = (defenseSkill * 2.5f) + haremDefenseBonus
 
                 val rawBossDmg = if (isSpecialAttack) {
                     (baseEnemyAtk * 1.45f).toInt() + Random.nextInt(1, 6)
@@ -1926,8 +2028,8 @@ class GameEngine(private val context: Context) {
                     baseEnemyAtk + Random.nextInt(-2, 4)
                 }
 
-                var finalEnemyDmg = (rawBossDmg - defenseReduction).coerceAtLeast(4f).toInt()
-                finalEnemyDmg = (finalEnemyDmg * (1.0f / playerMultiplier)).toInt()
+                var finalEnemyDmg = (rawBossDmg - defenseReduction).coerceAtLeast(3f).toInt()
+                finalEnemyDmg = (finalEnemyDmg * (1.0f / totalAffinityMultiplier)).toInt()
                 if (isDefending) {
                     finalEnemyDmg = (finalEnemyDmg * 0.35f).toInt().coerceAtLeast(2)
                 }
@@ -1958,6 +2060,32 @@ class GameEngine(private val context: Context) {
                     ))
                     addLog("💀 Porážka v boji proti ${session.boss.name}!")
                 }
+            }
+        }
+
+        // 5. End of Turn Affinity Passives (Regen & Dark Energy)
+        if (!isOver && newPlayerHp > 0) {
+            val haremRegen = currentGameState.characters.sumOf { com.example.haremdark.data.AffinityData.getAffinityCombatBonuses(it.affinityLevel).regenBonus }
+            val totalRegen = haremRegen + deployedAffinityBonus.regenBonus
+            if (totalRegen > 0 && newPlayerHp < session.playerMaxHp) {
+                val healAmt = totalRegen.coerceAtMost(session.playerMaxHp - newPlayerHp)
+                newPlayerHp += healAmt
+                newLogEntries.add(0, CombatLogEntry(
+                    turn = currentTurn,
+                    type = "player_heal",
+                    message = "💖 Pouto náklonnosti: Pasivní regenerace harému vyléčila +$healAmt HP ($newPlayerHp/${session.playerMaxHp})!"
+                ))
+            }
+
+            val darkGain = currentGameState.characters.sumOf { com.example.haremdark.data.AffinityData.getAffinityCombatBonuses(it.affinityLevel).darkEnergyBonus } + deployedAffinityBonus.darkEnergyBonus
+            if (darkGain > 0 && player.darkEnergy < player.maxDarkEnergy) {
+                player.darkEnergy = (player.darkEnergy + darkGain).coerceAtMost(player.maxDarkEnergy)
+                newPlayerDark = player.darkEnergy
+                newLogEntries.add(0, CombatLogEntry(
+                    turn = currentTurn,
+                    type = "player_spell",
+                    message = "👑 Věčná královna: Pasivní dar věčného pouta obnovil +$darkGain temné energie ($newPlayerDark/${player.maxDarkEnergy})!"
+                ))
             }
         }
 
@@ -2079,14 +2207,37 @@ class GameEngine(private val context: Context) {
         saveStateAsync("save_slot_autosave", current)
     }
 
-    fun quickSave() {
+    fun quickSave(): Pair<Boolean, String> {
         val state = _gameState.value
         val current = state.copy(
             slotNumber = 99,
-            saveDate = "Den ${state.player.day} (Quick Save)"
+            saveDate = "Den ${state.player.day} (Rychlé uložení)"
         )
+        _gameState.value = current
         saveStateAsync("save_slot_quicksave", current)
-        addLog("⚡ Rychlé uložení dokončeno.")
+        saveStateAsync("save_slot_autosave", current)
+        val msg = "💾 Rychlé uložení: Stav pána (Den ${state.player.day}), statistiky ${state.characters.size} dívek i výbava úspěšně uloženy do DataStore."
+        addLog(msg)
+        return Pair(true, msg)
+    }
+
+    suspend fun quickSaveSuspend(): Pair<Boolean, String> {
+        val state = _gameState.value
+        val current = state.copy(
+            slotNumber = 99,
+            saveDate = "Den ${state.player.day} (Rychlé uložení)"
+        )
+        _gameState.value = current
+        val keyQuick = stringPreferencesKey("save_slot_quicksave")
+        val keyAuto = stringPreferencesKey("save_slot_autosave")
+        val jsonStr = json.encodeToString(current)
+        context.dataStore.edit { prefs ->
+            prefs[keyQuick] = jsonStr
+            prefs[keyAuto] = jsonStr
+        }
+        val msg = "💾 Rychlé uložení: Stav pána (Den ${state.player.day}), statistiky ${state.characters.size} dívek i výbava úspěšně uloženy do DataStore."
+        addLog(msg)
+        return Pair(true, msg)
     }
 
     suspend fun getSlotSummary(slot: Int): String {

@@ -9,6 +9,7 @@ data class AffinityTierInfo(
     val minPoints: Int,
     val maxPoints: Int,
     val perkDescription: String,
+    val combatBonusDescription: String = "Základní bojové zapojení bez pasivních bonusů",
     val icon: String,
     val colorHex: Long = 0xFFE91E63,
     val unlockedPerks: List<String> = listOf(perkDescription),
@@ -25,6 +26,7 @@ object AffinityData {
             minPoints = 0,
             maxPoints = 30,
             perkDescription = "Základní poslušnost ze strachu.",
+            combatBonusDescription = "⚔️ Žádný bojový bonus (nedůvěra)",
             icon = "⛓️",
             colorHex = 0xFF9E9E9E,
             unlockedPerks = listOf("Základní poslušnost ze strachu", "Možnost dávat dary a mluvit v komnatách")
@@ -36,6 +38,7 @@ object AffinityData {
             minPoints = 31,
             maxPoints = 70,
             perkDescription = "+10% zisk zlata ze správy komnat.",
+            combatBonusDescription = "🛡️ Pasivní boj: +10 Max HP & +2 obrana dominia",
             icon = "🗝️",
             colorHex = 0xFF4CAF50,
             unlockedPerks = listOf("+10% zisk zlata ze správy komnat", "Odemčena nová pasivní vyznání a myšlenky"),
@@ -48,6 +51,7 @@ object AffinityData {
             minPoints = 71,
             maxPoints = 120,
             perkDescription = "+15% efektivita intimních rituálů.",
+            combatBonusDescription = "⚡ Pasivní boj: +25 Max HP, +10% Crit pro dívku & +4% globální Crit pána",
             icon = "💎",
             colorHex = 0xFF00BCD4,
             unlockedPerks = listOf("+15% efektivita intimních rituálů", "+10% zisk temné energie při rozkoši"),
@@ -60,6 +64,7 @@ object AffinityData {
             minPoints = 121,
             maxPoints = 180,
             perkDescription = "+20% šance na zplození dědice a +10 SE.",
+            combatBonusDescription = "💖 Pasivní boj: +40 Max HP, +15% Útok & regenerace +3 HP/kolo",
             icon = "🔥",
             colorHex = 0xFFFF4081,
             unlockedPerks = listOf("+20% šance na zplození dědice", "+10 max Sexuální energie v harému", "Svěřování nejhlubších tajemství"),
@@ -72,6 +77,7 @@ object AffinityData {
             minPoints = 181,
             maxPoints = 250,
             perkDescription = "+25% obrana a útok pána v soubojích.",
+            combatBonusDescription = "🔥 Pasivní boj: +60 Max HP, +25% Poškození & +10 Obrana pána i dívky",
             icon = "💖",
             colorHex = 0xFFE040FB,
             unlockedPerks = listOf("+25% bonus k útoku v soubojích", "+30% loajalita a imunita vůči vzpourám"),
@@ -84,6 +90,7 @@ object AffinityData {
             minPoints = 251,
             maxPoints = 9999,
             perkDescription = "+50% pasivní příjem a nezlomná věrnost.",
+            combatBonusDescription = "👑 Pasivní boj: +100 Max HP, +40% Masivní poškození, +15 Obrana & +5 TE/kolo",
             icon = "👑",
             colorHex = 0xFFFFD700,
             unlockedPerks = listOf("+50% celkový příjem dominia", "Absolutní nesmrtelná oddanost", "Titul Věčná královna harému")
@@ -132,11 +139,10 @@ object AffinityData {
         return Pair(currentInTier, tierSpan)
     }
 
-    fun getPassiveDialogues(character: Character): List<String> {
-        val tier = getLevelForPoints(character.affinityPoints)
-        val archetype = character.archetypeId
+    fun getDialoguesForTier(tier: Int, archetype: String): List<String> = getDialoguesForTier(archetype, tier)
 
-        val baseDialogues = when (archetype) {
+    fun getDialoguesForTier(archetype: String, tier: Int): List<String> {
+        return when (archetype) {
             "subka" -> when (tier) {
                 1 -> listOf(
                     "„Prosím, pane... neubližuj mi, udělám vše, co mi přikážeš.“",
@@ -272,8 +278,11 @@ object AffinityData {
                 )
             }
         }
+    }
 
-        return baseDialogues
+    fun getPassiveDialogues(character: Character): List<String> {
+        val tier = getLevelForPoints(character.affinityPoints)
+        return getDialoguesForTier(character.archetypeId, tier)
     }
 
     fun getRandomActiveDialogue(character: Character): String {
@@ -283,7 +292,28 @@ object AffinityData {
 
     fun getRandomActiveDialogue(affinityPoints: Int, archetypeId: String = "subka"): String {
         val tier = getLevelForPoints(affinityPoints)
-        val lines = PASSIVE_DIALOGUES[tier] ?: listOf("„Můj pane, má oddanost patří jen tobě.“")
-        return lines.randomOrNull() ?: "„Můj pane, má oddanost patří jen tobě.“"
+        val lines = getDialoguesForTier(archetypeId, tier)
+        return lines.randomOrNull() ?: (PASSIVE_DIALOGUES[tier]?.randomOrNull() ?: "„Můj pane, má oddanost patří jen tobě.“")
+    }
+
+    fun getAffinityCombatBonuses(tier: Int): AffinityCombatBonus {
+        return when {
+            tier >= 6 -> AffinityCombatBonus(hpBonus = 100, dmgMultiplierBonus = 0.40f, defenseBonus = 15, critBonus = 15, regenBonus = 8, darkEnergyBonus = 5)
+            tier >= 5 -> AffinityCombatBonus(hpBonus = 60, dmgMultiplierBonus = 0.25f, defenseBonus = 10, critBonus = 10, regenBonus = 5, darkEnergyBonus = 0)
+            tier >= 4 -> AffinityCombatBonus(hpBonus = 40, dmgMultiplierBonus = 0.15f, defenseBonus = 6, critBonus = 6, regenBonus = 3, darkEnergyBonus = 0)
+            tier >= 3 -> AffinityCombatBonus(hpBonus = 25, dmgMultiplierBonus = 0.08f, defenseBonus = 4, critBonus = 10, regenBonus = 0, darkEnergyBonus = 0)
+            tier >= 2 -> AffinityCombatBonus(hpBonus = 10, dmgMultiplierBonus = 0.04f, defenseBonus = 2, critBonus = 2, regenBonus = 0, darkEnergyBonus = 0)
+            else -> AffinityCombatBonus(hpBonus = 0, dmgMultiplierBonus = 0.0f, defenseBonus = 0, critBonus = 0, regenBonus = 0, darkEnergyBonus = 0)
+        }
     }
 }
+
+data class AffinityCombatBonus(
+    val hpBonus: Int,
+    val dmgMultiplierBonus: Float,
+    val defenseBonus: Int,
+    val critBonus: Int,
+    val regenBonus: Int,
+    val darkEnergyBonus: Int
+)
+

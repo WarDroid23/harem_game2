@@ -77,7 +77,35 @@ fun HaremScreen(
     val filters = listOf("Všechny")
     val sortOptions = listOf("Náklonnost")
     var sortExpanded by remember { mutableStateOf(false) }
+    val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+    val bgRes = when (hour) {
+        in 6..11 -> R.drawable.harem_bg_morning
+        in 12..17 -> R.drawable.harem_bg_day
+        in 18..21 -> R.drawable.harem_bg_evening
+        else -> R.drawable.harem_bg_night
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
+        Image(
+            painter = painterResource(id = bgRes),
+            contentDescription = "Harem Environment",
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.4f),
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.85f),
+                            MaterialTheme.colorScheme.background.copy(alpha = 0.95f)
+                        )
+                    )
+                )
+        )
+        
         Column(
             modifier = Modifier
                 .fillMaxSize()

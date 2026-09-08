@@ -349,7 +349,8 @@ fun ProfileAndStatsTab(
                         .clip(RoundedCornerShape(3.dp)),
                     color = Color(affinityTier.colorHex)
                 )
-                Text("💭 \"${AffinityData.getRandomActiveDialogue(character.affinityPoints, character.archetypeId)}\"", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f), fontWeight = FontWeight.Medium)
+                Text("💭 \"${AffinityData.getRandomActiveDialogue(character)}\"", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f), fontWeight = FontWeight.Medium)
+                Text("⚔️ Pasivní boj: ${affinityTier.combatBonusDescription}", fontSize = 10.sp, color = Color(0xFFFF80AB), fontWeight = FontWeight.SemiBold)
             }
         }
 
@@ -363,7 +364,37 @@ fun ProfileAndStatsTab(
                 modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                StatProgressBar("Životní síla (HP)", character.hp, character.maxHp, Color(0xFF4CAF50))
+                // Calculation of combat stats
+                val hpBonus = character.equipment.values.filterNotNull().sumOf { it.hpBonus } + ((character.skills["vitality"] ?: 0) * 10)
+                val totalMaxHp = character.maxHp + hpBonus
+                
+                val combatSkill = character.skills["combat"] ?: 0
+                val combatBonus = character.equipment.values.filterNotNull().sumOf { it.combatBonus }
+                var totalCombat = combatSkill + combatBonus + (combatSkill * 5)
+                if (character.archetypeId in listOf("odvazna", "vzdorna", "krvava_subka", "zlomena")) {
+                    totalCombat = (totalCombat * 1.2).toInt()
+                }
+                
+                val defSkill = character.skills["defense"] ?: 0
+                val defBonus = character.equipment.values.filterNotNull().sumOf { it.defenseBonus }
+                val totalDef = defSkill + defBonus + (defSkill * 2)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("⚔️ Útok", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                        Text("$totalCombat", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("🛡️ Obrana", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                        Text("$totalDef", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                
+                StatProgressBar("Životní síla (HP)", character.hp, totalMaxHp, Color(0xFF4CAF50))
                 StatProgressBar("Touha a vzrušení", character.touha, 100, Color(0xFFE91E63))
                 StatProgressBar("Vlhkost a citlivost", character.vlhkost, 100, Color(0xFF00BCD4))
                 StatProgressBar("Poslušnost", character.poslusnost, 100, Color(0xFF00E5FF))
@@ -489,7 +520,7 @@ fun AffinityAndDialogueTab(character: Character) {
         }
 
         // Active Speech Dialogue Card
-        val activeLine = AffinityData.getRandomActiveDialogue(character.affinityPoints, character.archetypeId)
+        val activeLine = AffinityData.getRandomActiveDialogue(character)
         Card(
             colors = CardDefaults.cardColors(
                 containerColor = Color(tier.colorHex).copy(alpha = 0.12f)
@@ -504,12 +535,29 @@ fun AffinityAndDialogueTab(character: Character) {
             ) {
                 Text("💬", fontSize = 20.sp)
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Aktuální pasivní myšlenky k pánovi:",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
-                        color = Color(tier.colorHex)
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Aktuální myšlenky k pánovi:",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = Color(tier.colorHex)
+                        )
+                        IconButton(
+                            onClick = { com.example.haremdark.domain.VoiceManager.speak(activeLine) },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.VolumeUp,
+                                contentDescription = "Přehrát hlas",
+                                tint = Color(tier.colorHex),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "„$activeLine“",
@@ -593,6 +641,17 @@ fun AffinityAndDialogueTab(character: Character) {
 
                     // Rewards Section
                     if (isUnlocked || isCurrent || t.level == tier.level + 1) {
+                        // Combat Passive Bonus
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.Shield, contentDescription = null, tint = Color(0xFFE91E63), modifier = Modifier.size(13.dp))
+                            Text(
+                                text = "Bojový bonus: ${t.combatBonusDescription}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isUnlocked) Color(0xFFFF80AB) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+
                         // Cosmetic Reward
                         t.cosmeticReward?.let { cosmetic ->
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -620,15 +679,37 @@ fun AffinityAndDialogueTab(character: Character) {
 
                         // Dialogues
                         if (isUnlocked) {
-                            val lines = AffinityData.PASSIVE_DIALOGUES[t.level] ?: emptyList()
+                            val lines = AffinityData.getDialoguesForTier(character.archetypeId, t.level)
                             if (lines.isNotEmpty()) {
-                                Text(
-                                    text = "• „${lines.first()}“",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                                    modifier = Modifier.padding(top = 4.dp)
-                                )
+                                Column(modifier = Modifier.padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text("Odemčené unikátní dialogy:", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                    lines.take(2).forEach { line ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = "• „$line“",
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            IconButton(
+                                                onClick = { com.example.haremdark.domain.VoiceManager.speak(line) },
+                                                modifier = Modifier.size(20.dp)
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.VolumeUp,
+                                                    contentDescription = "Přehrát",
+                                                    tint = Color(t.colorHex),
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     } else {

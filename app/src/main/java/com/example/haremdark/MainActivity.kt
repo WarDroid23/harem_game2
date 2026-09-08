@@ -14,6 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -26,6 +28,9 @@ import androidx.navigation.compose.rememberNavController
 import com.example.haremdark.domain.GameEngine
 import com.example.haremdark.ui.components.GameTopBar
 import com.example.haremdark.ui.screens.*
+import com.example.haremdark.ui.components.DailyAttendanceDialog
+import kotlinx.coroutines.launch
+
 import com.example.haremdark.ui.theme.HaremDarkTheme
 
 class MainActivity : ComponentActivity() {
@@ -44,18 +49,24 @@ class MainActivity : ComponentActivity() {
             val navController = rememberNavController()
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = navBackStackEntry?.destination?.route ?: "home"
+            val snackbarHostState = remember { SnackbarHostState() }
+            val coroutineScope = rememberCoroutineScope()
             
             var showRestDialog by remember { mutableStateOf(false) }
 
             HaremDarkTheme(themeName = currentTheme) {
                 Scaffold(
+                    snackbarHost = { SnackbarHost(snackbarHostState) },
                     topBar = {
                         GameTopBar(
                             player = gameState.player,
                             onRestClick = { showRestDialog = true },
                             onQuickSaveClick = { 
-                                engine.quickSave()
-                                Toast.makeText(context, "⚡ Rychlé uložení dokončeno!", Toast.LENGTH_SHORT).show()
+                                coroutineScope.launch {
+                                    engine.quickSaveSuspend()
+                                    snackbarHostState.showSnackbar("💾 Uloženo do DataStore (Pán, ${gameState.characters.size} dívek, výbava)")
+                                    Toast.makeText(context, "⚡ DataStore: Rychlé uložení dokončeno!", Toast.LENGTH_SHORT).show()
+                                }
                             }
                         )
                     },
@@ -96,6 +107,38 @@ class MainActivity : ComponentActivity() {
                                     )
                                 )
                             }
+
+                            // Quick Save Action directly in the main Navigation Menu
+                            NavigationBarItem(
+                                selected = false,
+                                onClick = {
+                                    coroutineScope.launch {
+                                        engine.quickSaveSuspend()
+                                        snackbarHostState.showSnackbar("💾 Uloženo do DataStore (Pán, ${gameState.characters.size} dívek, výbava)")
+                                        Toast.makeText(context, "⚡ DataStore: Rychlé uložení dokončeno!", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                icon = { 
+                                    Icon(
+                                        Icons.Default.Save, 
+                                        contentDescription = "Rychlé uložení",
+                                        tint = Color(0xFF4CAF50),
+                                        modifier = Modifier.size(22.dp)
+                                    ) 
+                                },
+                                label = { 
+                                    Text(
+                                        "Uložit", 
+                                        fontSize = 8.sp, 
+                                        maxLines = 1,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF4CAF50)
+                                    ) 
+                                },
+                                colors = NavigationBarItemDefaults.colors(
+                                    indicatorColor = Color(0xFF4CAF50).copy(alpha = 0.2f)
+                                )
+                            )
                         }
                     }
                 ) { innerPadding ->
@@ -145,58 +188,13 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                                // Daily Login Reward Dialog
+                                                // Daily Login Reward Dialog
                 dailyReward?.let { reward ->
-                    AlertDialog(
-                        onDismissRequest = { /* forced claim */ },
-                        title = { 
-                            Text(
-                                "🎁 Denní odměna", 
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            ) 
-                        },
-                        text = {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("Přihlášení v řadě: ${reward.consecutiveDays} dní", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                                Text("Tvá věrnost dominiu je odměněna, můj pane:")
-                                
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("💰", fontSize = 24.sp)
-                                    Text("+${reward.rewardGold} Zlatých")
-                                }
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("🔮", fontSize = 24.sp)
-                                    Text("+${reward.rewardMana} Temné energie")
-                                }
-                                
-                                if (reward.itemReward != null) {
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text("Vzácný dar k jubileu:", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), RoundedCornerShape(8.dp)).padding(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Text(reward.itemReward.icon, fontSize = 32.sp)
-                                        Column {
-                                            Text(reward.itemReward.name, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                                            Text(reward.itemReward.effectDescription, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.7f))
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        confirmButton = {
-                            Button(
-                                onClick = { 
-                                    engine.claimDailyReward() 
-                                    Toast.makeText(context, "Denní odměna vybrána!", Toast.LENGTH_SHORT).show()
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Vybrat odměnu")
-                            }
+                    DailyAttendanceDialog(
+                        reward = reward,
+                        onClaim = {
+                            engine.claimDailyReward()
+                            Toast.makeText(context, "Denní odměna vybrána!", Toast.LENGTH_SHORT).show()
                         }
                     )
                 }

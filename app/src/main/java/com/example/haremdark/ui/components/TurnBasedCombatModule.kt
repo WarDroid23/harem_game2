@@ -24,10 +24,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import kotlin.math.roundToInt
 import com.example.haremdark.R
 import com.example.haremdark.data.GameContent
 import com.example.haremdark.domain.GameEngine
@@ -66,6 +68,12 @@ fun ActiveCombatView(
     engine: GameEngine,
     modifier: Modifier = Modifier
 ) {
+    val fxState = rememberCombatVisualFxState()
+    val coroutineScope = rememberCoroutineScope()
+    val deployedChar = remember(gameState.characters, session.deployedCharacterId) {
+        gameState.characters.firstOrNull { it.id == session.deployedCharacterId }
+    }
+
     var selectedActionCategory by remember { mutableIntStateOf(0) }
     var selectedLogFilter by remember { mutableStateOf("all") }
     var showFullHistoryModal by remember { mutableStateOf(false) }
@@ -74,12 +82,20 @@ fun ActiveCombatView(
     val player = gameState.player
     val weapon = player.weapons.getOrNull(player.equippedWeaponIndex) ?: player.weapons.firstOrNull()
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .padding(bottom = 85.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(bottom = 85.dp)
     ) {
+        val shakeX = fxState.shakeOffsetX.value
+        val shakeY = fxState.shakeOffsetY.value
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .offset { IntOffset(shakeX.roundToInt(), shakeY.roundToInt()) },
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
         // Combat Arena Mini-Banner & Turn Tracker
         Card(
             shape = RoundedCornerShape(12.dp),
@@ -270,14 +286,14 @@ fun ActiveCombatView(
                     verticalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                     Text(
-                        text = "${player.name} (Pán)",
+                        text = if (deployedChar != null) "✨ ${deployedChar.name} (${deployedChar.role})" else "${player.name} (Pán)",
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
                         color = Color(0xFFC8E6C9),
                         maxLines = 1
                     )
                     Text(
-                        text = "Zbraň: ${weapon?.name ?: "Pěsti"}",
+                        text = if (deployedChar != null) "Archetyp: ${deployedChar.archetypeId} • Dívka" else "Zbraň: ${weapon?.name ?: "Pěsti"}",
                         fontSize = 10.sp,
                         color = Color(0xFF81C784),
                         maxLines = 1
@@ -452,21 +468,33 @@ fun ActiveCombatView(
                                     subtitle = "Přesný úder • Šance na kritický zásah",
                                     icon = Icons.Default.Gavel,
                                     buttonColor = Color(0xFFD32F2F),
-                                    onClick = { engine.executeCombatTurn("slash") }
+                                    onClick = {
+                                        fxState.triggerAbility(CombatAbilityType.SLASH, "Sek zbraní", coroutineScope) {
+                                            engine.executeCombatTurn("slash")
+                                        }
+                                    }
                                 )
                                 ActionRowButton(
                                     title = "Drtivý těžký úder",
                                     subtitle = "Masivní rozmach za 1.8x poškození • 25% šance na kritický úder",
                                     icon = Icons.Default.Bolt,
                                     buttonColor = Color(0xFFE65100),
-                                    onClick = { engine.executeCombatTurn("heavy_strike") }
+                                    onClick = {
+                                        fxState.triggerAbility(CombatAbilityType.HEAVY_STRIKE, "Drtivý těžký úder", coroutineScope) {
+                                            engine.executeCombatTurn("heavy_strike")
+                                        }
+                                    }
                                 )
                                 ActionRowButton(
                                     title = "Krvavé bodnutí",
                                     subtitle = "Otevře krvácející ránu způsobující DoT poškození po 3 kola",
                                     icon = Icons.Default.Bloodtype,
                                     buttonColor = Color(0xFF880E4F),
-                                    onClick = { engine.executeCombatTurn("bleed_strike") }
+                                    onClick = {
+                                        fxState.triggerAbility(CombatAbilityType.BLEED_STRIKE, "Krvavé bodnutí", coroutineScope) {
+                                            engine.executeCombatTurn("bleed_strike")
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -479,7 +507,11 @@ fun ActiveCombatView(
                                     icon = Icons.Default.AutoAwesome,
                                     buttonColor = Color(0xFF6A1B9A),
                                     enabled = player.darkEnergy >= 10,
-                                    onClick = { engine.executeCombatTurn("dark_burst") }
+                                    onClick = {
+                                        fxState.triggerAbility(CombatAbilityType.DARK_BURST, "Temný výboj", coroutineScope) {
+                                            engine.executeCombatTurn("dark_burst")
+                                        }
+                                    }
                                 )
                                 ActionRowButton(
                                     title = "Prokletí stínů (15 TE)",
@@ -487,7 +519,11 @@ fun ActiveCombatView(
                                     icon = Icons.Default.Visibility,
                                     buttonColor = Color(0xFF4A148C),
                                     enabled = player.darkEnergy >= 15,
-                                    onClick = { engine.executeCombatTurn("curse_shadow") }
+                                    onClick = {
+                                        fxState.triggerAbility(CombatAbilityType.SHADOW_CURSE, "Prokletí stínů", coroutineScope) {
+                                            engine.executeCombatTurn("curse_shadow")
+                                        }
+                                    }
                                 )
                                 ActionRowButton(
                                     title = "Vysátí duše (20 TE)",
@@ -495,7 +531,11 @@ fun ActiveCombatView(
                                     icon = Icons.Default.Favorite,
                                     buttonColor = Color(0xFF311B92),
                                     enabled = player.darkEnergy >= 20,
-                                    onClick = { engine.executeCombatTurn("soul_drain") }
+                                    onClick = {
+                                        fxState.triggerAbility(CombatAbilityType.SOUL_DRAIN, "Vysátí duše", coroutineScope) {
+                                            engine.executeCombatTurn("soul_drain")
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -507,8 +547,25 @@ fun ActiveCombatView(
                                     subtitle = "Sníží utržené poškození o 65% v tomto kole a doplní +8 TE",
                                     icon = Icons.Default.Shield,
                                     buttonColor = Color(0xFF1565C0),
-                                    onClick = { engine.executeCombatTurn("defend") }
+                                    onClick = {
+                                        fxState.triggerAbility(CombatAbilityType.DEFEND, "Obranný postoj", coroutineScope) {
+                                            engine.executeCombatTurn("defend")
+                                        }
+                                    }
                                 )
+                                if (deployedChar != null) {
+                                    ActionRowButton(
+                                        title = "Speciální technika (${deployedChar.name})",
+                                        subtitle = "Dívka využije svou bojovou techniku s šancí na omráčení",
+                                        icon = Icons.Default.AutoAwesome,
+                                        buttonColor = Color(0xFFFF6F00),
+                                        onClick = {
+                                            fxState.triggerAbility(CombatAbilityType.CHAR_SPECIAL, "Technika: ${deployedChar.name}", coroutineScope) {
+                                                engine.executeCombatTurn("char_special")
+                                            }
+                                        }
+                                    )
+                                }
                                 val characters = gameState.characters
                                 val favorite = characters.firstOrNull { it.oblibena } ?: characters.firstOrNull { it.jeManzelkou } ?: characters.firstOrNull()
                                 ActionRowButton(
@@ -517,7 +574,11 @@ fun ActiveCombatView(
                                     icon = Icons.Default.FavoriteBorder,
                                     buttonColor = Color(0xFFAD1457),
                                     enabled = favorite != null,
-                                    onClick = { engine.executeCombatTurn("harem_support") }
+                                    onClick = {
+                                        fxState.triggerAbility(CombatAbilityType.HAREM_SUPPORT, "Požehnání: ${favorite?.name ?: "Harém"}", coroutineScope) {
+                                            engine.executeCombatTurn("harem_support")
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -539,7 +600,11 @@ fun ActiveCombatView(
                                             subtitle = item.description,
                                             icon = Icons.Default.Medication,
                                             buttonColor = Color(0xFF2E7D32),
-                                            onClick = { engine.executeCombatTurn("item", item.id) }
+                                            onClick = {
+                                                fxState.triggerAbility(CombatAbilityType.ITEM_HEAL, item.name, coroutineScope) {
+                                                    engine.executeCombatTurn("item", item.id)
+                                                }
+                                            }
                                         )
                                     }
                                 }
@@ -605,6 +670,10 @@ fun ActiveCombatView(
                 }
             }
         }
+    }
+
+    // Particle effects, impact flashes, and floating ability banner
+    CombatVisualFxOverlay(fxState = fxState)
     }
 
     // --- FULL COMBAT LOG HISTORY MODAL ---
