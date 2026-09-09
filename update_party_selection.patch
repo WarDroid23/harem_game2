@@ -1,0 +1,20 @@
+--- ./app/src/main/java/com/example/haremdark/ui/components/PartySelectionModal.kt
++++ ./app/src/main/java/com/example/haremdark/ui/components/PartySelectionModal.kt
+@@ -49,15 +49,13 @@
+         gameState.characters.filter { it.hp > 0 }
+     }
+ 
+-    var selectedGirls by remember {
++    var selectedGirls by remember { // Now a List representing slots
+         mutableStateOf(
+             availableGirls.sortedByDescending { (it.skills["combat"] ?: 0) + it.affinityPoints }
+                 .take(3)
+                 .map { it.id }
+-                .toSet()
++                .toList()
+         )
+     }
+ 
+     var includePlayer by remember { mutableStateOf(true) }
+ 
+     val maxGirlsAllowed = if (includePlayer) 3 else 4

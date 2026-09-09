@@ -1,0 +1,1 @@
+sed -i 's/val allAchievements = listOf(/val allAchievements = listOf(\n        Achievement("ach_battles_100", "Bůh války", "Vyhraj 100 bitev.", "⚔️", true),\n        Achievement("ach_max_affinity", "Nejhlubší pouto", "Dosáhni maximální náklonnosti (100) u jedné z dívek.", "💞", true),/g' ./app/src/main/java/com/example/haremdark/models/GameModels.kt

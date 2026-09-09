@@ -336,7 +336,7 @@ fun HaremSpecialEventDialog(
                                     lineHeight = 20.sp
                                 )
 
-                                Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
 
                                 Text(
                                     text = "🎁 Výsledek setkání:",

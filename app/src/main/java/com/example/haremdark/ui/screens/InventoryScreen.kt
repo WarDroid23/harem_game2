@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,6 +37,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.haremdark.R
 import com.example.haremdark.data.AffinityData
+import com.example.haremdark.data.GiftInventoryCatalog
 import com.example.haremdark.data.StaticData
 import com.example.haremdark.domain.GameEngine
 import com.example.haremdark.models.Character
@@ -47,11 +49,85 @@ import com.example.haremdark.domain.VoiceTriggerType
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.lazy.LazyRow
 
-enum class ItemSortOption(val title: String) {
-    COUNT_DESC("Největší počet"),
-    PRICE_DESC("Nejvyšší hodnota"),
-    NAME_ASC("Název A-Z"),
-    RARITY("Vzácnost")
+enum class ItemSortOption(val title: String, val icon: String) {
+    RARITY_DESC("Vzácnost (Nejvyšší)", "💎"),
+    RARITY_ASC("Vzácnost (Nejnižší)", "🔹"),
+    AFFINITY_DESC("Náklonnost (Nejvyšší)", "💖"),
+    AFFINITY_ASC("Náklonnost (Nejnižší)", "🤍"),
+    TYPE("Kategorie / Typ", "🏷️"),
+    PRICE_DESC("Hodnota (Nejvyšší)", "💰"),
+    PRICE_ASC("Hodnota (Nejnižší)", "🪙"),
+    COUNT_DESC("Počet (Nejvíce)", "🔢"),
+    COUNT_ASC("Počet (Nejméně)", "📉"),
+    NAME_ASC("Název (A-Z)", "🔤"),
+    NAME_DESC("Název (Z-A)", "🔡")
+}
+
+enum class ItemRarityFilter(val rawValue: String, val displayName: String, val color: Color) {
+    ALL("ALL", "Vše", Color(0xFFB0BEC5)),
+    LEGENDARY("Legendární", "👑 Legendární", Color(0xFFFFD700)),
+    EPIC("Epický", "🔮 Epické", Color(0xFFE040FB)),
+    RARE("Vzácný", "💎 Vzácné", Color(0xFF00E5FF)),
+    COMMON("Běžný", "🌿 Běžné", Color(0xFF81C784))
+}
+
+enum class ItemAffinityFilter(val displayName: String, val minAffinity: Int, val icon: String) {
+    ALL("Vše", 0, "✨"),
+    ANY_BONUS("S bonusem (>0)", 1, "💖"),
+    HIGH_BONUS("Vysoký bonus (≥20)", 20, "🔥"),
+    LEGENDARY_BONUS("Královský dar (≥40)", 40, "👑")
+}
+
+fun getItemAffinityBonusValue(item: InventoryItem): Int {
+    val catalogGift = GiftInventoryCatalog.ALL_GIFTS.find { it.id == item.id }
+    if (catalogGift != null) {
+        return catalogGift.baseAffinity
+    }
+    val regexAffinity = Regex("""\+(\d+)\s*(?:Náklonnost|Affinity|Pouto)""", RegexOption.IGNORE_CASE)
+    val matchAff = regexAffinity.find(item.effectDescription)
+    if (matchAff != null) {
+        return matchAff.groupValues[1].toIntOrNull() ?: 0
+    }
+    val regexLoyalty = Regex("""\+(\d+)\s*(?:Loajalita|Loyalty|Věrnost)""", RegexOption.IGNORE_CASE)
+    val matchLoy = regexLoyalty.find(item.effectDescription)
+    if (matchLoy != null) {
+        val pts = matchLoy.groupValues[1].toIntOrNull() ?: 0
+        return pts * 2
+    }
+    val cat = item.category.lowercase()
+    if (cat.contains("gift") || cat.contains("dar") || item.id.startsWith("gift_") || item.id == "drahy_obojek") {
+        return when (item.rarity) {
+            "Legendární", "Mýtický" -> 50
+            "Epický" -> 35
+            "Vzácný" -> 22
+            else -> 15
+        }
+    }
+    return 0
+}
+
+fun getRarityRank(rarity: String): Int = when (rarity.lowercase()) {
+    "mýtický", "mythic" -> 5
+    "legendární", "legendary" -> 4
+    "epický", "epic" -> 3
+    "vzácný", "rare" -> 2
+    else -> 1
+}
+
+fun getItemCategoryKey(item: InventoryItem): String {
+    val cat = item.category.lowercase()
+    return when {
+        cat.contains("gift") || cat.contains("dar") || item.id.startsWith("gift_") || item.id == "drahy_obojek" -> "gift"
+        cat.contains("quest") || cat.contains("artifact") || cat.contains("key") || cat.contains("relic") || cat.contains("document") || item.id.contains("pecet") || item.id.contains("klic") || item.id.contains("listina") -> "quest"
+        else -> "combat"
+    }
+}
+
+fun getItemCategoryOrderRank(item: InventoryItem): Int = when (getItemCategoryKey(item)) {
+    "gift" -> 1
+    "combat" -> 2
+    "quest" -> 3
+    else -> 4
 }
 
 @Composable
@@ -67,31 +143,50 @@ fun InventoryScreen(
 
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Gifts, 1: Combat Consumables, 2: Quest Items, 3: All
     var searchQuery by remember { mutableStateOf("") }
-    var selectedSort by remember { mutableStateOf(ItemSortOption.COUNT_DESC) }
+    var selectedSort by remember { mutableStateOf(ItemSortOption.RARITY_DESC) }
+    var selectedRarityFilter by remember { mutableStateOf(ItemRarityFilter.ALL) }
+    var selectedAffinityFilter by remember { mutableStateOf(ItemAffinityFilter.ALL) }
+    var isFilterPanelExpanded by remember { mutableStateOf(false) }
+
     var selectedItemForGift by remember { mutableStateOf<InventoryItem?>(null) }
     var selectedItemForDetails by remember { mutableStateOf<InventoryItem?>(null) }
     var selectedItemForSell by remember { mutableStateOf<InventoryItem?>(null) }
     var inspectedQuestLore by remember { mutableStateOf<Pair<String, String>?>(null) }
 
-    // Helper categorization
-    fun getItemCategoryType(item: InventoryItem): String {
-        val cat = item.category.lowercase()
-        return when {
-            cat.contains("gift") || cat.contains("dar") || item.id.startsWith("gift_") || item.id == "drahy_obojek" -> "gift"
-            cat.contains("quest") || cat.contains("artifact") || cat.contains("key") || cat.contains("relic") || cat.contains("document") || item.id.contains("pecet") || item.id.contains("klic") || item.id.contains("listina") -> "quest"
-            else -> "combat"
-        }
+    val activeFilterCount = remember(selectedRarityFilter, selectedAffinityFilter, searchQuery) {
+        var count = 0
+        if (selectedRarityFilter != ItemRarityFilter.ALL) count++
+        if (selectedAffinityFilter != ItemAffinityFilter.ALL) count++
+        if (searchQuery.isNotBlank()) count++
+        count
     }
 
-    val filteredItems = remember(player.items, selectedTab, searchQuery, selectedSort) {
+    val filteredItems = remember(
+        player.items,
+        selectedTab,
+        searchQuery,
+        selectedSort,
+        selectedRarityFilter,
+        selectedAffinityFilter
+    ) {
         var list = player.items.filter { it.count > 0 }
 
         // Category filter
         list = when (selectedTab) {
-            0 -> list.filter { getItemCategoryType(it) == "gift" }
-            1 -> list.filter { getItemCategoryType(it) == "combat" }
-            2 -> list.filter { getItemCategoryType(it) == "quest" }
+            0 -> list.filter { getItemCategoryKey(it) == "gift" }
+            1 -> list.filter { getItemCategoryKey(it) == "combat" }
+            2 -> list.filter { getItemCategoryKey(it) == "quest" }
             else -> list
+        }
+
+        // Rarity Filter
+        if (selectedRarityFilter != ItemRarityFilter.ALL) {
+            list = list.filter { it.rarity.equals(selectedRarityFilter.rawValue, ignoreCase = true) }
+        }
+
+        // Affinity Bonus Filter
+        if (selectedAffinityFilter != ItemAffinityFilter.ALL) {
+            list = list.filter { getItemAffinityBonusValue(it) >= selectedAffinityFilter.minAffinity }
         }
 
         // Search filter
@@ -101,31 +196,50 @@ fun InventoryScreen(
                 it.name.lowercase().contains(q) ||
                 it.description.lowercase().contains(q) ||
                 it.rarity.lowercase().contains(q) ||
-                it.effectDescription.lowercase().contains(q)
+                it.effectDescription.lowercase().contains(q) ||
+                getItemCategoryKey(it).lowercase().contains(q)
             }
         }
 
         // Sorting
         when (selectedSort) {
-            ItemSortOption.COUNT_DESC -> list.sortedByDescending { it.count }
+            ItemSortOption.RARITY_DESC -> list.sortedWith(
+                compareByDescending<InventoryItem> { getRarityRank(it.rarity) }
+                    .thenByDescending { getItemAffinityBonusValue(it) }
+                    .thenByDescending { it.price }
+            )
+            ItemSortOption.RARITY_ASC -> list.sortedWith(
+                compareBy<InventoryItem> { getRarityRank(it.rarity) }
+                    .thenBy { it.name }
+            )
+            ItemSortOption.AFFINITY_DESC -> list.sortedWith(
+                compareByDescending<InventoryItem> { getItemAffinityBonusValue(it) }
+                    .thenByDescending { getRarityRank(it.rarity) }
+                    .thenByDescending { it.price }
+            )
+            ItemSortOption.AFFINITY_ASC -> list.sortedWith(
+                compareBy<InventoryItem> { getItemAffinityBonusValue(it) }
+                    .thenBy { it.name }
+            )
+            ItemSortOption.TYPE -> list.sortedWith(
+                compareBy<InventoryItem> { getItemCategoryOrderRank(it) }
+                    .thenByDescending { getRarityRank(it.rarity) }
+                    .thenBy { it.name }
+            )
             ItemSortOption.PRICE_DESC -> list.sortedByDescending { it.price * it.count }
-            ItemSortOption.NAME_ASC -> list.sortedBy { it.name }
-            ItemSortOption.RARITY -> list.sortedByDescending {
-                when (it.rarity) {
-                    "Legendární" -> 4
-                    "Epický" -> 3
-                    "Vzácný" -> 2
-                    else -> 1
-                }
-            }
+            ItemSortOption.PRICE_ASC -> list.sortedBy { it.price }
+            ItemSortOption.COUNT_DESC -> list.sortedByDescending { it.count }
+            ItemSortOption.COUNT_ASC -> list.sortedBy { it.count }
+            ItemSortOption.NAME_ASC -> list.sortedBy { it.name.lowercase() }
+            ItemSortOption.NAME_DESC -> list.sortedByDescending { it.name.lowercase() }
         }
     }
 
     val totalItemCount = remember(player.items) { player.items.sumOf { it.count } }
     val totalInventoryValue = remember(player.items) { player.items.sumOf { it.price * it.count } }
-    val giftItemsCount = remember(player.items) { player.items.filter { getItemCategoryType(it) == "gift" }.sumOf { it.count } }
-    val combatItemsCount = remember(player.items) { player.items.filter { getItemCategoryType(it) == "combat" }.sumOf { it.count } }
-    val questItemsCount = remember(player.items) { player.items.filter { getItemCategoryType(it) == "quest" }.sumOf { it.count } }
+    val giftItemsCount = remember(player.items) { player.items.filter { getItemCategoryKey(it) == "gift" }.sumOf { it.count } }
+    val combatItemsCount = remember(player.items) { player.items.filter { getItemCategoryKey(it) == "combat" }.sumOf { it.count } }
+    val questItemsCount = remember(player.items) { player.items.filter { getItemCategoryKey(it) == "quest" }.sumOf { it.count } }
 
     Column(
         modifier = modifier
@@ -298,16 +412,16 @@ fun InventoryScreen(
             // --- LOADOUT MANAGEMENT VIEW ---
             LoadoutsInventoryTab(gameState = gameState, engine = engine)
         } else {
-            // --- SEARCH BAR & SORTING ROW ---
+            // --- SEARCH BAR, FILTER BUTTON & SORT BUTTON ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Hledat v inventáři...", fontSize = 12.sp) },
+                    placeholder = { Text("Hledat název, efekt, vzácnost...", fontSize = 11.sp) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
@@ -324,31 +438,83 @@ fun InventoryScreen(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
                     ),
-                    modifier = Modifier.weight(1f).height(50.dp)
+                    modifier = Modifier.weight(1f).height(48.dp)
                 )
 
-                // Sort Menu Box
+                // Expandable Filter Toggle Button
+                OutlinedButton(
+                    onClick = { isFilterPanelExpanded = !isFilterPanelExpanded },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (activeFilterCount > 0 || isFilterPanelExpanded) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else Color.Transparent
+                    ),
+                    border = BorderStroke(
+                        1.dp,
+                        if (activeFilterCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                    ),
+                    modifier = Modifier.height(48.dp)
+                ) {
+                    Icon(
+                        Icons.Default.FilterList,
+                        contentDescription = "Filtry",
+                        tint = if (activeFilterCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    if (activeFilterCount > 0) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = "$activeFilterCount",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Sort Dropdown Menu Box
                 var sortMenuExpanded by remember { mutableStateOf(false) }
                 Box {
                     OutlinedButton(
                         onClick = { sortMenuExpanded = true },
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.height(50.dp)
+                        modifier = Modifier.height(48.dp)
                     ) {
-                        Icon(Icons.Default.Sort, contentDescription = "Řazení", modifier = Modifier.size(18.dp))
+                        Text(selectedSort.icon, fontSize = 16.sp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Řazení", modifier = Modifier.size(18.dp))
                     }
                     DropdownMenu(
                         expanded = sortMenuExpanded,
                         onDismissRequest = { sortMenuExpanded = false }
                     ) {
+                        Text(
+                            text = "📐 Seřadit inventář:",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+
                         ItemSortOption.values().forEach { option ->
                             DropdownMenuItem(
+                                leadingIcon = { Text(option.icon, fontSize = 16.sp) },
                                 text = {
                                     Text(
                                         option.title,
                                         fontWeight = if (selectedSort == option) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (selectedSort == option) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        color = if (selectedSort == option) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 12.sp
                                     )
                                 },
                                 onClick = {
@@ -361,20 +527,239 @@ fun InventoryScreen(
                 }
             }
 
+            // --- QUICK SORT CHIPS ROW ---
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                item {
+                    Text(
+                        text = "Řadit:",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+                item {
+                    val isRarityActive = selectedSort == ItemSortOption.RARITY_DESC || selectedSort == ItemSortOption.RARITY_ASC
+                    FilterChip(
+                        selected = isRarityActive,
+                        onClick = {
+                            selectedSort = if (selectedSort == ItemSortOption.RARITY_DESC) ItemSortOption.RARITY_ASC else ItemSortOption.RARITY_DESC
+                        },
+                        label = {
+                            Text(
+                                "💎 Vzácnost ${if (selectedSort == ItemSortOption.RARITY_ASC) "▲" else if (selectedSort == ItemSortOption.RARITY_DESC) "▼" else ""}",
+                                fontSize = 11.sp
+                            )
+                        },
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                }
+                item {
+                    val isAffinityActive = selectedSort == ItemSortOption.AFFINITY_DESC || selectedSort == ItemSortOption.AFFINITY_ASC
+                    FilterChip(
+                        selected = isAffinityActive,
+                        onClick = {
+                            selectedSort = if (selectedSort == ItemSortOption.AFFINITY_DESC) ItemSortOption.AFFINITY_ASC else ItemSortOption.AFFINITY_DESC
+                        },
+                        label = {
+                            Text(
+                                "💖 Náklonnost ${if (selectedSort == ItemSortOption.AFFINITY_ASC) "▲" else if (selectedSort == ItemSortOption.AFFINITY_DESC) "▼" else ""}",
+                                fontSize = 11.sp
+                            )
+                        },
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                }
+                item {
+                    val isTypeActive = selectedSort == ItemSortOption.TYPE
+                    FilterChip(
+                        selected = isTypeActive,
+                        onClick = { selectedSort = ItemSortOption.TYPE },
+                        label = { Text("🏷️ Typ", fontSize = 11.sp) },
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                }
+                item {
+                    val isPriceActive = selectedSort == ItemSortOption.PRICE_DESC || selectedSort == ItemSortOption.PRICE_ASC
+                    FilterChip(
+                        selected = isPriceActive,
+                        onClick = {
+                            selectedSort = if (selectedSort == ItemSortOption.PRICE_DESC) ItemSortOption.PRICE_ASC else ItemSortOption.PRICE_DESC
+                        },
+                        label = {
+                            Text(
+                                "💰 Hodnota ${if (selectedSort == ItemSortOption.PRICE_ASC) "▲" else if (selectedSort == ItemSortOption.PRICE_DESC) "▼" else ""}",
+                                fontSize = 11.sp
+                            )
+                        },
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                }
+                item {
+                    val isCountActive = selectedSort == ItemSortOption.COUNT_DESC || selectedSort == ItemSortOption.COUNT_ASC
+                    FilterChip(
+                        selected = isCountActive,
+                        onClick = {
+                            selectedSort = if (selectedSort == ItemSortOption.COUNT_DESC) ItemSortOption.COUNT_ASC else ItemSortOption.COUNT_DESC
+                        },
+                        label = {
+                            Text(
+                                "🔢 Počet ${if (selectedSort == ItemSortOption.COUNT_ASC) "▲" else if (selectedSort == ItemSortOption.COUNT_DESC) "▼" else ""}",
+                                fontSize = 11.sp
+                            )
+                        },
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                }
+                item {
+                    val isNameActive = selectedSort == ItemSortOption.NAME_ASC || selectedSort == ItemSortOption.NAME_DESC
+                    FilterChip(
+                        selected = isNameActive,
+                        onClick = {
+                            selectedSort = if (selectedSort == ItemSortOption.NAME_ASC) ItemSortOption.NAME_DESC else ItemSortOption.NAME_ASC
+                        },
+                        label = {
+                            Text(
+                                "🔤 Název ${if (selectedSort == ItemSortOption.NAME_DESC) "Z-A" else "A-Z"}",
+                                fontSize = 11.sp
+                            )
+                        },
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                }
+            }
+
+            // --- EXPANDABLE ADVANCED FILTERS PANEL ---
+            AnimatedVisibility(
+                visible = isFilterPanelExpanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Header & Clear Button
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "🎯 Podrobné filtry",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            if (activeFilterCount > 0) {
+                                TextButton(
+                                    onClick = {
+                                        selectedRarityFilter = ItemRarityFilter.ALL
+                                        selectedAffinityFilter = ItemAffinityFilter.ALL
+                                        searchQuery = ""
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Vymazat filtry", fontSize = 11.sp)
+                                }
+                            }
+                        }
+
+                        // Filter by Rarity
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Vzácnost předmětů:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.8f))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(ItemRarityFilter.values()) { rarityFilter ->
+                                    val isSelected = selectedRarityFilter == rarityFilter
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = { selectedRarityFilter = rarityFilter },
+                                        label = {
+                                            Text(
+                                                rarityFilter.displayName,
+                                                fontSize = 10.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isSelected) rarityFilter.color else MaterialTheme.colorScheme.onSurface
+                                            )
+                                        },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = rarityFilter.color.copy(alpha = 0.2f)
+                                        ),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Filter by Affinity Bonus Value
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Bonus náklonnosti (Dary):", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFFF80AB))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(ItemAffinityFilter.values()) { affFilter ->
+                                    val isSelected = selectedAffinityFilter == affFilter
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = { selectedAffinityFilter = affFilter },
+                                        label = {
+                                            Text(
+                                                "${affFilter.icon} ${affFilter.displayName}",
+                                                fontSize = 10.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        },
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Results count status bar
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Zobrazeno ${filteredItems.size} z $totalItemCount předmětů",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+                Text(
+                    text = "Řazení: ${selectedSort.title}",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                )
+            }
+
             // --- EMPTY STATE / ITEMS LIST ---
             if (filteredItems.isEmpty()) {
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-                    modifier = Modifier.fillMaxWidth().padding(top = 20.dp)
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
                 ) {
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(28.dp),
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            text = when (selectedTab) {
+                            text = if (activeFilterCount > 0) "🔍 Žádné předměty neodpovídají zvoleným filtrům" else when (selectedTab) {
                                 0 -> "🎁 V této kategorii nemáš žádné dary pro harém."
                                 1 -> "🧪 Žádné bojové lektvary v brašně."
                                 2 -> "📜 Žádné úkolové předměty nenalezeny."
@@ -385,7 +770,7 @@ fun InventoryScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = when (selectedTab) {
+                            text = if (activeFilterCount > 0) "Zkuste upravit vyhledávání, resetovat vzácnost nebo vymazat filtry." else when (selectedTab) {
                                 0 -> "Dary můžeš zakoupit na tržnici nebo získat z průzkumu dominií a úkolů."
                                 1 -> "Lektvary můžeš uvařit v Alchymistické laboratoři v Pevnosti nebo vybojovat v aréně."
                                 2 -> "Úkolové předměty získáš plněním misí mafie, zkoumáním mapy a lovem bossů."
@@ -397,7 +782,20 @@ fun InventoryScreen(
                         )
 
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (selectedTab == 1 && onNavigateToActivities != null) {
+                            if (activeFilterCount > 0) {
+                                Button(
+                                    onClick = {
+                                        selectedRarityFilter = ItemRarityFilter.ALL
+                                        selectedAffinityFilter = ItemAffinityFilter.ALL
+                                        searchQuery = ""
+                                    },
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Zrušit filtry")
+                                }
+                            } else if (selectedTab == 1 && onNavigateToActivities != null) {
                                 Button(
                                     onClick = onNavigateToActivities,
                                     shape = RoundedCornerShape(8.dp)
@@ -417,10 +815,26 @@ fun InventoryScreen(
                     contentPadding = PaddingValues(bottom = 90.dp)
                 ) {
                     items(filteredItems, key = { it.id }) { item ->
-                        val catType = getItemCategoryType(item)
+                        val catType = getItemCategoryKey(item)
+                        val affinityVal = getItemAffinityBonusValue(item)
+
+                        // Compute which harem girls love this gift if it's a gift
+                        val favoriteGirls = remember(item.id, gameState.characters) {
+                            if (catType == "gift") {
+                                val catalogGift = GiftInventoryCatalog.ALL_GIFTS.find { it.id == item.id }
+                                if (catalogGift != null) {
+                                    gameState.characters.filter { char ->
+                                        catalogGift.favoriteArchetypes.contains(char.archetypeId)
+                                    }.map { it.name }
+                                } else emptyList()
+                            } else emptyList()
+                        }
+
                         InventoryItemCard(
                             item = item,
                             categoryType = catType,
+                            affinityBonus = affinityVal,
+                            favoriteGirls = favoriteGirls,
                             onGiftClick = { selectedItemForGift = item },
                             onUseCombatClick = {
                                 val (success, msg) = engine.useCombatConsumableOnPlayer(item.id)
@@ -487,23 +901,56 @@ fun InventoryScreen(
 
     // --- ITEM DETAILS & LORE MODAL ---
     selectedItemForDetails?.let { item ->
-        val catType = getItemCategoryType(item)
+        val catType = getItemCategoryKey(item)
+        val itemAffinity = getItemAffinityBonusValue(item)
         AlertDialog(
             onDismissRequest = { selectedItemForDetails = null },
             icon = { Text(item.icon.ifBlank { if (catType == "gift") "🎁" else if (catType == "quest") "📜" else "🧪" }, fontSize = 32.sp) },
             title = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(item.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Text(
-                        text = "Vzácnost: ${item.rarity} • ${item.count}x v brašně",
-                        fontSize = 11.sp,
-                        color = when (item.rarity) {
-                            "Legendární" -> Color(0xFFFFD700)
-                            "Epický" -> Color(0xFFE040FB)
-                            "Vzácný" -> Color(0xFF00E5FF)
-                            else -> Color(0xFF81C784)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = when (item.rarity) {
+                                "Legendární" -> Color(0xFFFFD700).copy(alpha = 0.2f)
+                                "Epický" -> Color(0xFFE040FB).copy(alpha = 0.2f)
+                                "Vzácný" -> Color(0xFF00E5FF).copy(alpha = 0.2f)
+                                else -> Color(0xFF81C784).copy(alpha = 0.2f)
+                            }
+                        ) {
+                            Text(
+                                text = item.rarity,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = when (item.rarity) {
+                                    "Legendární" -> Color(0xFFFFD700)
+                                    "Epický" -> Color(0xFFE040FB)
+                                    "Vzácný" -> Color(0xFF00E5FF)
+                                    else -> Color(0xFF81C784)
+                                },
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
                         }
-                    )
+
+                        if (itemAffinity > 0) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0xFFE91E63).copy(alpha = 0.2f)
+                            ) {
+                                Text(
+                                    text = "💖 +$itemAffinity Náklonnost",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFF80AB),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             },
             text = {
@@ -651,6 +1098,8 @@ fun CategoryTabChip(
 fun InventoryItemCard(
     item: InventoryItem,
     categoryType: String,
+    affinityBonus: Int = 0,
+    favoriteGirls: List<String> = emptyList(),
     onGiftClick: () -> Unit,
     onUseCombatClick: () -> Unit,
     onInspectQuestClick: () -> Unit,
@@ -721,7 +1170,11 @@ fun InventoryItemCard(
                             )
                         }
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 2.dp)
+                        ) {
                             Surface(
                                 shape = RoundedCornerShape(4.dp),
                                 color = when (item.rarity) {
@@ -745,8 +1198,23 @@ fun InventoryItemCard(
                                 )
                             }
 
+                            if (affinityBonus > 0) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color(0xFFE91E63).copy(alpha = 0.2f)
+                                ) {
+                                    Text(
+                                        text = "💖 +$affinityBonus",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFFF80AB),
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+
                             Text(
-                                text = "• ${item.price} zl./ks",
+                                text = "• ${item.price} zl.",
                                 fontSize = 10.sp,
                                 color = Color(0xFFFFD700)
                             )
@@ -803,6 +1271,30 @@ fun InventoryItemCard(
                 }
             }
 
+            // Favorite Girls hint
+            if (favoriteGirls.isNotEmpty()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text("Oblíbeno u:", fontSize = 9.sp, color = Color(0xFFFF80AB).copy(alpha = 0.8f))
+                    favoriteGirls.take(3).forEach { girlName ->
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFFE91E63).copy(alpha = 0.25f)
+                        ) {
+                            Text(
+                                text = "✨ $girlName",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFFFF80AB),
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
             // Action Buttons Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -844,7 +1336,7 @@ fun InventoryItemCard(
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100)),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Prozkoumat runy", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
@@ -1206,7 +1698,7 @@ fun LoadoutsInventoryTab(
                             },
                             modifier = Modifier.size(34.dp)
                         ) {
-                            Icon(Icons.Default.VolumeUp, contentDescription = "Bojový pokřik", tint = Color(0xFFFF80AB))
+                            Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Bojový pokřik", tint = Color(0xFFFF80AB))
                         }
 
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

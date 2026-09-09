@@ -1,0 +1,1 @@
+sed -i '/composable("inventory") {/i \                            composable("achievements") {\n                                com.example.haremdark.ui.screens.AchievementScreen(gameState = gameState, engine = engine, onMenuClick = { coroutineScope.launch { drawerState.open() } })\n                            }' ./app/src/main/java/com/example/haremdark/MainActivity.kt

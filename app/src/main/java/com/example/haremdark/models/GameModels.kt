@@ -252,6 +252,8 @@ data class Achievement(
 
 object AchievementList {
     val allAchievements = listOf(
+        Achievement("ach_battles_100", "Bůh války", "Vyhraj 100 bitev.", "⚔️", true),
+        Achievement("ach_max_affinity", "Nejhlubší pouto", "Dosáhni maximální náklonnosti (100) u jedné z dívek.", "💞", true),
         Achievement("ach_harem_10", "Sběratel krásy", "Získej alespoň 10 dívek do svého harému.", "👥", true),
         Achievement("ach_harem_20", "Pán harému", "Shromáždi ohromných 20 dívek ve svém harému.", "👑", true),
         Achievement("ach_affinity_total", "Casanova podsvětí", "Dosáhni celkové náklonnosti (Affinity) 250 napříč harémem.", "💖", true),
@@ -288,6 +290,7 @@ data class Player(
     var maxDarkEnergy: Int = 100,
     var dominance: Int = 5,
     var killCount: Int = 0,
+    var battlesWon: Int = 0,
     var day: Int = 1,
     var skillPoints: Int = 2,
     var unlockedCodexIds: Set<String> = emptySet(),

@@ -55,6 +55,9 @@ class GameEngine(private val context: Context) {
     private val _partyCombatSession = MutableStateFlow<PartyCombatSession?>(null)
     val partyCombatSession: StateFlow<PartyCombatSession?> = _partyCombatSession.asStateFlow()
 
+    private val _narrativeEvents = kotlinx.coroutines.flow.MutableSharedFlow<com.example.haremdark.data.NarrativeEvent>(extraBufferCapacity = 10)
+    val narrativeEvents: kotlinx.coroutines.flow.SharedFlow<com.example.haremdark.data.NarrativeEvent> = _narrativeEvents
+
     private val _currentTheme = MutableStateFlow("Temné dominium")
     val currentTheme: StateFlow<String> = _currentTheme.asStateFlow()
 
@@ -207,6 +210,18 @@ class GameEngine(private val context: Context) {
     fun updateState(transform: (GameSave) -> GameSave) {
         val current = _gameState.value
         val transformed = transform(current)
+        
+        // Narrative Events Check for Affinity Level Up
+        current.characters.forEach { oldChar ->
+            val newChar = transformed.characters.find { it.id == oldChar.id }
+            if (newChar != null && newChar.affinityLevel > oldChar.affinityLevel) {
+                val event = com.example.haremdark.data.AffinityEventData.getEventFor(newChar, newChar.affinityLevel)
+                if (event != null) {
+                    _narrativeEvents.tryEmit(event)
+                }
+            }
+        }
+        
         // Ensure Player and collections have distinct references so StateFlow and Compose always re-render in real-time
         val p = transformed.player
         val finalState = transformed.copy(
@@ -3054,6 +3069,7 @@ class GameEngine(private val context: Context) {
             player.gold += session.boss.rewardGold
             addPlayerXp(session.boss.rewardXp)
             player.killCount += 1
+            player.battlesWon += 1
             
             var droppedItem: com.example.haremdark.models.InventoryItem? = null
             if (Random.nextInt(100) < 35) { // 35% chance to drop item
@@ -3629,6 +3645,8 @@ class GameEngine(private val context: Context) {
         }
 
         // Conditions
+        if (player.battlesWon >= 100) award("ach_battles_100")
+        if (current.characters.any { it.affinityPoints >= 100 }) award("ach_max_affinity")
         if (current.characters.size >= 10) award("ach_harem_10")
         if (current.characters.size >= 20) award("ach_harem_20")
         
@@ -4054,6 +4072,7 @@ class GameEngine(private val context: Context) {
                 mana = (player.mana + rewards.bloodRubies).coerceAtLeast(0),
                 prestige = player.prestige + rewards.prestigeGain,
                 xp = player.xp + rewards.playerXp,
+                battlesWon = player.battlesWon + 1,
                 items = newItems
             )
 

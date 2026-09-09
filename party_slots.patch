@@ -1,0 +1,81 @@
+--- ./app/src/main/java/com/example/haremdark/ui/components/PartySelectionModal.kt
++++ ./app/src/main/java/com/example/haremdark/ui/components/PartySelectionModal.kt
+@@ -51,11 +51,11 @@
+ 
+     var selectedGirls by remember {
+         mutableStateOf(
+             availableGirls.sortedByDescending { (it.skills["combat"] ?: 0) + it.affinityPoints }
+                 .take(3)
+                 .map { it.id }
+-                .toSet()
++                .toList()
+         )
+     }
+ 
+     var includePlayer by remember { mutableStateOf(true) }
+@@ -161,7 +161,7 @@
+                             onCheckedChange = { checked ->
+                                 includePlayer = checked
+                                 if (checked && selectedGirls.size > 3) {
+-                                    selectedGirls = selectedGirls.take(3).toSet()
++                                    selectedGirls = selectedGirls.take(3).toList()
+                                 }
+                             },
+                             colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFFFFD700), checkedTrackColor = Color(0xFF7B1FA2))
+@@ -169,6 +169,57 @@
+                     }
+                 }
+ 
++                // --- SLOT-BASED FORMATION UI ---
++                Text("Formace družiny (Pozice poskytují bonusy):", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.White)
++                val slotBonuses = listOf(
++                    "Vanguard" to "+15% HP & Obrana",
++                    "Flank" to "+10% Útok & Rychlost",
++                    "Rearguard" to "+15% Crit & Mana",
++                    "Support" to "+5 Rychlost & Obrana"
++                )
++                Row(
++                    modifier = Modifier.fillMaxWidth(),
++                    horizontalArrangement = Arrangement.spacedBy(8.dp)
++                ) {
++                    for (i in 0 until maxGirlsAllowed) {
++                        val girlId = selectedGirls.getOrNull(i)
++                        val char = girlId?.let { id -> availableGirls.find { it.id == id } }
++                        val bonusInfo = slotBonuses.getOrNull(if (includePlayer) i + 1 else i) ?: ("Slot ${i+1}" to "")
++                        Column(
++                            horizontalAlignment = Alignment.CenterHorizontally,
++                            modifier = Modifier.weight(1f).clickable {
++                                if (girlId != null) {
++                                    selectedGirls = selectedGirls.filter { it != girlId }
++                                }
++                            }
++                        ) {
++                            Box(
++                                modifier = Modifier
++                                    .aspectRatio(1f)
++                                    .clip(RoundedCornerShape(8.dp))
++                                    .border(1.dp, if (char != null) Color(0xFFFF4081) else Color.Gray, RoundedCornerShape(8.dp))
++                                    .background(Color(0xFF2E1B3E)),
++                                contentAlignment = Alignment.Center
++                            ) {
++                                if (char != null) {
++                                    val portraitRes = StaticData.getPortraitForArchetype(char.archetype)
++                                    SubcomposeAsyncImage(
++                                        model = ImageRequest.Builder(LocalContext.current).data(portraitRes).crossfade(true).build(),
++                                        contentDescription = char.name,
++                                        contentScale = ContentScale.Crop,
++                                        modifier = Modifier.fillMaxSize()
++                                    )
++                                } else {
++                                    Text("Prázdné", fontSize = 9.sp, color = Color.Gray)
++                                }
++                            }
++                            Spacer(modifier = Modifier.height(4.dp))
++                            Text(bonusInfo.first, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFD700))
++                            Text(bonusInfo.second, fontSize = 8.sp, color = Color(0xFFB39DDB), maxLines = 1, overflow = TextOverflow.Ellipsis)
++                        }
++                    }
++                }
++
+                 // --- 3. ROSTER OF HAREM GIRLS ---
+                 Text("Dostupné společnice v dominiu:", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.White)

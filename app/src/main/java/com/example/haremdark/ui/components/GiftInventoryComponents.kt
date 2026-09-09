@@ -873,7 +873,7 @@ fun GiftMerchantDialog(
                     }
                 }
 
-                Divider()
+                HorizontalDivider()
 
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(1),

@@ -90,6 +90,28 @@ object PartyCombatManager {
             }
         }
 
+        // Apply Slot Bonuses based on index
+        partyList.forEachIndexed { index, member ->
+            val posIndex = if (includePlayerAsLeader && member.isPlayer) -1 else if (includePlayerAsLeader) index else index + 1
+            when (posIndex) {
+                1 -> { // Vanguard (Slot 1)
+                    member.hp += (member.maxHp * 0.15).toInt()
+                    member.defense += (member.defense * 0.20).toInt()
+                }
+                2 -> { // Flank (Slot 2)
+                    member.attack += (member.attack * 0.10).toInt()
+                    member.speed += (member.speed * 0.10).toInt()
+                }
+                3 -> { // Rearguard (Slot 3)
+                    member.critRatePercent += 15
+                }
+                4 -> { // Support (Slot 4)
+                    member.speed += 5
+                    member.defense += 5
+                }
+            }
+        }
+
         // Deep copy enemies
         val clonedEnemies = encounterDef.enemies.map { it.copy(statusEffects = mutableListOf()) }
         val synergies = PartyCombatCatalog.calculateSynergies(partyList)

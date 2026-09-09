@@ -1,0 +1,14 @@
+--- ./app/src/main/java/com/example/haremdark/MainActivity.kt
++++ ./app/src/main/java/com/example/haremdark/MainActivity.kt
+@@ -10,6 +10,12 @@
+ import androidx.compose.material3.*
+ import androidx.compose.runtime.*
+ import androidx.compose.ui.Modifier
++import androidx.compose.ui.unit.dp
++import androidx.compose.ui.unit.sp
++import androidx.compose.ui.text.font.FontWeight
++import kotlinx.coroutines.launch
++import androidx.navigation.compose.rememberNavController
++import androidx.navigation.compose.currentBackStackEntryAsState
+ 
+ class MainActivity : ComponentActivity() {

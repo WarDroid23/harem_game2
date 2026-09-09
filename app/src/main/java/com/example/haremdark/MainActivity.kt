@@ -46,6 +46,13 @@ class MainActivity : ComponentActivity() {
             val dailyReward by engine.dailyRewardAvailable.collectAsState()
             val context = LocalContext.current
             
+            var activeNarrativeEvent by remember { mutableStateOf<com.example.haremdark.data.NarrativeEvent?>(null) }
+            LaunchedEffect(Unit) {
+                engine.narrativeEvents.collect { event ->
+                    activeNarrativeEvent = event
+                }
+            }
+            
             val navController = rememberNavController()
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = navBackStackEntry?.destination?.route ?: "home"
@@ -53,23 +60,87 @@ class MainActivity : ComponentActivity() {
             val coroutineScope = rememberCoroutineScope()
             
             var showRestDialog by remember { mutableStateOf(false) }
+            val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
 
             HaremDarkTheme(themeName = currentTheme) {
-                Scaffold(
-                    snackbarHost = { SnackbarHost(snackbarHostState) },
-                    topBar = {
-                        GameTopBar(
-                            player = gameState.player,
-                            onRestClick = { showRestDialog = true },
-                            onQuickSaveClick = { 
-                                coroutineScope.launch {
-                                    engine.quickSaveSuspend()
-                                    snackbarHostState.showSnackbar("💾 Uloženo do DataStore (Pán, ${gameState.characters.size} dívek, výbava)")
-                                    Toast.makeText(context, "⚡ DataStore: Rychlé uložení dokončeno!", Toast.LENGTH_SHORT).show()
+                ModalNavigationDrawer(
+                    drawerState = drawerState,
+                    drawerContent = {
+                        ModalDrawerSheet(modifier = Modifier.width(280.dp)) {
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                "Rychlá navigace",
+                                modifier = Modifier.padding(16.dp),
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            HorizontalDivider()
+                            NavigationDrawerItem(
+                                icon = { Icon(Icons.Default.Favorite, contentDescription = null) },
+                                label = { Text("Harém") },
+                                selected = currentRoute == "harem",
+                                onClick = {
+                                    coroutineScope.launch { drawerState.close() }
+                                    navController.navigate("harem") { launchSingleTop = true }
+                                },
+                                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                            )
+                            NavigationDrawerItem(
+                                icon = { Icon(Icons.Default.Inventory, contentDescription = null) },
+                                label = { Text("Inventář") },
+                                selected = currentRoute == "inventory",
+                                onClick = {
+                                    coroutineScope.launch { drawerState.close() }
+                                    navController.navigate("inventory") { launchSingleTop = true }
+                                },
+                                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                            )
+                            NavigationDrawerItem(
+                                icon = { Icon(Icons.Default.EmojiEvents, contentDescription = null) },
+                                label = { Text("Úspěchy") },
+                                selected = currentRoute == "achievements",
+                                onClick = {
+                                    coroutineScope.launch { drawerState.close() }
+                                    navController.navigate("achievements") { launchSingleTop = true }
+                                },
+                                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                            )
+                            NavigationDrawerItem(
+                                icon = { Icon(Icons.Default.SportsMartialArts, contentDescription = null) },
+                                label = { Text("Boj") },
+                                selected = currentRoute == "arena" || currentRoute == "party_combat", // Support combat routes
+                                onClick = {
+                                    coroutineScope.launch { drawerState.close() }
+                                    // Default to arena or Party Combat
+                                    navController.navigate("arena") { launchSingleTop = true }
+                                },
+                                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                            )
+                        }
+                    }
+                ) {
+                    Scaffold(
+                        snackbarHost = { SnackbarHost(snackbarHostState) },
+                        topBar = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
+                                    Icon(Icons.Default.Menu, contentDescription = "Menu")
                                 }
+                                GameTopBar(
+                                    player = gameState.player,
+                                    onRestClick = { showRestDialog = true },
+                                    onQuickSaveClick = { 
+                                        coroutineScope.launch {
+                                            engine.quickSaveSuspend()
+                                            snackbarHostState.showSnackbar("💾 Uloženo do DataStore (Pán, ${gameState.characters.size} dívek, výbava)")
+                                            Toast.makeText(context, "⚡ DataStore: Rychlé uložení dokončeno!", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
                             }
-                        )
-                    },
+                        },
                     bottomBar = {
                         NavigationBar(
                             containerColor = MaterialTheme.colorScheme.surface,
@@ -184,6 +255,12 @@ class MainActivity : ComponentActivity() {
                             composable("settings") {
                                 SaveSettingsScreen(gameState = gameState, currentTheme = currentTheme, engine = engine)
                             }
+                            composable("achievements") {
+                                com.example.haremdark.ui.screens.AchievementScreen(gameState = gameState, engine = engine, onMenuClick = { coroutineScope.launch { drawerState.open() } })
+                            }
+                            composable("inventory") {
+                                com.example.haremdark.ui.screens.InventoryScreen(gameState = gameState, engine = engine)
+                            }
                         }
                     }
                 }
@@ -195,6 +272,27 @@ class MainActivity : ComponentActivity() {
                         onClaim = {
                             engine.claimDailyReward()
                             Toast.makeText(context, "Denní odměna vybrána!", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                }
+
+                // Narrative Scenario Dialog
+                activeNarrativeEvent?.let { event ->
+                    AlertDialog(
+                        onDismissRequest = { activeNarrativeEvent = null },
+                        title = { Text(event.title, color = MaterialTheme.colorScheme.primary) },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(event.description, fontSize = 14.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Odměna:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text(event.rewardText, color = Color(0xFFFFD700), fontSize = 12.sp)
+                            }
+                        },
+                        confirmButton = {
+                            Button(onClick = { activeNarrativeEvent = null }) {
+                                Text("Pokračovat")
+                            }
                         }
                     )
                 }
@@ -229,6 +327,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     )
+                }
                 }
             }
         }

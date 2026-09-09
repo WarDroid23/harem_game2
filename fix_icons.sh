@@ -1,0 +1,1 @@
+find ./app/src/main/java/com/example/haremdark/ -name "*.kt" -type f -exec grep -l "Icons.AutoMirrored.Filled" {} + | xargs sed -i 's/import androidx.compose.material.icons.filled.\*/import androidx.compose.material.icons.filled.*\nimport androidx.compose.material.icons.automirrored.filled.*/g'

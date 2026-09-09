@@ -633,9 +633,9 @@ fun CharacterGridCard(
                             .background(Color(0x88000000), CircleShape)
                     ) {
                         Icon(
-                            imageVector = if (character.isPinned) Icons.Default.PushPin else Icons.Default.LocationOn,
-                            contentDescription = "Připnout",
-                            tint = if (character.isPinned) MaterialTheme.colorScheme.primary else Color.White,
+                            imageVector = if (character.isPinned) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = "Oblíbená/Připnutá",
+                            tint = if (character.isPinned) Color(0xFFE91E63) else Color.White,
                             modifier = Modifier.size(18.dp)
                         )
                     }

@@ -187,7 +187,7 @@ fun DrugResourceManager(
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                     )
-                    Divider(color = MaterialTheme.colorScheme.outlineVariant)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -369,7 +369,7 @@ private fun ActiveBuffsAndStockTab(
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
                         )
 
-                        Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
 
                         // Maintenance row
                         Row(
@@ -908,7 +908,7 @@ private fun SourcingAndHarvestTab(
                             }
                         }
                         if (ing != DrugData.ALL_INGREDIENTS.last()) {
-                            Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                         }
                     }
                 }

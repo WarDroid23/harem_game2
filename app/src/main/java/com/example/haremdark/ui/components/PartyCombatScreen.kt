@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -148,7 +149,7 @@ fun PartyCombatScreen(
                             modifier = Modifier.size(30.dp)
                         ) {
                             Icon(
-                                imageVector = if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                                imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
                                 contentDescription = "Zvuk",
                                 tint = if (isMuted) Color.Red else Color(0xFFFFD700),
                                 modifier = Modifier.size(18.dp)
@@ -172,7 +173,7 @@ fun PartyCombatScreen(
                             modifier = Modifier.size(30.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.ExitToApp,
+                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
                                 contentDescription = "Ústup",
                                 tint = Color(0xFFFF8A80),
                                 modifier = Modifier.size(18.dp)

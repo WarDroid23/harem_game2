@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -174,7 +175,7 @@ fun ActiveCombatView(
                             modifier = Modifier.size(28.dp)
                         ) {
                             Icon(
-                                Icons.Default.VolumeUp,
+                                Icons.AutoMirrored.Filled.VolumeUp,
                                 contentDescription = "Bojový pokřik",
                                 tint = Color(0xFFFF80AB),
                                 modifier = Modifier.size(18.dp)
@@ -202,7 +203,7 @@ fun ActiveCombatView(
                             shape = RoundedCornerShape(6.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF37474F))
                         ) {
-                            Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(13.dp))
+                            Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, modifier = Modifier.size(13.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Log (${session.logEntries.size})", fontSize = 11.sp)
                         }
@@ -462,7 +463,7 @@ fun ActiveCombatView(
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Icon(Icons.Default.MenuBook, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Celý log")
                         }
@@ -748,7 +749,7 @@ fun FullCombatHistoryDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Default.MenuBook, contentDescription = null, tint = Color(0xFFFFD700))
+                        Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = Color(0xFFFFD700))
                         Column {
                             Text("Kompletní historie souboje", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                             Text("Protivník: ${session.boss.name} • Celkem ${session.logEntries.size} záznamů", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
@@ -892,7 +893,7 @@ fun ScrollableCombatLogComponent(
                         modifier = Modifier.size(24.dp)
                     ) {
                         Icon(
-                            if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                            if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
                             contentDescription = if (isMuted) "Zvuk vypnut" else "Zvuk zapnut",
                             tint = if (isMuted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(16.dp)

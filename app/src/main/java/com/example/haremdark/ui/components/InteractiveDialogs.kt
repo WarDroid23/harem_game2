@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -573,7 +574,7 @@ fun AffinityAndDialogueTab(character: Character) {
                             modifier = Modifier.size(24.dp)
                         ) {
                             Icon(
-                                Icons.Default.VolumeUp,
+                                Icons.AutoMirrored.Filled.VolumeUp,
                                 contentDescription = "Přehrát hlas",
                                 tint = Color(tier.colorHex),
                                 modifier = Modifier.size(16.dp)
@@ -723,7 +724,7 @@ fun AffinityAndDialogueTab(character: Character) {
                                                 modifier = Modifier.size(20.dp)
                                             ) {
                                                 Icon(
-                                                    Icons.Default.VolumeUp,
+                                                    Icons.AutoMirrored.Filled.VolumeUp,
                                                     contentDescription = "Přehrát",
                                                     tint = Color(t.colorHex),
                                                     modifier = Modifier.size(14.dp)
@@ -1813,7 +1814,7 @@ fun EquipmentTab(
                                 },
                                 modifier = Modifier.size(28.dp)
                             ) {
-                                Icon(Icons.Default.VolumeUp, contentDescription = "Bojový pokřik", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
+                                Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = "Bojový pokřik", tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
                             }
                             // Voice Trigger Button: Affinity Chime
                             IconButton(
@@ -1935,7 +1936,7 @@ fun EquipmentTab(
                     
                     if (isExpanded && equippedItem == null) {
                         Spacer(modifier = Modifier.height(12.dp))
-                        Divider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f))
                         Spacer(modifier = Modifier.height(12.dp))
                         
                         val availableItems = player.items.filter { it.category == "equipment" && it.equipSlot == slotId && it.count > 0 }
@@ -2084,7 +2085,7 @@ fun EquipmentItemRow(item: InventoryItem, character: Character, onEquip: () -> U
 fun StatDiff(label: String, oldVal: Int, newVal: Int) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("$label: $oldVal ", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-        Icon(Icons.Default.ArrowForward, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(10.dp))
+        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(10.dp))
         Text(" $newVal", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
     }
 }

@@ -1,0 +1,1 @@
+sed -i 's/if (current.characters.size >= 10) award("ach_harem_10")/if (player.battlesWon >= 100) award("ach_battles_100")\n        if (current.characters.any { it.affinityPoints >= 100 }) award("ach_max_affinity")\n        if (current.characters.size >= 10) award("ach_harem_10")/g' ./app/src/main/java/com/example/haremdark/domain/GameEngine.kt

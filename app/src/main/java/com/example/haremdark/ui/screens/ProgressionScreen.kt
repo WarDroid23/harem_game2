@@ -166,7 +166,7 @@ fun ProgressionScreen(
                                         }
                                     }
                                 }
-                                Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                             }
                         }
                     }
