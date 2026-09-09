@@ -162,7 +162,7 @@ class HaremRepositoryImpl(
             list.map { char ->
                 if (char.id == characterId) {
                     char.affinityLevel = clampedLevel
-                    val minPointsForLevel = AffinityData.getPointsThreshold(clampedLevel)
+                    val minPointsForLevel = AffinityData.TIERS.find { it.level == clampedLevel }?.minPoints ?: 0
                     if (char.affinityPoints < minPointsForLevel) {
                         char.affinityPoints = minPointsForLevel
                     }

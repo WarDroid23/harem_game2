@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -246,7 +247,8 @@ fun CharacterDetailDialog(
                             character = character,
                             player = player,
                             onGiveDirectGift = onGiveDirectGift,
-                            onUseInventoryItem = onUseInventoryItem
+                            onUseInventoryItem = onUseInventoryItem,
+                            engine = engine
                         )
                         4 -> InteractionsSectionTab(
                             character = character,
@@ -743,165 +745,127 @@ fun GiftingAndItemsTab(
     character: Character,
     player: Player,
     onGiveDirectGift: (DirectGiftItem) -> Unit,
-    onUseInventoryItem: (InventoryItem) -> Unit
+    onUseInventoryItem: (InventoryItem) -> Unit,
+    engine: GameEngine? = null
 ) {
-    val affinityTier = AffinityData.getTierForPoints(character.affinityPoints)
+    var giftSubTab by remember { mutableIntStateOf(0) } // 0: Collectible Gifts & Inventory, 1: Potions & Direct
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Player Wealth Overview Banner
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.fillMaxWidth()
+        // Tab Mode Selector
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Row(
-                modifier = Modifier.padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text("🪙", fontSize = 18.sp)
-                    Column {
-                        Text("Pokladnice pána", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-                        Text("${player.gold} Zlatých", fontWeight = FontWeight.Bold, color = Color(0xFFFFD700), fontSize = 14.sp)
-                    }
-                }
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color(affinityTier.colorHex).copy(alpha = 0.2f)
-                ) {
-                    Text(
-                        text = "${affinityTier.icon} Úr. ${affinityTier.level} (${character.affinityPoints} pts)",
-                        color = Color(affinityTier.colorHex),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
-                    )
-                }
-            }
+            FilterChip(
+                selected = giftSubTab == 0,
+                onClick = { giftSubTab = 0 },
+                label = { Text("🎁 Dary & Inventář", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp)
+            )
+            FilterChip(
+                selected = giftSubTab == 1,
+                onClick = { giftSubTab = 1 },
+                label = { Text("🧪 Lektvary & Alchymie", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp)
+            )
         }
 
-        // Section: Direct Purchasable Gifts
-        Text("Královské dary za zlato (Zvyšují náklonnost 💖):", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-
-        GameContent.DIRECT_GIFTS.forEach { gift ->
-            val canAfford = player.gold >= gift.goldCost
-            val affinityBoost = (gift.loyaltyBoost + gift.trustBoost + gift.romanceBoost) / 2 + 10
-
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(gift.icon, fontSize = 20.sp)
-                            Column {
-                                Text(gift.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                Text(gift.description, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-                            }
-                        }
-                    }
-
-                    // Stat boosts row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFE91E63).copy(alpha = 0.15f)) {
-                            Text("+$affinityBoost 💖 Nákl.", color = Color(0xFFE91E63), fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
-                        }
-                        Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF4CAF50).copy(alpha = 0.15f)) {
-                            Text("+${gift.loyaltyBoost} Loaj.", color = Color(0xFF4CAF50), fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
-                        }
-                        Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFFF4081).copy(alpha = 0.15f)) {
-                            Text("+${gift.romanceBoost} Rom.", color = Color(0xFFFF4081), fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
-                        }
-                    }
-
-                    Button(
-                        onClick = { onGiveDirectGift(gift) },
-                        enabled = canAfford,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(vertical = 6.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF8E24AA)
-                        )
-                    ) {
-                        Text("🎁 Darovat (${gift.goldCost} zlatých)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
+        if (giftSubTab == 0) {
+            CollectibleGiftInventoryTab(
+                character = character,
+                player = player,
+                engine = engine,
+                onDirectGiftLegacy = { giftId ->
+                    val direct = GameContent.DIRECT_GIFTS.find { it.id == giftId }
+                    if (direct != null) onGiveDirectGift(direct)
                 }
-            }
-        }
-
-        // Section: Inventory Items Gifting
-        Text("Lektvary a předměty z inventáře:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-
-        if (player.items.isEmpty()) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "V inventáři nemáš žádné předměty. Můžeš je uvařit v Alchymii (Záložka Aktivity)!",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
-                }
-            }
+            )
         } else {
-            player.items.forEach { item ->
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("${item.name} (${item.count}x)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            Text(item.description, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-                        }
+            // Potions & Consumables View
+            val consumableItems = remember(player.items) {
+                player.items.filter { it.count > 0 && !it.id.startsWith("gift_") && it.category != "gift" }
+            }
 
-                        Button(
-                            onClick = { onUseInventoryItem(item) },
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Aktivní lektvary a alchymistické esence pro ${character.name}:",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp
+                )
+
+                if (consumableItems.isEmpty()) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Text("Použít", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("🧪", fontSize = 28.sp)
+                            Text(
+                                text = "V inventáři nemáš žádné lektvary.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+                            Text(
+                                text = "Můžeš je uvařit v Alchymistické laboratoři (Záložka Aktivity)!",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                    consumableItems.forEach { item ->
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(item.icon.ifBlank { "🧪" }, fontSize = 22.sp)
+                                    Column {
+                                        Text("${item.name} (${item.count}x)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text(item.description, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                                        if (item.effectDescription.isNotBlank()) {
+                                            Text(item.effectDescription, fontSize = 10.sp, color = Color(0xFF81C784))
+                                        }
+                                    }
+                                }
+
+                                Button(
+                                    onClick = { onUseInventoryItem(item) },
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text("Použít", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
                         }
                     }
                 }

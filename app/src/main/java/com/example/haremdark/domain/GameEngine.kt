@@ -2047,6 +2047,150 @@ class GameEngine(private val context: Context) {
         return Pair(true, msg)
     }
 
+    fun purchaseGiftToInventory(giftId: String, count: Int = 1): Pair<Boolean, String> {
+        val gift = com.example.haremdark.data.GiftInventoryCatalog.getGiftById(giftId)
+            ?: return Pair(false, "Předmět nebyl nalezen.")
+        val totalCost = gift.goldCost * count
+        val current = _gameState.value
+        if (current.player.gold < totalCost) {
+            return Pair(false, "Nedostatek zlata! Potřebuješ $totalCost zlatých (máš ${current.player.gold}).")
+        }
+
+        updateState { state ->
+            val updatedItems = state.player.items.toMutableList()
+            val existing = updatedItems.find { it.id == gift.id }
+            if (existing != null) {
+                existing.count += count
+            } else {
+                updatedItems.add(
+                    InventoryItem(
+                        id = gift.id,
+                        name = gift.name,
+                        description = gift.description,
+                        count = count,
+                        price = gift.goldCost,
+                        category = "gift",
+                        icon = gift.icon,
+                        rarity = gift.rarity.title,
+                        effectDescription = "+${gift.baseAffinity} Náklonnost"
+                    )
+                )
+            }
+            state.copy(
+                player = state.player.copy(
+                    gold = state.player.gold - totalCost,
+                    items = updatedItems
+                ),
+                gameLog = (listOf("🛍️ Zakoupeno: $count× ${gift.name} (${gift.icon}) do inventáře za $totalCost zlatých.") + state.gameLog).take(30)
+            )
+        }
+        SoundEffectManager.playHarem(HaremSound.GIFT)
+        return Pair(true, "Zakoupeno $count× ${gift.name} do tvého inventáře!")
+    }
+
+    fun giveCollectibleGift(
+        characterId: String,
+        giftId: String,
+        count: Int = 1
+    ): GiftActionResult? {
+        val current = _gameState.value
+        val gift = com.example.haremdark.data.GiftInventoryCatalog.getGiftById(giftId) ?: return null
+        val character = current.characters.firstOrNull { it.id == characterId } ?: return null
+
+        val inventoryItem = current.player.items.find { it.id == giftId }
+        val availableCount = inventoryItem?.count ?: 0
+        if (availableCount < count) return null
+
+        val isFavorite = gift.isFavoriteOf(character.archetypeId)
+        val singleAffinity = gift.calculateTotalAffinity(character.archetypeId)
+        val singleLoyalty = gift.calculateLoyaltyGain(character.archetypeId)
+        val singleDesire = gift.calculateDesireGain(character.archetypeId)
+        val singleTrust = gift.calculateTrustGain(character.archetypeId)
+
+        val totalAffinity = singleAffinity * count
+        val totalLoyalty = singleLoyalty * count
+        val totalDesire = singleDesire * count
+        val totalTrust = singleTrust * count
+
+        val prevAffinityLevel = character.affinityLevel
+        val newAffinityPoints = character.affinityPoints + totalAffinity
+        val newAffinityLevel = AffinityData.getLevelForPoints(newAffinityPoints)
+        val leveledUp = newAffinityLevel > prevAffinityLevel
+        val tierInfo = AffinityData.getTierForPoints(newAffinityPoints)
+
+        val reactionQuote = gift.getReactionQuote(character.archetypeId, character.name)
+        val levelUpMsg = if (leveledUp) {
+            "\n🌟 Pouto posíleno! ${character.name} dosáhla úrovně ${tierInfo.level}: ${tierInfo.title}! ${tierInfo.combatBonusDescription}"
+        } else ""
+
+        val actionLog = "🎁 Darováno $count× ${gift.name} (${gift.icon}) pro ${character.name} (+$totalAffinity nákl., +$totalLoyalty loaj., +$totalDesire touha)$levelUpMsg"
+
+        updateState { state ->
+            val updatedItems = state.player.items.mapNotNull { item ->
+                if (item.id == giftId) {
+                    val remaining = item.count - count
+                    if (remaining > 0) item.copy(count = remaining) else null
+                } else item
+            }.toMutableList()
+
+            val updatedCharacters = state.characters.map { c ->
+                if (c.id == characterId) {
+                    c.affinityHistory.add(
+                        AffinityPointRecord(
+                            day = state.player.day,
+                            points = newAffinityPoints,
+                            source = "Dar: $count× ${gift.name} (+$totalAffinity pts)"
+                        )
+                    )
+                    c.copy(
+                        loajalita = (c.loajalita + totalLoyalty).coerceIn(0, 100),
+                        touha = (c.touha + totalDesire).coerceIn(0, 100),
+                        duvera = (c.duvera + totalTrust).coerceIn(0, 100),
+                        poslusnost = (c.poslusnost + (gift.obedienceBonus * count)).coerceIn(0, 100),
+                        romanceBody = (c.romanceBody + (gift.desireBonus * count)).coerceIn(0, 100),
+                        affinityPoints = newAffinityPoints,
+                        affinityLevel = newAffinityLevel,
+                        lastInteractionDay = state.player.day
+                    )
+                } else c
+            }
+
+            state.copy(
+                player = state.player.copy(items = updatedItems),
+                characters = updatedCharacters,
+                gameLog = (listOf(actionLog) + state.gameLog).take(30)
+            )
+        }
+
+        if (leveledUp) {
+            SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
+            VoiceManager.playTriggerVoice(
+                VoiceTriggerType.AFFINITY_LEVEL_UP,
+                character.copy(affinityPoints = newAffinityPoints, affinityLevel = newAffinityLevel)
+            )
+        } else {
+            SoundEffectManager.playHarem(HaremSound.GIFT)
+            VoiceManager.speak(reactionQuote, character.archetypeId)
+        }
+
+        addPlayerXp(15 * count)
+        progressMission("GIFT", count)
+
+        return GiftActionResult(
+            character = character.copy(affinityPoints = newAffinityPoints, affinityLevel = newAffinityLevel),
+            gift = gift,
+            quantity = count,
+            affinityGained = totalAffinity,
+            loyaltyGained = totalLoyalty,
+            desireGained = totalDesire,
+            trustGained = totalTrust,
+            leveledUp = leveledUp,
+            newAffinityLevel = newAffinityLevel,
+            dialogueResponse = reactionQuote,
+            isFavoriteMatch = isFavorite
+        )
+    }
+
     fun executeSpecialDialogueChoice(
         characterId: String,
         choice: com.example.haremdark.data.DialogueChoice
