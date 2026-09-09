@@ -28,6 +28,7 @@ import com.example.haremdark.data.StaticData
 import com.example.haremdark.domain.GameEngine
 import com.example.haremdark.models.CombatSession
 import com.example.haremdark.models.GameSave
+import com.example.haremdark.ui.components.DrugResourceManager
 
 @Composable
 fun ActivitiesScreen(
@@ -224,88 +225,7 @@ fun CombatTab(gameState: GameSave, session: CombatSession?, engine: GameEngine) 
 
 @Composable
 fun AlchemyTab(gameState: GameSave, engine: GameEngine) {
-    val context = LocalContext.current
-
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(bottom = 90.dp)
-    ) {
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Column {
-                    Box(modifier = Modifier.fillMaxWidth().height(115.dp)) {
-                        Image(
-                            painter = painterResource(id = R.drawable.img_alchemy_lab),
-                            contentDescription = "Alchymie",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
-                        )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(Color.Transparent, Color(0xDD120B1B))
-                                    )
-                                )
-                        )
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(10.dp)
-                        ) {
-                            Text("Alchymistická laboratoř", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = Color.White)
-                            Text("Míchej esence a temnou energii pro výrobu lektvarů pro harém a souboje.", fontSize = 11.sp, color = Color(0xFFCE93D8))
-                        }
-                    }
-                }
-            }
-        }
-
-        items(GameContent.ALCHEMY_RECIPES) { recipe ->
-            val canAffordGold = gameState.player.gold >= recipe.goldCost
-            val canAffordDark = gameState.player.darkEnergy >= recipe.darkCost
-
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Column(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(recipe.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Surface(shape = RoundedCornerShape(6.dp), color = Color(0xFFFFD700).copy(alpha = 0.2f)) {
-                                Text("💰 ${recipe.goldCost}", fontSize = 11.sp, color = Color(0xFFFFD700), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                            }
-                            Surface(shape = RoundedCornerShape(6.dp), color = Color(0xFF9C27B0).copy(alpha = 0.2f)) {
-                                Text("🔮 ${recipe.darkCost}", fontSize = 11.sp, color = Color(0xFF9C27B0), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                            }
-                        }
-                    }
-                    Text(recipe.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f))
-
-                    Button(
-                        onClick = {
-                            val (success, msg) = engine.brewAlchemy(recipe)
-                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = canAffordGold && canAffordDark,
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("Uvařit elixír", fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-    }
+    DrugResourceManager(gameState = gameState, engine = engine)
 }
 
 @Composable

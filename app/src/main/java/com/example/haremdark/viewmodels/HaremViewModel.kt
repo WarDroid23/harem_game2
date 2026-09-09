@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 data class HaremFilterCriteria(
     val status: String = "Všechny",
@@ -112,5 +114,67 @@ class HaremViewModel(private val engine: GameEngine) : ViewModel() {
     
     fun openInteraction(character: Character?) {
         selectedCharacterForInteraction.value = character
+    }
+
+    // --- Time-Limited Harem Event Triggers ---
+    val activeTimeLimitedEvent = MutableStateFlow<com.example.haremdark.data.TimeLimitedHaremEvent?>(null)
+    val eventRemainingSeconds = MutableStateFlow(0)
+    val isEventDialogueOpen = MutableStateFlow(false)
+    private var timerJob: kotlinx.coroutines.Job? = null
+
+    fun triggerTimeLimitedEvent(targetCharacterId: String? = null): Boolean {
+        val characters = engine.gameState.value.characters
+        if (characters.isEmpty()) return false
+
+        val targetChar = if (targetCharacterId != null) {
+            characters.firstOrNull { it.id == targetCharacterId } ?: characters.random()
+        } else {
+            characters.random()
+        }
+
+        val event = com.example.haremdark.data.HaremEventData.generateEventForCharacter(targetChar)
+        timerJob?.cancel()
+        activeTimeLimitedEvent.value = event
+        eventRemainingSeconds.value = event.durationSeconds
+
+        timerJob = viewModelScope.launch {
+            while (isActive && eventRemainingSeconds.value > 0) {
+                kotlinx.coroutines.delay(1000L)
+                val current = eventRemainingSeconds.value - 1
+                eventRemainingSeconds.value = current
+                if (current <= 0) {
+                    activeTimeLimitedEvent.value = null
+                    isEventDialogueOpen.value = false
+                    engine.addLog("⏳ Čas vypršel – ${targetChar.name} se zklamaně stáhla do svých komnat.")
+                    break
+                }
+            }
+        }
+        return true
+    }
+
+    fun dismissActiveEvent() {
+        timerJob?.cancel()
+        activeTimeLimitedEvent.value = null
+        isEventDialogueOpen.value = false
+    }
+
+    fun openActiveEventDialogue() {
+        if (activeTimeLimitedEvent.value != null) {
+            isEventDialogueOpen.value = true
+        }
+    }
+
+    fun closeActiveEventDialogue() {
+        isEventDialogueOpen.value = false
+    }
+
+    fun resolveActiveEventChoice(choice: com.example.haremdark.data.DialogueChoice): Pair<Boolean, String> {
+        val event = activeTimeLimitedEvent.value ?: return Pair(false, "Žádná aktivní událost.")
+        val result = engine.executeSpecialDialogueChoice(event.characterId, choice)
+        timerJob?.cancel()
+        activeTimeLimitedEvent.value = null
+        isEventDialogueOpen.value = false
+        return result
     }
 }

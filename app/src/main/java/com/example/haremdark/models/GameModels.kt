@@ -147,6 +147,7 @@ data class Character(
     var vlhkost: Int = 50,
     var submisivita: Int = 40,
     var loajalita: Int = 30,
+    var strength: Int = 15,
     var nalada: String = "neutrální",
     var plodnost: Int = 50,
     var duvera: Int = 30,
@@ -187,9 +188,53 @@ data class Character(
     var skillPoints: Int = 0,
     var skills: MutableMap<String, Int> = mutableMapOf("combat" to 0, "defense" to 0, "production" to 0, "rental" to 0),
     var equippedWeapon: Weapon? = null,
-    var equipment: MutableMap<String, InventoryItem?> = mutableMapOf("weapon" to null, "armor" to null, "accessory" to null)
+    var equipment: MutableMap<String, InventoryItem?> = mutableMapOf("weapon" to null, "armor" to null, "accessory" to null),
+    var affinityHistory: MutableList<AffinityPointRecord> = mutableListOf()
+) {
+    var loyalty: Int
+        get() = loajalita
+        set(value) { loajalita = value.coerceIn(0, 100) }
 
+    fun getLoyaltyStatus(): String = when {
+        loajalita >= 80 -> "Oddaná fanatička"
+        loajalita >= 60 -> "Věrná společnice"
+        loajalita >= 40 -> "Poslušná"
+        loajalita >= 20 -> "Ostražitá"
+        else -> "Vzpurná a zrádná"
+    }
+
+    fun getStrengthStatus(): String = when {
+        strength >= 80 -> "Legendární šampionka"
+        strength >= 60 -> "Mistryně čepele"
+        strength >= 40 -> "Zkušená válečnice"
+        strength >= 25 -> "Bojeschopná"
+        else -> "Křehká kráska"
+    }
+}
+
+@Serializable
+data class AffinityPointRecord(
+    val day: Int,
+    val points: Int,
+    val source: String = "Interakce"
 )
+
+fun Character.getSafeAffinityTrend(currentDay: Int = 1): List<AffinityPointRecord> {
+    if (affinityHistory.size >= 2) {
+        return affinityHistory
+    }
+    // Provide realistic baseline affinity progression curve up to current points
+    val baseline = (affinityPoints * 0.25f).toInt().coerceAtLeast(5)
+    val step1 = (affinityPoints * 0.50f).toInt().coerceAtLeast(baseline + 2)
+    val step2 = (affinityPoints * 0.78f).toInt().coerceAtLeast(step1 + 2)
+    val startDay = (currentDay - 3).coerceAtLeast(1)
+    return listOf(
+        AffinityPointRecord(startDay, baseline, "Příchod do komnat"),
+        AffinityPointRecord(startDay + 1, step1, "Pozornost & Dary"),
+        AffinityPointRecord(startDay + 2, step2, "Důvěrný rozhovor"),
+        AffinityPointRecord(currentDay.coerceAtLeast(startDay + 3), affinityPoints, "Aktuální pouto")
+    )
+}
 
 
 @Serializable
@@ -228,6 +273,8 @@ data class Player(
     var hp: Int = 100,
     var maxHp: Int = 100,
     var gold: Int = 500,
+    var influence: Int = 35,
+    var maxInfluence: Int = 100,
     var wood: Int = 100,
     var stone: Int = 50,
     var iron: Int = 10,
@@ -282,6 +329,7 @@ data class Player(
     var haremHarmony: Int = 85,
     var drugsCraftedTotal: Int = 0,
     var drugsSoldTotal: Int = 0,
+    var greenhouseHarvestDay: Int = 0,
     var agents: MutableList<Agent> = mutableListOf(
         Agent("Vesper, Noční stín", 1, 75, "vymahač")
     )
@@ -291,7 +339,12 @@ data class Player(
 data class CombatLogEntry(
     val turn: Int,
     val type: String, // "player_attack", "player_spell", "player_heal", "player_defend", "player_support", "enemy_attack", "enemy_special", "system", "victory", "defeat"
-    val message: String
+    val message: String,
+    val actor: String = "",
+    val actionName: String = "",
+    val damageDealt: Int = 0,
+    val damageCalculation: String? = null,
+    val narrativeText: String? = null
 )
 
 @Serializable
@@ -342,6 +395,23 @@ data class PartyBuff(
 )
 
 @Serializable
+data class ActiveDrugBuff(
+    val id: String,
+    val drugId: String,
+    val name: String,
+    val icon: String,
+    val targetType: String, // "player" or "concubine"
+    val targetCharacterId: String? = null,
+    val targetCharacterName: String = "Pán",
+    var remainingDays: Int = 3,
+    val maxDays: Int = 3,
+    val effectSummary: String,
+    val category: String = "Afrodiziakum",
+    var autoRenew: Boolean = true,
+    var withdrawalWarning: Boolean = false
+)
+
+@Serializable
 data class EquipmentLoadout(
     val id: String,
     val name: String,
@@ -377,6 +447,7 @@ data class GameSave(
     val lastMissionUpdateDay: Int = 0,
     val gameLog: List<String> = emptyList(),
     val activeBuffs: List<PartyBuff> = emptyList(),
+    val activeDrugBuffs: List<ActiveDrugBuff> = emptyList(),
     val resourceHistory: List<DailyResourceStat> = emptyList(),
     val savedLoadouts: List<EquipmentLoadout> = emptyList(),
     val activeLoadoutId: String? = null

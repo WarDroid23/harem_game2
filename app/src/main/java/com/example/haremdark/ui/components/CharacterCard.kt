@@ -36,6 +36,7 @@ fun CharacterCard(
     onDetailClick: () -> Unit,
     onFavoriteClick: () -> Unit,
     onPinClick: () -> Unit = {},
+    hasActiveEvent: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val loyaltyTier = StaticData.getLoyaltyTier(character.loajalita)
@@ -124,6 +125,27 @@ fun CharacterCard(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
+                            if (hasActiveEvent) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFFEF5350),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                    ) {
+                                        Text("🔥", fontSize = 9.sp)
+                                        Text(
+                                            text = "Událost!",
+                                            color = Color.White,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                    }
+                                }
+                            }
                             if (character.oblibena) {
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
@@ -401,6 +423,7 @@ fun CharacterGridCard(
     onClick: () -> Unit,
     onFavoriteClick: () -> Unit,
     onPinClick: () -> Unit = {},
+    hasActiveEvent: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val loyaltyTier = StaticData.getLoyaltyTier(character.loajalita)
@@ -484,6 +507,27 @@ fun CharacterGridCard(
             ) {
                 // Status Badges Column
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (hasActiveEvent) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFFEF5350),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Text("🔥", fontSize = 8.sp)
+                                Text(
+                                    text = "Událost!",
+                                    color = Color.White,
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+                        }
+                    }
                     if (character.jeManzelkou) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),

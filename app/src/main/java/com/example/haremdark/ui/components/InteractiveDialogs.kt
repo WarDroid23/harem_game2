@@ -526,6 +526,12 @@ fun AffinityAndDialogueTab(character: Character) {
             }
         }
 
+        // Affinity Growth Trend Chart (Vico library visualization)
+        AffinityTrendChart(
+            character = character,
+            modifier = Modifier.fillMaxWidth()
+        )
+
         // Active Speech Dialogue Card
         val activeLine = AffinityData.getRandomActiveDialogue(character)
         Card(

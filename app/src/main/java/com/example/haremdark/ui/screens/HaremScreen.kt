@@ -43,6 +43,8 @@ import com.example.haremdark.ui.components.CharacterCard
 import com.example.haremdark.ui.components.CharacterDetailDialog
 import com.example.haremdark.ui.components.CharacterGridCard
 import com.example.haremdark.ui.components.InteractionDialog
+import com.example.haremdark.ui.components.TimeLimitedEventBanner
+import com.example.haremdark.ui.components.HaremSpecialEventDialog
 
 @Composable
 fun HaremScreen(
@@ -67,6 +69,18 @@ fun HaremScreen(
     val selectedCharacterForProfile by haremViewModel.selectedCharacterForProfile.collectAsState()
     val selectedCharacterForInteraction by haremViewModel.selectedCharacterForInteraction.collectAsState()
     val filteredList by haremViewModel.filteredList.collectAsState()
+    val activeEvent by haremViewModel.activeTimeLimitedEvent.collectAsState()
+    val eventRemainingSeconds by haremViewModel.eventRemainingSeconds.collectAsState()
+    val isEventDialogueOpen by haremViewModel.isEventDialogueOpen.collectAsState()
+
+    LaunchedEffect(gameState.characters.size) {
+        if (gameState.characters.isNotEmpty() && haremViewModel.activeTimeLimitedEvent.value == null) {
+            kotlinx.coroutines.delay(2000L)
+            if (haremViewModel.activeTimeLimitedEvent.value == null) {
+                haremViewModel.triggerTimeLimitedEvent()
+            }
+        }
+    }
 
     val haremTabs = listOf("🔲 Mřížka", "🛏️ Komnaty", "👑 Hierarchie", "👶 Dynastie", "👗 Garderóba", "📚 Archiv", "🖼️ Galerie")
     
@@ -179,7 +193,16 @@ fun HaremScreen(
                     }
                 }
             } else {
-            Box(modifier = Modifier.weight(1f)) {
+                TimeLimitedEventBanner(
+                    event = activeEvent,
+                    remainingSeconds = eventRemainingSeconds,
+                    onEnterChamber = { haremViewModel.openActiveEventDialogue() },
+                    onDismiss = { haremViewModel.dismissActiveEvent() },
+                    onTriggerManualEvent = { haremViewModel.triggerTimeLimitedEvent() },
+                    canTriggerManual = activeEvent == null && gameState.characters.isNotEmpty()
+                )
+
+                Box(modifier = Modifier.weight(1f)) {
             when (selectedHaremTab) {
                 0 -> {
                     // --- TAB 0: DEDICATED HAREM GRID SCREEN ---
@@ -319,9 +342,17 @@ fun HaremScreen(
                                 contentPadding = PaddingValues(top = 2.dp, bottom = 90.dp)
                             ) {
                                 items(filteredList, key = { it.id }) { character ->
+                                    val hasEvent = activeEvent?.characterId == character.id
                                     CharacterGridCard(
                                         character = character,
-                                        onClick = { haremViewModel.openProfile(character) },
+                                        hasActiveEvent = hasEvent,
+                                        onClick = {
+                                            if (hasEvent) {
+                                                haremViewModel.openActiveEventDialogue()
+                                            } else {
+                                                haremViewModel.openProfile(character)
+                                            }
+                                        },
                                         onPinClick = {
                                             val (success, res) = engine.togglePin(character.id)
                                             Toast.makeText(context, res, Toast.LENGTH_SHORT).show()
@@ -467,10 +498,24 @@ fun HaremScreen(
                             }
                         } else {
                             items(filteredList, key = { it.id }) { character ->
+                                val hasEvent = activeEvent?.characterId == character.id
                                 CharacterCard(
                                     character = character,
-                                    onInteractClick = { haremViewModel.openInteraction(character) },
-                                    onDetailClick = { haremViewModel.openProfile(character) },
+                                    hasActiveEvent = hasEvent,
+                                    onInteractClick = {
+                                        if (hasEvent) {
+                                            haremViewModel.openActiveEventDialogue()
+                                        } else {
+                                            haremViewModel.openInteraction(character)
+                                        }
+                                    },
+                                    onDetailClick = {
+                                        if (hasEvent) {
+                                            haremViewModel.openActiveEventDialogue()
+                                        } else {
+                                            haremViewModel.openProfile(character)
+                                        }
+                                    },
                                     onPinClick = {
                                         val (success, res) = engine.togglePin(character.id)
                                         Toast.makeText(context, res, Toast.LENGTH_SHORT).show()
@@ -581,6 +626,24 @@ fun HaremScreen(
             },
             engine = engine
         )
+    }
+
+    // Time-Limited Special Dialogue Sequence Dialog
+    activeEvent?.let { evt ->
+        if (isEventDialogueOpen) {
+            val currentConcubine = gameState.characters.firstOrNull { it.id == evt.characterId }
+            if (currentConcubine != null) {
+                HaremSpecialEventDialog(
+                    event = evt,
+                    character = currentConcubine,
+                    onDismiss = { haremViewModel.closeActiveEventDialogue() },
+                    onChoiceSelected = { choice ->
+                        val (success, msg) = haremViewModel.resolveActiveEventChoice(choice)
+                        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                    }
+                )
+            }
+        }
     }
     if (filterSheetExpanded) {
         AlertDialog(

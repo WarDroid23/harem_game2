@@ -39,6 +39,7 @@ import com.example.haremdark.models.Boss
 import com.example.haremdark.models.CombatLogEntry
 import com.example.haremdark.models.CombatSession
 import com.example.haremdark.models.GameSave
+import com.example.haremdark.domain.SoundEffectManager
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.lazy.LazyRow
 
@@ -79,7 +80,6 @@ fun ActiveCombatView(
     }
 
     var selectedActionCategory by remember { mutableIntStateOf(0) }
-    var selectedLogFilter by remember { mutableStateOf("all") }
     var showFullHistoryModal by remember { mutableStateOf(false) }
     var selectedStatusTooltip by remember { mutableStateOf<String?>(null) }
 
@@ -657,61 +657,12 @@ fun ActiveCombatView(
             }
         }
 
-        // Live Battle Logs Panel (Recent Entries)
-        Card(
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)),
+        // Scrollable Combat Log UI Component
+        ScrollableCombatLogComponent(
+            session = session,
+            onOpenFullHistory = { showFullHistoryModal = true },
             modifier = Modifier.weight(1f)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(10.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "Bojový záznamník",
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleSmall
-                    )
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        LogFilterChip("Vše", selectedLogFilter == "all") { selectedLogFilter = "all" }
-                        LogFilterChip("Útoky", selectedLogFilter == "attacks") { selectedLogFilter = "attacks" }
-                        LogFilterChip("Kouzla", selectedLogFilter == "spells") { selectedLogFilter = "spells" }
-
-                        IconButton(
-                            onClick = { showFullHistoryModal = true },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(Icons.Default.Fullscreen, contentDescription = "Zvětšit", tint = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                }
-
-                val filteredLogs = remember(session.logEntries, selectedLogFilter) {
-                    when (selectedLogFilter) {
-                        "attacks" -> session.logEntries.filter { it.type.contains("attack") }
-                        "spells" -> session.logEntries.filter { it.type.contains("spell") || it.type.contains("heal") }
-                        else -> session.logEntries
-                    }
-                }
-
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(filteredLogs) { entry ->
-                        CombatLogItem(entry)
-                    }
-                }
-            }
-        }
+        )
     }
 
     // Particle effects, impact flashes, and floating ability banner
@@ -899,21 +850,140 @@ fun ModalFilterChip(title: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
+fun ScrollableCombatLogComponent(
+    session: CombatSession,
+    onOpenFullHistory: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var selectedLogFilter by remember { mutableStateOf("all") }
+    var narrativeMode by remember { mutableStateOf(true) }
+    val isMuted by SoundEffectManager.isMuted.collectAsState()
+
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.88f)),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            // Header: Title, Sound Mute Button, Mode Switch, Fullscreen
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        "⚔️ Bojový deník",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleSmall
+                    )
+
+                    // Audio Sound Effect Toggle Button
+                    IconButton(
+                        onClick = { SoundEffectManager.toggleMute() },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                            contentDescription = if (isMuted) "Zvuk vypnut" else "Zvuk zapnut",
+                            tint = if (isMuted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Narrative vs Compact mode switcher
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (narrativeMode) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else Color.Transparent,
+                        border = BorderStroke(1.dp, if (narrativeMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+                        modifier = Modifier.clickable { narrativeMode = !narrativeMode }
+                    ) {
+                        Text(
+                            text = if (narrativeMode) "📖 Příběh" else "⚡ Stručně",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (narrativeMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onOpenFullHistory,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(Icons.Default.Fullscreen, contentDescription = "Zvětšit", tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+
+            // Filters row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                LogFilterChip("Vše (${session.logEntries.size})", selectedLogFilter == "all") { selectedLogFilter = "all" }
+                LogFilterChip("🗡️ Útoky", selectedLogFilter == "attacks") { selectedLogFilter = "attacks" }
+                LogFilterChip("🔮 Magie", selectedLogFilter == "spells") { selectedLogFilter = "spells" }
+                LogFilterChip("👹 Boss", selectedLogFilter == "enemy") { selectedLogFilter = "enemy" }
+            }
+
+            val filteredLogs = remember(session.logEntries, selectedLogFilter) {
+                when (selectedLogFilter) {
+                    "attacks" -> session.logEntries.filter { it.type.contains("attack") || it.type.contains("special") }
+                    "spells" -> session.logEntries.filter { it.type.contains("spell") || it.type.contains("heal") || it.type.contains("support") }
+                    "enemy" -> session.logEntries.filter { it.type.startsWith("enemy") }
+                    else -> session.logEntries
+                }
+            }
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(filteredLogs) { entry ->
+                    if (narrativeMode) {
+                        DetailedCombatLogCard(entry)
+                    } else {
+                        CombatLogItem(entry)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun DetailedCombatLogCard(entry: CombatLogEntry) {
     val bgColor = when (entry.type) {
-        "player_attack" -> Color(0xFF1A2733)
-        "player_spell" -> Color(0xFF2B1B38)
-        "player_heal", "player_support" -> Color(0xFF183020)
-        "player_defend" -> Color(0xFF192A40)
-        "enemy_attack" -> Color(0xFF381B1D)
-        "enemy_special" -> Color(0xFF4C181C)
-        "victory" -> Color(0xFF283B19)
-        "defeat" -> Color(0xFF451518)
+        "player_attack" -> Color(0xFF131F2E)
+        "player_special" -> Color(0xFF1B2338)
+        "player_spell" -> Color(0xFF281836)
+        "player_heal", "player_support" -> Color(0xFF152A1C)
+        "player_defend" -> Color(0xFF13243A)
+        "enemy_attack" -> Color(0xFF2E1517)
+        "enemy_special" -> Color(0xFF3D1216)
+        "victory" -> Color(0xFF233515)
+        "defeat" -> Color(0xFF381215)
         else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
     }
 
     val badgeColor = when (entry.type) {
         "player_attack" -> Color(0xFF42A5F5)
+        "player_special" -> Color(0xFF64B5F6)
         "player_spell" -> Color(0xFFBA68C8)
         "player_heal", "player_support" -> Color(0xFF66BB6A)
         "player_defend" -> Color(0xFF29B6F6)
@@ -924,34 +994,136 @@ fun DetailedCombatLogCard(entry: CombatLogEntry) {
         else -> Color.Gray
     }
 
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = bgColor,
+    val actorColor = when {
+        entry.type.startsWith("enemy") -> Color(0xFFFF8A80)
+        entry.type == "player_support" -> Color(0xFFFF80AB)
+        entry.type.startsWith("player") -> Color(0xFF80D8FF)
+        entry.type == "victory" -> Color(0xFFFFD54F)
+        else -> Color.LightGray
+    }
+
+    Card(
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = bgColor),
+        border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.25f)),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Surface(
-                shape = RoundedCornerShape(4.dp),
-                color = badgeColor.copy(alpha = 0.25f)
+            // Header line: Turn pill, Actor & Action, Damage tag
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = badgeColor.copy(alpha = 0.22f)
+                    ) {
+                        Text(
+                            text = "KOLO ${entry.turn}",
+                            color = badgeColor,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        )
+                    }
+
+                    if (!entry.actor.isNullOrBlank()) {
+                        Text(
+                            text = entry.actor,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = actorColor
+                        )
+                    }
+
+                    if (!entry.actionName.isNullOrBlank()) {
+                        Text(
+                            text = "• ${entry.actionName}",
+                            fontSize = 10.sp,
+                            color = Color.White.copy(alpha = 0.75f)
+                        )
+                    }
+                }
+
+                if (entry.damageDealt != null && entry.damageDealt > 0) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = if (entry.type.startsWith("enemy")) Color(0xFFD32F2F).copy(alpha = 0.3f) else Color(0xFF1976D2).copy(alpha = 0.3f)
+                    ) {
+                        Text(
+                            text = "${if (entry.type.startsWith("enemy")) "-" else ""}${entry.damageDealt} DMG",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (entry.type.startsWith("enemy")) Color(0xFFFF8A80) else Color(0xFF90CAF9),
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                        )
+                    }
+                }
+            }
+
+            // Narrative Story Description Box
+            if (!entry.narrativeText.isNullOrBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color.Black.copy(alpha = 0.28f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Text("📜", fontSize = 11.sp)
+                        Text(
+                            text = entry.narrativeText,
+                            fontSize = 11.sp,
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                            lineHeight = 15.sp,
+                            color = Color(0xFFE0E0E0)
+                        )
+                    }
+                }
+            } else {
                 Text(
-                    text = "KOLO ${entry.turn}",
-                    color = badgeColor,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                    text = entry.message,
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.9f)
                 )
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = entry.message,
-                fontSize = 11.sp,
-                color = Color.White.copy(alpha = 0.95f),
-                modifier = Modifier.weight(1f)
-            )
+
+            // Damage Calculation Formula Chip
+            if (!entry.damageCalculation.isNullOrBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = Color(0xFF101622),
+                    border = BorderStroke(0.5.dp, Color(0xFF64B5F6).copy(alpha = 0.35f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text("📐", fontSize = 9.sp)
+                        Text(
+                            text = entry.damageCalculation,
+                            fontSize = 9.sp,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF81D4FA)
+                        )
+                    }
+                }
+            }
         }
     }
 }

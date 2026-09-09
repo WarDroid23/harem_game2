@@ -651,9 +651,49 @@ class GameEngine(private val context: Context) {
             val logEntry = "🌅 Den $newDay svítá. Energie plně obnovena (${p.sexEnergy}/${p.darkEnergy}). Příjem: +${totalPassiveGold + rentalIncome} zlatých."
             val logsList = mutableListOf(logEntry)
             if (bondingLog != null) logsList.add(bondingLog!!)
+
+            // Process Active Drug Enhancers and Maintenance
+            val remainingDrugBuffs = mutableListOf<com.example.haremdark.models.ActiveDrugBuff>()
+            val playerItems = p.items.map { it.copy() }.toMutableList()
+
+            for (buff in current.activeDrugBuffs) {
+                if (buff.remainingDays > 1) {
+                    remainingDrugBuffs.add(buff.copy(remainingDays = buff.remainingDays - 1))
+                } else {
+                    // remainingDays is 1 -> expiring today unless autoRenewed
+                    if (buff.autoRenew) {
+                        val stockItem = playerItems.firstOrNull { it.id == buff.drugId && it.count > 0 }
+                        if (stockItem != null) {
+                            // Deduct 1 dose
+                            stockItem.count -= 1
+                            if (stockItem.count <= 0) {
+                                playerItems.removeAll { it.id == buff.drugId && it.count <= 0 }
+                            }
+                            remainingDrugBuffs.add(buff.copy(remainingDays = buff.maxDays, withdrawalWarning = false))
+                            logsList.add("💊 Dávkování posílení: Spotřebována 1x dávka ${buff.name} pro ${buff.targetCharacterName}. Posílení úspěšně udrženo!")
+                        } else {
+                            // Out of stock! Buff expires and causes withdrawal
+                            logsList.add("⚠️ VYČERPÁNY ZÁSOBY: Došly zásoby substance ${buff.name}! Posílení pro ${buff.targetCharacterName} vypršelo!")
+                            if (buff.targetType == "concubine" && buff.targetCharacterId != null) {
+                                val c = updatedCharacters.firstOrNull { it.id == buff.targetCharacterId }
+                                if (c != null) {
+                                    c.touha = (c.touha - 15).coerceAtLeast(0)
+                                    c.strach = (c.strach + 12).coerceAtMost(100)
+                                    c.duvera = (c.duvera - 8).coerceAtLeast(0)
+                                    c.poslusnost = (c.poslusnost - 10).coerceAtLeast(0)
+                                    logsList.add("⚡ Abstinenční záchvat: Dívka ${c.name} trpí nedostatkem substance! Vzrostl strach a poklesla poslušnost.")
+                                }
+                            }
+                        }
+                    } else {
+                        logsList.add("⏳ Posílení ${buff.name} pro ${buff.targetCharacterName} vypršelo.")
+                    }
+                }
+            }
+            p.items = playerItems
+
             val logs = (logsList + current.gameLog).take(30)
 
-            
             val newMissions = listOf(
                 DailyMission(id = "m1_$newDay", type = "INTERACT", description = "Provést interakce s dívkami", targetCount = 3, rewardGold = 50, rewardSexEnergy = 20),
                 DailyMission(id = "m2_$newDay", type = "EXPLORE", description = "Vyrazit na výpravu", targetCount = 1, rewardGold = 100, rewardDarkEnergy = 15),
@@ -667,6 +707,7 @@ class GameEngine(private val context: Context) {
                 dailyMissions = newMissions,
                 lastMissionUpdateDay = newDay,
                 activeBuffs = newBuffs,
+                activeDrugBuffs = remainingDrugBuffs,
                 resourceHistory = newHistory
             )
         }
@@ -800,6 +841,7 @@ class GameEngine(private val context: Context) {
         character.affinityPoints += affinityGain
         val newAffinityLevel = com.example.haremdark.data.AffinityData.getLevelForPoints(character.affinityPoints)
         character.affinityLevel = newAffinityLevel
+        character.affinityHistory.add(AffinityPointRecord(_gameState.value.player.day, character.affinityPoints, "${interaction.name} (+$affinityGain pts)"))
 
         val tierInfo = com.example.haremdark.data.AffinityData.getTierForPoints(character.affinityPoints)
         val levelUpAnnouncement = if (newAffinityLevel > prevAffinityLevel) {
@@ -819,11 +861,18 @@ class GameEngine(private val context: Context) {
         updateState { it.copy() }
         
         if (newAffinityLevel > prevAffinityLevel) {
+            SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
             com.example.haremdark.domain.VoiceManager.playTriggerVoice(
                 com.example.haremdark.domain.VoiceTriggerType.AFFINITY_LEVEL_UP,
                 character
             )
         } else {
+            when (interaction.type) {
+                "intimni" -> SoundEffectManager.playHarem(HaremSound.SEDUCE)
+                "rozmluva" -> SoundEffectManager.playHarem(HaremSound.FLIRT)
+                "disciplina", "vycvik" -> SoundEffectManager.playHarem(HaremSound.TRAIN)
+                else -> SoundEffectManager.playHarem(HaremSound.FLIRT)
+            }
             com.example.haremdark.domain.VoiceManager.speak(unlockedDialogue, character.archetypeId)
         }
         
@@ -1334,34 +1383,63 @@ class GameEngine(private val context: Context) {
 
     // --- UNDERWORLD DRUGS & CARTEL SYSTEM ---
 
-    fun craftDrug(drugId: String): Pair<Boolean, String> {
+    fun craftDrug(drugId: String, batchCount: Int = 1): Pair<Boolean, String> {
+        val countToCraft = batchCount.coerceAtLeast(1)
         val drug = DrugData.getDrugById(drugId) ?: return Pair(false, "Neznámá substance.")
         val current = _gameState.value
         val p = current.player
 
-        if (p.gold < drug.goldCost) {
-            return Pair(false, "Nedostatek zlata pro syntézu (${p.gold}/${drug.goldCost} zlatých)!")
+        val totalGold = drug.goldCost * countToCraft
+        val totalDark = drug.darkCost * countToCraft
+        val totalWood = drug.woodCost * countToCraft
+        val totalMana = drug.manaCost * countToCraft
+
+        if (p.gold < totalGold) {
+            return Pair(false, "Nedostatek zlata pro syntézu (${p.gold}/$totalGold zlatých)!")
         }
-        if (p.darkEnergy < drug.darkCost) {
-            return Pair(false, "Nedostatek temné energie (${p.darkEnergy}/${drug.darkCost} TE)!")
+        if (p.darkEnergy < totalDark) {
+            return Pair(false, "Nedostatek temné energie (${p.darkEnergy}/$totalDark TE)!")
         }
-        if (p.wood < drug.woodCost) {
-            return Pair(false, "Nedostatek bylin a organických esencí (${p.wood}/${drug.woodCost} bylin)!")
+        if (p.wood < totalWood) {
+            return Pair(false, "Nedostatek bylin a esencí (${p.wood}/$totalWood)!")
         }
-        if (p.mana < drug.manaCost) {
-            return Pair(false, "Nedostatek many (${p.mana}/${drug.manaCost} many)!")
+        if (p.mana < totalMana) {
+            return Pair(false, "Nedostatek many (${p.mana}/$totalMana)!")
+        }
+
+        // Check required ingredients
+        for ((ingId, neededPerBatch) in drug.requiredIngredients) {
+            val totalNeeded = neededPerBatch * countToCraft
+            val ingDef = DrugData.getIngredientById(ingId)
+            val available = p.items.firstOrNull { it.id == ingId }?.count ?: 0
+            if (available < totalNeeded) {
+                return Pair(false, "Nedostatek suroviny: ${ingDef?.name ?: ingId} (máš $available/$totalNeeded)!")
+            }
         }
 
         // Harem role perk: Správkyně laboratoře gives +50% extra yield
         val hasLabOverseer = current.characters.any { it.role == "Správkyně laboratoře" }
-        val yield = if (hasLabOverseer) (drug.yieldCount * 1.5).toInt().coerceAtLeast(drug.yieldCount + 1) else drug.yieldCount
+        val baseYield = drug.yieldCount * countToCraft
+        val yield = if (hasLabOverseer) (baseYield * 1.5).toInt().coerceAtLeast(baseYield + 1) else baseYield
 
         val item = DrugData.toInventoryItem(drug, count = yield)
-        val overseerNote = if (hasLabOverseer) " (Bonus Správkyně laboratoře: +${yield - drug.yieldCount} dávka!)" else ""
+        val overseerNote = if (hasLabOverseer) " (Bonus Správkyně laboratoře: +${yield - baseYield} dávek!)" else ""
         val msg = "⚗️ V laboratoři jsi syntetizoval ${yield}x ${drug.name} [${drug.streetName}]$overseerNote!"
 
         updateState { state ->
             val newItems = state.player.items.map { it.copy() }.toMutableList()
+
+            // Deduct ingredients
+            for ((ingId, neededPerBatch) in drug.requiredIngredients) {
+                val totalNeeded = neededPerBatch * countToCraft
+                val existingIng = newItems.firstOrNull { it.id == ingId }
+                if (existingIng != null) {
+                    existingIng.count -= totalNeeded
+                }
+            }
+            newItems.removeAll { it.category == "ingredient" && it.count <= 0 }
+
+            // Add crafted drug
             val existing = newItems.firstOrNull { it.id == drug.id }
             if (existing != null) {
                 existing.count += yield
@@ -1370,18 +1448,223 @@ class GameEngine(private val context: Context) {
             }
 
             val newP = state.player.copy(
-                gold = (state.player.gold - drug.goldCost).coerceAtLeast(0),
-                darkEnergy = (state.player.darkEnergy - drug.darkCost).coerceAtLeast(0),
-                wood = (state.player.wood - drug.woodCost).coerceAtLeast(0),
-                mana = (state.player.mana - drug.manaCost).coerceAtLeast(0),
+                gold = (state.player.gold - totalGold).coerceAtLeast(0),
+                darkEnergy = (state.player.darkEnergy - totalDark).coerceAtLeast(0),
+                wood = (state.player.wood - totalWood).coerceAtLeast(0),
+                mana = (state.player.mana - totalMana).coerceAtLeast(0),
                 drugsCraftedTotal = state.player.drugsCraftedTotal + yield,
                 items = newItems
             )
             val logs = (listOf(msg) + state.gameLog).take(30)
             state.copy(player = newP, gameLog = logs)
         }
+        addPlayerXp(20 * countToCraft)
+        return Pair(true, msg)
+    }
+
+    fun startSourcingExpedition(expeditionId: String): Pair<Boolean, String> {
+        val exp = DrugData.getExpeditionById(expeditionId) ?: return Pair(false, "Neznámá výprava.")
+        val current = _gameState.value
+        val p = current.player
+
+        if (p.sexEnergy < exp.energyCost) {
+            return Pair(false, "Nedostatek energie (${p.sexEnergy}/${exp.energyCost} SE) pro vyslání výpravy!")
+        }
+        if (p.darkEnergy < exp.darkCost) {
+            return Pair(false, "Nedostatek temné energie (${p.darkEnergy}/${exp.darkCost} TE) pro ochranu výpravy!")
+        }
+
+        // Harem scout perks
+        val scoutConcubine = current.characters.firstOrNull { it.role == "Strážkyně ložnice" || it.role == "Mafiánská kurýrka" }
+        val bonusBatch = if (scoutConcubine != null) 1 else 0
+
+        // Gather 2 random ingredients from possible
+        val gathered = exp.possibleIngredients.shuffled().take(2).map { ingId ->
+            val ingDef = DrugData.getIngredientById(ingId)!!
+            val amount = kotlin.random.Random.nextInt(2, 4) + bonusBatch
+            ingDef to amount
+        }
+
+        val scoutNote = if (scoutConcubine != null) " (Doprovod ${scoutConcubine.name}: +1 bonus k nalezeným surovinám!)" else ""
+        val summary = gathered.joinToString(", ") { "${it.second}x ${it.first.name} ${it.first.icon}" }
+        val msg = "🌿 Výprava do '${exp.name}' úspěšná! Nalezeno: $summary$scoutNote."
+
+        updateState { state ->
+            val updatedItems = state.player.items.map { it.copy() }.toMutableList()
+            for ((ing, amt) in gathered) {
+                val existing = updatedItems.firstOrNull { it.id == ing.id }
+                if (existing != null) {
+                    existing.count += amt
+                } else {
+                    updatedItems.add(DrugData.ingredientToInventoryItem(ing, count = amt))
+                }
+            }
+
+            val newPlayer = state.player.copy(
+                sexEnergy = (state.player.sexEnergy - exp.energyCost).coerceAtLeast(0),
+                darkEnergy = (state.player.darkEnergy - exp.darkCost).coerceAtLeast(0),
+                items = updatedItems
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newPlayer, gameLog = logs)
+        }
+        addPlayerXp(25)
+        return Pair(true, msg)
+    }
+
+    fun buyIngredientBlackMarket(ingredientId: String, count: Int = 1): Pair<Boolean, String> {
+        val ing = DrugData.getIngredientById(ingredientId) ?: return Pair(false, "Neznámá surovina.")
+        val current = _gameState.value
+        val p = current.player
+        val totalCost = ing.buyPrice * count
+
+        if (p.gold < totalCost) {
+            return Pair(false, "Nedostatek zlata pro nákup na černém trhu (${p.gold}/$totalCost zlatých)!")
+        }
+
+        val msg = "💰 Zakoupeno ${count}x ${ing.name} ${ing.icon} za $totalCost zlatých od pašeráků."
+
+        updateState { state ->
+            val updatedItems = state.player.items.map { it.copy() }.toMutableList()
+            val existing = updatedItems.firstOrNull { it.id == ing.id }
+            if (existing != null) {
+                existing.count += count
+            } else {
+                updatedItems.add(DrugData.ingredientToInventoryItem(ing, count = count))
+            }
+
+            val newPlayer = state.player.copy(
+                gold = state.player.gold - totalCost,
+                items = updatedItems
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newPlayer, gameLog = logs)
+        }
+        return Pair(true, msg)
+    }
+
+    fun harvestEstateGarden(): Pair<Boolean, String> {
+        val current = _gameState.value
+        val p = current.player
+
+        if (p.greenhouseHarvestDay == p.day) {
+            return Pair(false, "Dnešní sklizeň v pěstírně již proběhla! Nové byliny vykvetou zítra za úsvitu.")
+        }
+
+        val sage = DrugData.getIngredientById("ing_mountain_sage")!!
+        val lotus = DrugData.getIngredientById("ing_lotus_leaf")!!
+        val poppy = DrugData.getIngredientById("ing_shadow_poppy")!!
+        val starDust = DrugData.getIngredientById("ing_star_dust")!!
+
+        val sageCount = kotlin.random.Random.nextInt(2, 4)
+        val lotusCount = kotlin.random.Random.nextInt(1, 3)
+        val poppyCount = kotlin.random.Random.nextInt(2, 4)
+        val harmonyBonus = if (p.haremHarmony >= 80) 1 else 0
+
+        val harvested = mutableListOf(
+            sage to sageCount,
+            lotus to lotusCount,
+            poppy to poppyCount
+        )
+        if (harmonyBonus > 0) {
+            harvested.add(starDust to 1)
+        }
+
+        val harmonyNote = if (harmonyBonus > 0) " (Vysoká harmonie harému vyvolala rozkvět Hvězdného prachu!)" else ""
+        val summary = harvested.joinToString(", ") { "${it.second}x ${it.first.name} ${it.first.icon}" }
+        val msg = "🌱 Sklizeň v alchymistické pěstírně: Získáno $summary$harmonyNote!"
+
+        updateState { state ->
+            val updatedItems = state.player.items.map { it.copy() }.toMutableList()
+            for ((ing, amt) in harvested) {
+                val existing = updatedItems.firstOrNull { it.id == ing.id }
+                if (existing != null) {
+                    existing.count += amt
+                } else {
+                    updatedItems.add(DrugData.ingredientToInventoryItem(ing, count = amt))
+                }
+            }
+
+            val newPlayer = state.player.copy(
+                greenhouseHarvestDay = state.player.day,
+                items = updatedItems
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newPlayer, gameLog = logs)
+        }
         addPlayerXp(20)
         return Pair(true, msg)
+    }
+
+    fun activateDrugBuff(drugId: String, targetType: String, characterId: String? = null, autoRenew: Boolean = true): Pair<Boolean, String> {
+        val drug = DrugData.getDrugById(drugId) ?: return Pair(false, "Neznámá substance.")
+        val current = _gameState.value
+        val hasStock = current.player.items.any { it.id == drugId && it.count > 0 }
+        if (!hasStock) {
+            return Pair(false, "Nemáš žádnou dávku ${drug.name} skladem! Nejprve ji vyrob v laboratoři.")
+        }
+
+        val targetName = if (targetType == "player") "Pán" else (current.characters.firstOrNull { it.id == characterId }?.name ?: "Dívka")
+
+        // Apply immediate drug effect
+        if (targetType == "player") {
+            val (ok, resMsg) = useDrugOnPlayer(drugId)
+            if (!ok) return Pair(false, resMsg)
+        } else if (characterId != null) {
+            val (ok, resMsg) = administerDrugToConcubine(drugId, characterId)
+            if (!ok) return Pair(false, resMsg)
+        }
+
+        val buffId = "${drugId}_${characterId ?: "player"}"
+        val effectText = if (targetType == "player") drug.playerEffectSummary else drug.concubineEffectSummary
+
+        val newBuff = com.example.haremdark.models.ActiveDrugBuff(
+            id = buffId,
+            drugId = drug.id,
+            name = drug.name,
+            icon = drug.icon,
+            targetType = targetType,
+            targetCharacterId = characterId,
+            targetCharacterName = targetName,
+            remainingDays = 3,
+            maxDays = 3,
+            effectSummary = effectText,
+            category = drug.category,
+            autoRenew = autoRenew
+        )
+
+        updateState { state ->
+            val filtered = state.activeDrugBuffs.filterNot { it.id == buffId }
+            state.copy(activeDrugBuffs = filtered + newBuff)
+        }
+
+        val msg = "✨ Aktivováno posílení '${drug.name}' pro $targetName na 3 dny (Denní udržování: ${if (autoRenew) "ZAPNUTO" else "VYPNUTO"})!"
+        return Pair(true, msg)
+    }
+
+    fun toggleBuffAutoRenew(buffId: String): Pair<Boolean, String> {
+        var newState = false
+        updateState { state ->
+            val updated = state.activeDrugBuffs.map { buff ->
+                if (buff.id == buffId) {
+                    newState = !buff.autoRenew
+                    buff.copy(autoRenew = newState)
+                } else buff
+            }
+            state.copy(activeDrugBuffs = updated)
+        }
+        return Pair(true, if (newState) "Automatická obnova zapnuta." else "Automatická obnova vypnuta.")
+    }
+
+    fun dismissDrugBuff(buffId: String): Pair<Boolean, String> {
+        val current = _gameState.value
+        val buff = current.activeDrugBuffs.firstOrNull { it.id == buffId }
+            ?: return Pair(false, "Posílení nebylo nalezeno.")
+
+        updateState { state ->
+            state.copy(activeDrugBuffs = state.activeDrugBuffs.filterNot { it.id == buffId })
+        }
+        return Pair(true, "Posílení ${buff.name} pro ${buff.targetCharacterName} bylo ukončeno.")
     }
 
     fun useDrugOnPlayer(drugId: String): Pair<Boolean, String> {
@@ -1451,25 +1734,28 @@ class GameEngine(private val context: Context) {
         // If in combat, apply combat boost
         val session = _combatState.value
         if (session != null && !session.isOver) {
+            val entries = session.logEntries.toMutableList()
+            var newPlayerHp = session.playerHp
             when (drugId) {
                 "drug_krvavy_prach" -> {
-                    session.logEntries.add(CombatLogEntry(
+                    entries.add(CombatLogEntry(
                         turn = session.turnCount,
                         type = "buff",
-                        message = "🩸 Krvavý amok! Útok pána vzrostl o +25 bodů a v očích mu planou démonické plameny!"
+                        message = "🩸 Krvavý amok! Útok pána vzrostl a v očích mu planou démonické plameny!"
                     ))
                 }
                 "drug_nocni_bes" -> {
-                    session.logEntries.add(CombatLogEntry(
+                    entries.add(CombatLogEntry(
                         turn = session.turnCount,
                         type = "buff",
-                        message = "🐍 Reflexy stínové zmije! Obrana pána vzrostla o +15 bodů a uhýbá úderům!"
+                        message = "🐍 Reflexy stínové zmije! Obrana pána vzrostla a bleskově uhýbá úderům!"
                     ))
                 }
                 "drug_stinove_opium", "drug_cistici_elixir" -> {
-                    session.playerHp = (session.playerHp + 45).coerceAtMost(session.playerMaxHp)
+                    newPlayerHp = (session.playerHp + 45).coerceAtMost(session.playerMaxHp)
                 }
             }
+            _combatState.value = session.copy(logEntries = entries, playerHp = newPlayerHp)
         }
 
         addPlayerXp(12)
@@ -1590,7 +1876,7 @@ class GameEngine(private val context: Context) {
         val current = _gameState.value
         val item = current.player.items.firstOrNull { it.id == drugId && it.count >= quantity }
             ?: return Pair(false, "Nemáš dostatek této substance pro distribuci (${quantity}x)!")
-        val territory = current.mafiaTerritories.firstOrNull { it.id == territoryId }
+        val territory = current.territories.firstOrNull { it.id == territoryId }
             ?: return Pair(false, "Území nebylo nalezeno.")
 
         // Calculate sale profit
@@ -1613,7 +1899,7 @@ class GameEngine(private val context: Context) {
                 } else itm.copy()
             }.toMutableList()
 
-            val updatedTerritories = state.mafiaTerritories.map { t ->
+            val updatedTerritories = state.territories.map { t ->
                 if (t.id == territoryId) {
                     t.copy(securityLevel = (t.securityLevel + (2 * quantity)).coerceAtMost(100))
                 } else t
@@ -1628,7 +1914,7 @@ class GameEngine(private val context: Context) {
             val logs = (listOf(msg) + state.gameLog).take(30)
             state.copy(
                 player = newPlayer,
-                mafiaTerritories = updatedTerritories,
+                territories = updatedTerritories,
                 gameLog = logs
             )
         }
@@ -1721,6 +2007,7 @@ class GameEngine(private val context: Context) {
                     val newTrust = (c.duvera + gift.trustBoost).coerceAtMost(100)
                     val newRomance = (c.romanceBody + gift.romanceBoost).coerceAtMost(100)
                     val isPartner = c.partnerka || newRomance >= 50
+                    c.affinityHistory.add(AffinityPointRecord(state.player.day, newAffinity, "Dar: ${gift.name} (+$affinityGain pts)"))
                     c.copy(
                         loajalita = newLoyalty,
                         touha = newDesire,
@@ -1745,16 +2032,130 @@ class GameEngine(private val context: Context) {
             )
         }
         if (newAffinityLvl > prevAffinityLevel) {
+            SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
             val charForVoice = _gameState.value.characters.firstOrNull { it.id == characterId } ?: character
             com.example.haremdark.domain.VoiceManager.playTriggerVoice(
                 com.example.haremdark.domain.VoiceTriggerType.AFFINITY_LEVEL_UP,
                 charForVoice
             )
         } else {
+            SoundEffectManager.playHarem(HaremSound.GIFT)
             com.example.haremdark.domain.VoiceManager.speak(unlockedDialogue, character.archetypeId)
         }
         addPlayerXp(12)
         progressMission("GIFT", 1)
+        return Pair(true, msg)
+    }
+
+    fun executeSpecialDialogueChoice(
+        characterId: String,
+        choice: com.example.haremdark.data.DialogueChoice
+    ): Pair<Boolean, String> {
+        val current = _gameState.value
+        val character = current.characters.firstOrNull { it.id == characterId }
+            ?: return Pair(false, "Konkubína nebyla nalezena.")
+
+        val prevAffinityLevel = character.affinityLevel
+        val newAffinity = character.affinityPoints + choice.affinityGain
+        val newAffinityLvl = com.example.haremdark.data.AffinityData.getLevelForPoints(newAffinity)
+        val tierInfo = com.example.haremdark.data.AffinityData.getTierForPoints(newAffinity)
+        val levelUpAnnouncement = if (newAffinityLvl > prevAffinityLevel) {
+            "\n🌟 Pouto posíleno! ${character.name} dosáhla úrovně vztahu ${tierInfo.level}: ${tierInfo.title}! ${tierInfo.combatBonusDescription}"
+        } else ""
+
+        val msg = "🕯️ Speciální událost s ${character.name}: ${choice.outcomeSummary}$levelUpAnnouncement"
+
+        updateState { state ->
+            val updatedCharacters = state.characters.map { c ->
+                if (c.id == characterId) {
+                    var touha = c.touha
+                    var poslusnost = c.poslusnost
+                    var loajalita = c.loajalita
+                    var duvera = c.duvera
+                    var submisivita = c.submisivita
+                    var vlhkost = c.vlhkost
+                    var strach = c.strach
+                    var srdce = c.srdce
+                    var plodnost = c.plodnost
+                    var maxHp = c.maxHp
+
+                    choice.statChanges.forEach { (key, delta) ->
+                        when (key) {
+                            "touha" -> touha = (touha + delta).coerceIn(0, 100)
+                            "poslusnost" -> poslusnost = (poslusnost + delta).coerceIn(0, 100)
+                            "loajalita" -> loajalita = (loajalita + delta).coerceIn(0, 100)
+                            "duvera" -> duvera = (duvera + delta).coerceIn(0, 100)
+                            "submisivita" -> submisivita = (submisivita + delta).coerceIn(0, 100)
+                            "vlhkost" -> vlhkost = (vlhkost + delta).coerceIn(0, 100)
+                            "strach" -> strach = (strach + delta).coerceIn(0, 100)
+                            "srdce" -> srdce = (srdce + delta).coerceIn(0, 100)
+                            "plodnost" -> plodnost = (plodnost + delta).coerceIn(0, 100)
+                            "maxHp" -> maxHp += delta
+                        }
+                    }
+
+                    c.affinityHistory.add(AffinityPointRecord(state.player.day, newAffinity, "Volba: ${choice.text} (+${choice.affinityGain} pts)"))
+                    c.copy(
+                        touha = touha,
+                        poslusnost = poslusnost,
+                        loajalita = loajalita,
+                        duvera = duvera,
+                        submisivita = submisivita,
+                        vlhkost = vlhkost,
+                        strach = strach,
+                        srdce = srdce,
+                        plodnost = plodnost,
+                        maxHp = maxHp,
+                        hp = c.hp.coerceAtMost(maxHp),
+                        affinityPoints = newAffinity,
+                        affinityLevel = newAffinityLvl,
+                        lastInteractionDay = state.player.day
+                    )
+                } else c
+            }
+
+            var newGold = state.player.gold
+            var newDark = state.player.darkEnergy
+            var newSex = state.player.sexEnergy
+            var newMana = state.player.mana
+
+            choice.statChanges.forEach { (key, delta) ->
+                when (key) {
+                    "gold" -> newGold = (newGold + delta).coerceAtLeast(0)
+                    "darkEnergy" -> newDark = (newDark + delta).coerceIn(0, state.player.maxDarkEnergy)
+                    "sexEnergy" -> newSex = (newSex + delta).coerceIn(0, state.player.maxSexEnergy)
+                    "mana" -> newMana = (newMana + delta).coerceIn(0, state.player.maxMana)
+                }
+            }
+
+            val newPlayer = state.player.copy(
+                gold = newGold,
+                darkEnergy = newDark,
+                sexEnergy = newSex,
+                mana = newMana
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(
+                player = newPlayer,
+                characters = updatedCharacters,
+                gameLog = logs
+            )
+        }
+
+        if (newAffinityLvl > prevAffinityLevel) {
+            SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
+            val charForVoice = _gameState.value.characters.firstOrNull { it.id == characterId } ?: character
+            com.example.haremdark.domain.VoiceManager.playTriggerVoice(
+                com.example.haremdark.domain.VoiceTriggerType.AFFINITY_LEVEL_UP,
+                charForVoice
+            )
+        } else {
+            SoundEffectManager.playEvent(EventSound.EVENT_CHOICE)
+            com.example.haremdark.domain.VoiceManager.speak(choice.reactionText, character.archetypeId)
+        }
+
+        addPlayerXp(25)
+        progressMission("INTERACT", 1)
         return Pair(true, msg)
     }
 
@@ -2088,6 +2489,7 @@ class GameEngine(private val context: Context) {
             victory = false,
             lootGained = null
         )
+        SoundEffectManager.playCombat(CombatSound.COMBAT_START)
     }
 
     fun executeCombatTurn(action: String, itemId: String? = null) {
@@ -2151,6 +2553,9 @@ class GameEngine(private val context: Context) {
         val haremDefenseBonus = currentGameState.characters.sumOf { com.example.haremdark.data.AffinityData.getAffinityCombatBonuses(it.affinityLevel).defenseBonus / 3 } + deployedAffinityBonus.defenseBonus
         val haremDmgPercent = currentGameState.characters.sumOf { (com.example.haremdark.data.AffinityData.getAffinityCombatBonuses(it.affinityLevel).dmgMultiplierBonus * 0.4).toDouble() }.toFloat() + deployedAffinityBonus.dmgMultiplierBonus
         val totalAffinityMultiplier = 1.0f + haremDmgPercent
+        val combatHeroName = if (session.deployedCharacterId != null) {
+            currentGameState.characters.firstOrNull { it.id == session.deployedCharacterId }?.name ?: "Bojovnice"
+        } else "Pán dominia"
 
         when (action) {
             "attack", "slash" -> {
@@ -2160,10 +2565,26 @@ class GameEngine(private val context: Context) {
                 val finalDmg = (((rawDmg - (session.boss.defense * 0.35f)) * critMultiplier) * totalAffinityMultiplier).toInt().coerceAtLeast(6)
                 newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
                 val critText = if (isCrit) " 💥 KRITICKÝ ZÁSAH!" else ""
+                
+                if (isCrit) {
+                    SoundEffectManager.playCombat(CombatSound.CRITICAL_HIT)
+                } else {
+                    SoundEffectManager.playCombat(CombatSound.PLAYER_SLASH)
+                }
+
                 newLogEntries.add(0, CombatLogEntry(
                     turn = currentTurn,
                     type = if (isCrit) "player_attack" else "player_attack",
-                    message = "🗡️ Útok pomocí $weaponName udělil $finalDmg poškození!$critText"
+                    message = "🗡️ Útok pomocí $weaponName udělil $finalDmg poškození!$critText",
+                    actor = combatHeroName,
+                    actionName = "Sek zbraní ($weaponName)",
+                    damageDealt = finalDmg,
+                    damageCalculation = "[$weaponName: $weaponDamage + Boj: ${combatSkill * 3}] * [Krit: x${"%.2f".format(critMultiplier)}] * [Harém: x${"%.2f".format(totalAffinityMultiplier)}] - [Obrana: ${"%.1f".format(session.boss.defense * 0.35f)}] = $finalDmg DMG",
+                    narrativeText = if (isCrit) {
+                        "Drtivý bleskový sek! Čepel $weaponName si našla nekrytou štěrbinu ve zbroji nepřítele a s ohlušujícím křupnutím rozťala tkáň!"
+                    } else {
+                        "Rychlý ztečný výpad zbraní $weaponName rozčísl stíny a zasáhl nepřítele do nekrytého boku."
+                    }
                 ))
             }
             "heavy_strike" -> {
@@ -2172,10 +2593,22 @@ class GameEngine(private val context: Context) {
                 val rawDmg = (weaponDamage * 1.5f) + combatSkill * 4 + Random.nextInt(2, 10)
                 val finalDmg = (((rawDmg - (session.boss.defense * 0.25f)) * multiplier) * totalAffinityMultiplier).toInt().coerceAtLeast(12)
                 newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
+
+                if (isCrit) {
+                    SoundEffectManager.playCombat(CombatSound.CRITICAL_HIT)
+                } else {
+                    SoundEffectManager.playCombat(CombatSound.PLAYER_SLASH)
+                }
+
                 newLogEntries.add(0, CombatLogEntry(
                     turn = currentTurn,
                     type = "player_special",
-                    message = "⚔️ Těžký útok ubral ${finalDmg} HP!"
+                    message = "⚔️ Těžký útok ubral ${finalDmg} HP!",
+                    actor = combatHeroName,
+                    actionName = "Zničující těžký útok",
+                    damageDealt = finalDmg,
+                    damageCalculation = "[Základ: ${(weaponDamage * 1.5f).toInt()} + Síla: ${combatSkill * 4}] * [Násobič: x${"%.2f".format(multiplier)}] * [Harém: x${"%.2f".format(totalAffinityMultiplier)}] - [Obrana: ${"%.1f".format(session.boss.defense * 0.25f)}] = $finalDmg DMG",
+                    narrativeText = "Těžký obouruční rozmach otřásl zemí. Masivní úder dopadl plnou vahou a prorazil nepřátelský kryt v gejzíru trosek!"
                 ))
             }
             "bleed_strike" -> {
@@ -2185,10 +2618,18 @@ class GameEngine(private val context: Context) {
                 val finalDmg = (((rawDmg - (session.boss.defense * 0.2f)) * multiplier) * totalAffinityMultiplier).toInt().coerceAtLeast(10)
                 newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
                 newBleedTurns = 3
+
+                SoundEffectManager.playCombat(CombatSound.PLAYER_SLASH)
+
                 newLogEntries.add(0, CombatLogEntry(
                     turn = currentTurn,
                     type = "player_special",
-                    message = "🩸 Krvavé bodnutí zasadilo ${finalDmg} zranění a otevřelo ránu krvácející 3 kola!"
+                    message = "🩸 Krvavé bodnutí zasadilo ${finalDmg} zranění a otevřelo ránu krvácející 3 kola!",
+                    actor = combatHeroName,
+                    actionName = "Krvavé bodnutí do tepny",
+                    damageDealt = finalDmg,
+                    damageCalculation = "[$weaponName: $weaponDamage + Zásah: ${combatSkill * 3}] * [Bodnutí: x${"%.2f".format(multiplier)}] * [Harém: x${"%.2f".format(totalAffinityMultiplier)}] - [Obrana: ${"%.1f".format(session.boss.defense * 0.2f)}] = $finalDmg DMG (+Krvácení 3 kola)",
+                    narrativeText = "Zákeřný hrot pronikl hluboko pod žebra. Temná krev se vyvalila z otevřené rány a protivník zachroptěl bolestí."
                 ))
             }
             "dark_burst" -> {
@@ -2198,16 +2639,26 @@ class GameEngine(private val context: Context) {
                     val rawDmg = 28 + (player.skills["temnota"] ?: 0) * 5 + Random.nextInt(6, 14)
                     val finalDmg = (rawDmg * totalAffinityMultiplier).toInt().coerceAtLeast(18)
                     newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
+
+                    SoundEffectManager.playCombat(CombatSound.DARK_SPELL)
+
                     newLogEntries.add(0, CombatLogEntry(
                         turn = currentTurn,
                         type = "player_spell",
-                        message = "🔮 Temný výboj stínové energie prorazil obranu nepřítele za ${finalDmg} poškození (-10 TE)!"
+                        message = "🔮 Temný výboj stínové energie prorazil obranu nepřítele za ${finalDmg} poškození (-10 TE)!",
+                        actor = combatHeroName,
+                        actionName = "Temný výboj stínové magie",
+                        damageDealt = finalDmg,
+                        damageCalculation = "[Magie temnoty: $rawDmg] * [Harém násobič: x${"%.2f".format(totalAffinityMultiplier)}] = $finalDmg magického DMG (-10 TE)",
+                        narrativeText = "Stíny se shlukly kolem napřažené pravice a s hromovým třeskem vyšlehly vstříc cíli. Temný výboj sežehl auru nepřítele."
                     ))
                 } else {
                     newLogEntries.add(0, CombatLogEntry(
                         turn = currentTurn,
                         type = "system",
-                        message = "❌ Nemáš dostatek temné energie na Temný výboj (vyžaduje 10)!"
+                        message = "❌ Nemáš dostatek temné energie na Temný výboj (vyžaduje 10)!",
+                        actor = "Systém",
+                        actionName = "Nedostatek energie"
                     ))
                 }
             }
@@ -2218,16 +2669,26 @@ class GameEngine(private val context: Context) {
                     val curseDmg = ((25 + (player.skills["temnota"] ?: 0) * 4) * totalAffinityMultiplier).toInt()
                     newBossHp = (newBossHp - curseDmg).coerceAtLeast(0)
                     activeBuff = "Prokletí stínů (Nepřítel oslaben)"
+
+                    SoundEffectManager.playCombat(CombatSound.DARK_SPELL)
+
                     newLogEntries.add(0, CombatLogEntry(
                         turn = currentTurn,
                         type = "player_spell",
-                        message = "👁️ Prokletí stínů srazilo nepřítele za $curseDmg zranění a oslabilo jeho útoky (-15 TE)."
+                        message = "👁️ Prokletí stínů srazilo nepřítele za $curseDmg zranění a oslabilo jeho útoky (-15 TE).",
+                        actor = combatHeroName,
+                        actionName = "Prokletí stínů",
+                        damageDealt = curseDmg,
+                        damageCalculation = "[Základ kletby: ${25 + (player.skills["temnota"] ?: 0) * 4}] * [Harém: x${"%.2f".format(totalAffinityMultiplier)}] = $curseDmg DMG + Oslabení útoků o -25%",
+                        narrativeText = "Prastará zapovězená slova utvořila stínová pouta. Nepřítelovy končetiny ztěžkly a temná kletba začala sžírat jeho sílu."
                     ))
                 } else {
                     newLogEntries.add(0, CombatLogEntry(
                         turn = currentTurn,
                         type = "system",
-                        message = "❌ Nemáš dostatek temné energie na Prokletí (vyžaduje 15)!"
+                        message = "❌ Nemáš dostatek temné energie na Prokletí (vyžaduje 15)!",
+                        actor = "Systém",
+                        actionName = "Nedostatek energie"
                     ))
                 }
             }
@@ -2239,16 +2700,26 @@ class GameEngine(private val context: Context) {
                     val healed = (drainDmg * 0.75f).toInt()
                     newBossHp = (newBossHp - drainDmg).coerceAtLeast(0)
                     newPlayerHp = (newPlayerHp + healed).coerceAtMost(session.playerMaxHp)
+
+                    SoundEffectManager.playCombat(CombatSound.DARK_SPELL)
+
                     newLogEntries.add(0, CombatLogEntry(
                         turn = currentTurn,
                         type = "player_spell",
-                        message = "🖤 Vysátí duše vytrhlo z nepřítele životní esenci za $drainDmg poškození a uzdravilo tě o +$healed HP (-20 TE)!"
+                        message = "🖤 Vysátí duše vytrhlo z nepřítele životní esenci za $drainDmg poškození a uzdravilo tě o +$healed HP (-20 TE)!",
+                        actor = combatHeroName,
+                        actionName = "Vysátí duše",
+                        damageDealt = drainDmg,
+                        damageCalculation = "[Vysátí esence: $drainDmg DMG] -> Konverze života: +$healed HP (75% přeměna)",
+                        narrativeText = "Z hrudi protivníka vytrhla černá chapadla vířící proud životní síly. Vstřebaná esence okamžitě zacelila tvé rány."
                     ))
                 } else {
                     newLogEntries.add(0, CombatLogEntry(
                         turn = currentTurn,
                         type = "system",
-                        message = "❌ Nemáš dostatek temné energie na Vysátí duše (vyžaduje 20)!"
+                        message = "❌ Nemáš dostatek temné energie na Vysátí duše (vyžaduje 20)!",
+                        actor = "Systém",
+                        actionName = "Nedostatek energie"
                     ))
                 }
             }
@@ -2257,10 +2728,18 @@ class GameEngine(private val context: Context) {
                 val gainedDark = 8
                 player.darkEnergy = (player.darkEnergy + gainedDark).coerceAtMost(player.maxDarkEnergy)
                 newPlayerDark = player.darkEnergy
+
+                SoundEffectManager.playCombat(CombatSound.SHIELD_BLOCK)
+
                 newLogEntries.add(0, CombatLogEntry(
                     turn = currentTurn,
                     type = "player_defend",
-                    message = "🛡️ Zaujal jsi neprostupný obranný postoj (-65% utrženého zranění v tomto kole, +$gainedDark TE)!"
+                    message = "🛡️ Zaujal jsi neprostupný obranný postoj (-65% utrženého zranění v tomto kole, +$gainedDark TE)!",
+                    actor = combatHeroName,
+                    actionName = "Neprostupný kryt",
+                    damageDealt = 0,
+                    damageCalculation = "Aktivní blokování: redukce příchozího zranění o 65% • Obnova: +$gainedDark TE",
+                    narrativeText = "Pevný kryt a magická bariéra vytvořily neprostupnou hradbu. Hrdina se připravil absorbovat a odrazit nadcházející nápor útoků."
                 ))
             }
             "harem_support" -> {
@@ -2273,16 +2752,26 @@ class GameEngine(private val context: Context) {
                     player.darkEnergy = (player.darkEnergy + energyAmt).coerceAtMost(player.maxDarkEnergy)
                     newPlayerDark = player.darkEnergy
                     activeBuff = "Požehnání harému (${favorite.name})"
+
+                    SoundEffectManager.playHarem(HaremSound.SEDUCE)
+
                     newLogEntries.add(0, CombatLogEntry(
                         turn = currentTurn,
                         type = "player_support",
-                        message = "💖 ${favorite.name} ti poslala duševní podporu z harému! Obdržel jsi +$healAmt HP a +$energyAmt TE!"
+                        message = "💖 ${favorite.name} ti poslala duševní podporu z harému! Obdržel jsi +$healAmt HP a +$energyAmt TE!",
+                        actor = favorite.name,
+                        actionName = "Požehnání harému",
+                        damageDealt = 0,
+                        damageCalculation = "Léčení: +$healAmt HP (28 + Loajalita/5) • Energie: +$energyAmt TE",
+                        narrativeText = "Myšlenka na oddanou konkubínu ${favorite.name} a její vroucí pohled vnesly do tvého těla novou vlnu sil a odhodlání."
                     ))
                 } else {
                     newLogEntries.add(0, CombatLogEntry(
                         turn = currentTurn,
                         type = "system",
-                        message = "❌ V tvém harému není žádná otrokyně, která by ti dodala sílu!"
+                        message = "❌ V tvém harému není žádná otrokyně, která by ti dodala sílu!",
+                        actor = "Systém",
+                        actionName = "Chybí podpora"
                     ))
                 }
             }
@@ -2301,10 +2790,18 @@ class GameEngine(private val context: Context) {
                 }
                 val stunText = if (stunSuccess) " • Protivník byl OMRÁČEN!" else ""
                 val voiceShout = deployedChar?.let { com.example.haremdark.data.AffinityData.getRandomActiveDialogue(it) } ?: "Za mého pána!"
+
+                SoundEffectManager.playCombat(CombatSound.CRITICAL_HIT)
+
                 newLogEntries.add(0, CombatLogEntry(
                     turn = currentTurn,
                     type = "player_special",
-                    message = "✨ $charName: „$voiceShout“ aktivovala speciální techniku a zasadila $finalDmg poškození!$stunText"
+                    message = "✨ $charName: „$voiceShout“ aktivovala speciální techniku a zasadila $finalDmg poškození!$stunText",
+                    actor = charName,
+                    actionName = "Unikátní harémová technika",
+                    damageDealt = finalDmg,
+                    damageCalculation = "[$charName boj: $charCombat * 5 + Síla: ${(weaponDamage * 1.6f).toInt()}] * [Technika: x${"%.2f".format(mult)}] * [Pouto: x${"%.2f".format(totalAffinityMultiplier)}] = $finalDmg DMG",
+                    narrativeText = "$charName se s půvabem a divokou oddaností vrhla vpřed. Se slovy „$voiceShout“ zasadila mistrný zásah!"
                 ))
             }
             "item" -> {
@@ -2318,29 +2815,47 @@ class GameEngine(private val context: Context) {
                         "hojivy_balzam" -> {
                             val healAmt = 45
                             newPlayerHp = (newPlayerHp + healAmt).coerceAtMost(session.playerMaxHp)
+                            SoundEffectManager.playHarem(HaremSound.GIFT)
                             newLogEntries.add(0, CombatLogEntry(
                                 turn = currentTurn,
                                 type = "player_heal",
-                                message = "🧪 Použil jsi ${item.name} a vyléčil se o +$healAmt HP."
+                                message = "🧪 Použil jsi ${item.name} a vyléčil se o +$healAmt HP.",
+                                actor = combatHeroName,
+                                actionName = "Použití lektvaru",
+                                damageDealt = 0,
+                                damageCalculation = "Okamžitá regenerace: +$healAmt HP",
+                                narrativeText = "Chladivý bylinný balzám pronikl do krvácejících ran a zacelil poškozené tkáně."
                             ))
                         }
                         "elixir_touhy" -> {
                             player.darkEnergy = (player.darkEnergy + 35).coerceAtMost(player.maxDarkEnergy)
                             player.sexEnergy = (player.sexEnergy + 35).coerceAtMost(player.maxSexEnergy)
                             newPlayerDark = player.darkEnergy
+                            SoundEffectManager.playHarem(HaremSound.GIFT)
                             newLogEntries.add(0, CombatLogEntry(
                                 turn = currentTurn,
                                 type = "player_heal",
-                                message = "🧪 Vypil jsi ${item.name}! Tvé tělo zaplavila energie (+35 TE, +35 SE)."
+                                message = "🧪 Vypil jsi ${item.name}! Tvé tělo zaplavila energie (+35 TE, +35 SE).",
+                                actor = combatHeroName,
+                                actionName = "Vypití elixíru touhy",
+                                damageDealt = 0,
+                                damageCalculation = "Zisk energie: +35 TE, +35 SE",
+                                narrativeText = "Rudý elixír rozdmýchal v žilách plamen touhy a stínové dominance."
                             ))
                         }
                         else -> {
                             val healAmt = 30
                             newPlayerHp = (newPlayerHp + healAmt).coerceAtMost(session.playerMaxHp)
+                            SoundEffectManager.playHarem(HaremSound.GIFT)
                             newLogEntries.add(0, CombatLogEntry(
                                 turn = currentTurn,
                                 type = "player_heal",
-                                message = "🧪 Využil jsi předmět ${item.name} (+30 HP)."
+                                message = "🧪 Využil jsi předmět ${item.name} (+30 HP).",
+                                actor = combatHeroName,
+                                actionName = "Použití předmětu",
+                                damageDealt = 0,
+                                damageCalculation = "Regenerace: +$healAmt HP",
+                                narrativeText = "Předmět z batohu poskytl okamžitou úlevu uprostřed líté vřavy."
                             ))
                         }
                     }
@@ -2348,7 +2863,9 @@ class GameEngine(private val context: Context) {
                     newLogEntries.add(0, CombatLogEntry(
                         turn = currentTurn,
                         type = "system",
-                        message = "❌ Nemáš tento předmět k dispozici!"
+                        message = "❌ Nemáš tento předmět k dispozici!",
+                        actor = "Systém",
+                        actionName = "Předmět nedostupný"
                     ))
                 }
             }
@@ -2356,7 +2873,10 @@ class GameEngine(private val context: Context) {
                 newLogEntries.add(0, CombatLogEntry(
                     turn = currentTurn,
                     type = "system",
-                    message = "🏃 Takticky jsi ustoupil a opustil bojiště."
+                    message = "🏃 Takticky jsi ustoupil a opustil bojiště.",
+                    actor = combatHeroName,
+                    actionName = "Ústup z boje",
+                    narrativeText = "Pochopil jsi nevýhodu situace a rychlým ústupem do stínů jsi opustil nebezpečnou zónu."
                 ))
                 _combatState.value = null
                 return
@@ -2371,7 +2891,12 @@ class GameEngine(private val context: Context) {
             newLogEntries.add(0, CombatLogEntry(
                 turn = currentTurn,
                 type = "player_spell",
-                message = "🩸 Krvácení způsobilo nepříteli $bleedDmg zranění (zbývá $newBleedTurns kol)."
+                message = "🩸 Krvácení způsobilo nepříteli $bleedDmg zranění (zbývá $newBleedTurns kol).",
+                actor = "Krvácení rány",
+                actionName = "Účinek krvácení",
+                damageDealt = bleedDmg,
+                damageCalculation = "Ztráta krve: -$bleedDmg HP (zbývá $newBleedTurns kol)",
+                narrativeText = "Z otevřené rány dál prudce prýští krev, oslabující nepřítelovu odolnost a reflexy."
             ))
         }
 
@@ -2405,11 +2930,18 @@ class GameEngine(private val context: Context) {
             val itemDropStr = if (droppedItem != null) " • Nalezeno: ${droppedItem.name}" else ""
             val charExpStr = if (session.deployedCharacterId != null) " • Dívka +${session.boss.rewardXp} ZK" else ""
             lootInfo = "+${session.boss.rewardGold} zlatých • +${session.boss.rewardXp} XP$charExpStr$itemDropStr"
+
+            SoundEffectManager.playCombat(CombatSound.VICTORY)
             
             newLogEntries.add(0, CombatLogEntry(
                 turn = currentTurn,
                 type = "victory",
-                message = "🏆 VÍTĚZSTVÍ! Protivník ${session.boss.name} padl! Zisk: $lootInfo."
+                message = "🏆 VÍTĚZSTVÍ! Protivník ${session.boss.name} padl! Zisk: $lootInfo.",
+                actor = "Dominium stínů",
+                actionName = "Konečné vítězství",
+                damageDealt = 0,
+                damageCalculation = "Odměna: +${session.boss.rewardGold} G • +${session.boss.rewardXp} XP",
+                narrativeText = "Protivník ${session.boss.name} klesl s posledním vzdechem k zemi. Bojiště utichlo a z jeho ostatků stoupá temná mlha plná kořisti a uznání!"
             ))
             addLog("🏆 Protivník ${session.boss.name} byl poražen v souboji!")
             updateState { it.copy(defeatedBosses = it.defeatedBosses + session.boss.id) }
@@ -2420,7 +2952,10 @@ class GameEngine(private val context: Context) {
                 newLogEntries.add(0, CombatLogEntry(
                     turn = currentTurn,
                     type = "system",
-                    message = "💫 ${session.boss.name} je omráčen a vynechává své kolo!"
+                    message = "💫 ${session.boss.name} je omráčen a vynechává své kolo!",
+                    actor = session.boss.name,
+                    actionName = "Stav omráčení",
+                    narrativeText = "Protivník vrávorá a s omámeným zrakem se snaží znovu nabrat rovnováhu. Jeho tah propadá!"
                 ))
             } else {
                 val isSpecialAttack = (currentTurn % 3 == 0)
@@ -2447,10 +2982,25 @@ class GameEngine(private val context: Context) {
                 val attackTitle = if (isSpecialAttack) "💥 ${session.boss.name} provedl speciální techniku [${session.boss.phaseName}]" else "⚔️ ${session.boss.name} zaútočil"
                 val defenseNotice = if (isDefending) " (útok odražen štítem!)" else ""
 
+                if (isSpecialAttack) {
+                    SoundEffectManager.playCombat(CombatSound.BOSS_SPECIAL)
+                } else {
+                    SoundEffectManager.playCombat(CombatSound.ENEMY_STRIKE)
+                }
+
                 newLogEntries.add(0, CombatLogEntry(
                     turn = currentTurn,
                     type = if (isSpecialAttack) "enemy_special" else "enemy_attack",
-                    message = "$attackTitle za $finalEnemyDmg poškození!$defenseNotice"
+                    message = "$attackTitle za $finalEnemyDmg poškození!$defenseNotice",
+                    actor = session.boss.name,
+                    actionName = if (isSpecialAttack) "Boss technika: ${session.boss.phaseName}" else "Zuřivý protiútok",
+                    damageDealt = finalEnemyDmg,
+                    damageCalculation = "[Útok bosse: $rawBossDmg] - [Obrana a harém: ${defenseReduction.toInt()}] * [Kryt: ${if (isDefending) "x0.35" else "x1.0"}] = $finalEnemyDmg DMG",
+                    narrativeText = if (isSpecialAttack) {
+                        "Aréna potemněla! ${session.boss.name} rozpoutal svou zhoubnou schopnost [${session.boss.phaseName}], jež zasáhla celou linii drtivou silou!"
+                    } else {
+                        "${session.boss.name} bleskově zaútočil zuřivým výpadem. Rána dopadla s brutální silou."
+                    }
                 ))
 
                 if (newPlayerHp <= 0) {
@@ -2458,10 +3008,17 @@ class GameEngine(private val context: Context) {
                     victory = false
                     newPlayerHp = if (session.deployedCharacterId != null) 1 else 25
                     val msgName = if (session.deployedCharacterId != null) "Tvá dívka padla v boji" else "Byl jsi v boji poražen"
+
+                    SoundEffectManager.playCombat(CombatSound.DEFEAT)
+
                     newLogEntries.add(0, CombatLogEntry(
                         turn = currentTurn,
                         type = "defeat",
-                        message = "💀 $msgName! Odnášíte zraněné do bezpečí pevnosti."
+                        message = "💀 $msgName! Odnášíte zraněné do bezpečí pevnosti.",
+                        actor = "Systém",
+                        actionName = "Poražení v bitvě",
+                        damageDealt = 0,
+                        narrativeText = "Tlak nepřítele byl příliš zdrcující. Pod rouškou stínů stahujete raněné do bezpečí temných komnat, abyste nabrali nových sil."
                     ))
                     addLog("💀 Porážka v boji proti ${session.boss.name}!")
                 }
