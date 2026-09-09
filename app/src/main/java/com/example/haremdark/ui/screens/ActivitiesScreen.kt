@@ -216,6 +216,21 @@ fun AuctionTab(gameState: GameSave, engine: GameEngine) {
 
 @Composable
 fun CombatTab(gameState: GameSave, session: CombatSession?, engine: GameEngine) {
+    val partySession by engine.partyCombatSession.collectAsState()
+    if (partySession != null) {
+        val s = partySession
+        if (s != null) {
+            com.example.haremdark.ui.components.PartyCombatScreen(
+                session = s,
+                gameState = gameState,
+                engine = engine,
+                onSessionUpdated = { engine.updatePartyCombatSession(it) },
+                onExitCombat = { engine.closePartyCombat() }
+            )
+            return
+        }
+    }
+
     com.example.haremdark.ui.components.TurnBasedCombatModule(
         gameState = gameState,
         session = session,

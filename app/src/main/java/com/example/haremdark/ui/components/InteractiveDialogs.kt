@@ -37,6 +37,9 @@ import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.window.Dialog
 import com.example.haremdark.data.AffinityData
+import com.example.haremdark.data.CharacterSkillCatalog
+import com.example.haremdark.data.CharacterSkillNode
+import com.example.haremdark.data.SkillNodeType
 import com.example.haremdark.data.DirectGiftItem
 import com.example.haremdark.data.GameContent
 import com.example.haremdark.data.GameInteraction
@@ -259,7 +262,11 @@ fun CharacterDetailDialog(
                             onRent = onRent,
                             onUpgradeSkill = onUpgradeSkill
                         )
-                        5 -> SkillTreeTab(character = character, onUpgradeSkill = onUpgradeSkill)
+                        5 -> SkillTreeTab(
+                            character = character,
+                            engine = engine,
+                            onUpgradeSkill = onUpgradeSkill
+                        )
                     }
                 }
             }
@@ -1256,37 +1263,50 @@ fun StatRow(name: String, value: String) {
 }
 
 @Composable
-fun SkillTreeTab(character: Character, onUpgradeSkill: (String) -> Unit) {
+fun SkillTreeTab(
+    character: Character,
+    engine: GameEngine? = null,
+    onUpgradeSkill: (String) -> Unit
+) {
     var selectedBranch by remember { mutableStateOf("Boj") }
-    val branches = listOf("Boj", "Podpora")
+    val branches = listOf("Bojové Schopnosti", "Pasivní Statistiky", "Podpora")
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Header with level, xp, and available points
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
             shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
         ) {
-            Row(
-                modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text("Úroveň ${character.level}", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                    Text("ZK: ${character.xp} / ${character.level * 100}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f))
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Úroveň ${character.level} (Bojovnice)", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text("ZK: ${character.xp} ZK • SP: ${character.skillPoints} bodů", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f))
+                    }
+                    if (engine != null && character.xp >= 100) {
+                        Button(
+                            onClick = { engine.convertCharacterXpToSp(character.id) },
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700))
+                        ) {
+                            Text("100 ZK ➔ 1 SP", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("${character.skillPoints} SP", fontWeight = FontWeight.ExtraBold, fontSize = 24.sp, color = MaterialTheme.colorScheme.primary)
-                    Text("Dostupné body", fontSize = 10.sp, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
-                }
+                Spacer(modifier = Modifier.height(6.dp))
+                LinearProgressIndicator(
+                    progress = { (character.xp.toFloat() / (character.level * 100).coerceAtLeast(1).toFloat()).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)
+                )
             }
-            LinearProgressIndicator(
-                progress = (character.xp.toFloat() / (character.level * 100).coerceAtLeast(1).toFloat()).coerceIn(0f, 1f),
-                modifier = Modifier.fillMaxWidth().height(4.dp),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)
-            )
         }
 
         // Branch Selection
@@ -1299,12 +1319,12 @@ fun SkillTreeTab(character: Character, onUpgradeSkill: (String) -> Unit) {
                 Tab(
                     selected = selectedBranch == branch,
                     onClick = { selectedBranch = branch },
-                    text = { Text(branch, fontWeight = FontWeight.Bold) }
+                    text = { Text(branch, fontWeight = FontWeight.Bold, fontSize = 11.sp) }
                 )
             }
         }
         
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         Box(
             modifier = Modifier
@@ -1312,30 +1332,121 @@ fun SkillTreeTab(character: Character, onUpgradeSkill: (String) -> Unit) {
                 .verticalScroll(rememberScrollState()),
             contentAlignment = Alignment.TopCenter
         ) {
-            if (selectedBranch == "Boj") {
-                SkillTreeLayout(
-                    character = character,
-                    onUpgradeSkill = onUpgradeSkill,
-                    skills = listOf(
-                        SkillNodeData("combat", "Útok", "🗡️", "+5 Poškození v boji", 0),
-                        SkillNodeData("defense", "Obrana", "🛡️", "+2 Obrana v boji", 1),
-                        SkillNodeData("vitality", "Vitalita", "❤️", "+10 Zdraví", 1),
-                        SkillNodeData("bloodlust", "Krvavá žízeň", "🩸", "Šance na krvácení", 2, req = "combat", reqLvl = 3),
-                        SkillNodeData("iron_skin", "Železná kůže", "🧱", "Šance blokovat útok", 2, req = "defense", reqLvl = 3)
+            when (selectedBranch) {
+                "Bojové Schopnosti" -> {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "Aktivní & Pasivní dovednosti archetypu:",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        val allSkills = CharacterSkillCatalog.getSkillTreeForCharacter(character)
+                        allSkills.forEach { skillDef ->
+                            val isUnlocked = character.unlockedCombatSkills.contains(skillDef.id) || character.unlockedPassives.contains(skillDef.id)
+                            val canUnlockXp = !isUnlocked && character.xp >= skillDef.xpCost && character.level >= skillDef.reqLevel
+                            val canUnlockSp = !isUnlocked && character.skillPoints >= skillDef.spCost && character.level >= skillDef.reqLevel
+                            val isPassive = skillDef.nodeType == SkillNodeType.PASSIVE_PERK || skillDef.nodeType == SkillNodeType.SYNERGY_MASTERY
+
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isUnlocked) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                border = if (isUnlocked) BorderStroke(1.dp, Color(0xFFFF80AB).copy(alpha = 0.5f)) else null,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Text(skillDef.icon, fontSize = 18.sp)
+                                            Column {
+                                                Text(skillDef.name, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (isUnlocked) Color(0xFFFF80AB) else MaterialTheme.colorScheme.onSurface)
+                                                Text(if (isPassive) "Pasivní dovednost" else "Aktivní bojová schopnost (Cena: ${skillDef.activeSkill?.manaCost ?: 0} many)", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                                            }
+                                        }
+
+                                        if (isUnlocked) {
+                                            Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF4CAF50).copy(alpha = 0.2f)) {
+                                                Text("Odemčeno ✓", color = Color(0xFF4CAF50), fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                            }
+                                        } else {
+                                            Text("Vyžaduje Úr. ${skillDef.reqLevel}", fontSize = 10.sp, color = if (character.level >= skillDef.reqLevel) Color(0xFF81C784) else Color(0xFFE53935), fontWeight = FontWeight.SemiBold)
+                                        }
+                                    }
+
+                                    Text(skillDef.description, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+
+                                    if (!isUnlocked && engine != null) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            if (skillDef.xpCost > 0) {
+                                                Button(
+                                                    onClick = { engine.unlockCharacterSkillWithXp(character.id, skillDef.id) },
+                                                    enabled = canUnlockXp,
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    modifier = Modifier.weight(1f),
+                                                    contentPadding = PaddingValues(vertical = 4.dp),
+                                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF))
+                                                ) {
+                                                    Text("Odemknout (${skillDef.xpCost} ZK)", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                            if (skillDef.spCost > 0) {
+                                                Button(
+                                                    onClick = { engine.unlockCharacterSkillWithSp(character.id, skillDef.id) },
+                                                    enabled = canUnlockSp,
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    modifier = Modifier.weight(1f),
+                                                    contentPadding = PaddingValues(vertical = 4.dp),
+                                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700))
+                                                ) {
+                                                    Text("Odemknout (${skillDef.spCost} SP)", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                "Pasivní Statistiky" -> {
+                    SkillTreeLayout(
+                        character = character,
+                        onUpgradeSkill = onUpgradeSkill,
+                        skills = listOf(
+                            SkillNodeData("combat", "Útok", "🗡️", "+5 Poškození v boji", 0),
+                            SkillNodeData("defense", "Obrana", "🛡️", "+2 Obrana v boji", 1),
+                            SkillNodeData("vitality", "Vitalita", "❤️", "+10 Zdraví", 1),
+                            SkillNodeData("bloodlust", "Krvavá žízeň", "🩸", "Šance na krvácení", 2, req = "combat", reqLvl = 3),
+                            SkillNodeData("iron_skin", "Železná kůže", "🧱", "Šance blokovat útok", 2, req = "defense", reqLvl = 3)
+                        )
                     )
-                )
-            } else {
-                SkillTreeLayout(
-                    character = character,
-                    onUpgradeSkill = onUpgradeSkill,
-                    skills = listOf(
-                        SkillNodeData("production", "Produkce", "⚒️", "+2% Produkce surovin", 0),
-                        SkillNodeData("rental", "Nájmy", "💰", "+15 Zlata z nájmů", 0),
-                        SkillNodeData("charm", "Šarm", "✨", "+10% Zisk náklonnosti", 1, req = "rental", reqLvl = 2),
-                        SkillNodeData("efficiency", "Efektivita", "⚙️", "Sníží únavu z práce", 1, req = "production", reqLvl = 2),
-                        SkillNodeData("loyalty_boost", "Oddanost", "💖", "Zabraňuje ztrátě důvěry", 2, req = "charm", reqLvl = 3)
+                }
+                else -> {
+                    SkillTreeLayout(
+                        character = character,
+                        onUpgradeSkill = onUpgradeSkill,
+                        skills = listOf(
+                            SkillNodeData("production", "Produkce", "⚒️", "+2% Produkce surovin", 0),
+                            SkillNodeData("rental", "Nájmy", "💰", "+15 Zlata z nájmů", 0),
+                            SkillNodeData("charm", "Šarm", "✨", "+10% Zisk náklonnosti", 1, req = "rental", reqLvl = 2),
+                            SkillNodeData("efficiency", "Efektivita", "⚙️", "Sníží únavu z práce", 1, req = "production", reqLvl = 2),
+                            SkillNodeData("loyalty_boost", "Oddanost", "💖", "Zabraňuje ztrátě důvěry", 2, req = "charm", reqLvl = 3)
+                        )
                     )
-                )
+                }
             }
         }
     }

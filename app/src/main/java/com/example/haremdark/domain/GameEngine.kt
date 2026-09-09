@@ -52,6 +52,9 @@ class GameEngine(private val context: Context) {
     private val _combatState = MutableStateFlow<CombatSession?>(null)
     val combatState: StateFlow<CombatSession?> = _combatState.asStateFlow()
 
+    private val _partyCombatSession = MutableStateFlow<PartyCombatSession?>(null)
+    val partyCombatSession: StateFlow<PartyCombatSession?> = _partyCombatSession.asStateFlow()
+
     private val _currentTheme = MutableStateFlow("Temné dominium")
     val currentTheme: StateFlow<String> = _currentTheme.asStateFlow()
 
@@ -3248,6 +3251,77 @@ class GameEngine(private val context: Context) {
         autoSave()
     }
 
+    fun startPartyCombat(
+        selectedGirlIds: List<String>,
+        includePlayer: Boolean,
+        encounter: com.example.haremdark.data.PartyCombatCatalog.PartyEncounterDefinition
+    ) {
+        val state = _gameState.value
+        val session = PartyCombatManager.createSession(
+            selectedCharacterIds = selectedGirlIds,
+            allCharacters = state.characters,
+            player = state.player,
+            includePlayerAsLeader = includePlayer,
+            encounterDef = encounter
+        )
+        _partyCombatSession.value = session
+        addLog("⚔️ Zahájen skupinový tahový boj: ${encounter.title} (${session.party.size} bojovníků)!")
+    }
+
+    fun updatePartyCombatSession(session: PartyCombatSession) {
+        _partyCombatSession.value = session
+    }
+
+    fun closePartyCombat() {
+        _partyCombatSession.value = null
+        autoSave()
+    }
+
+    fun awardPartyCombatVictory(
+        gold: Int,
+        xp: Int,
+        prestige: Int,
+        participatingGirlIds: List<String>,
+        affinityGain: Int,
+        loyaltyGain: Int
+    ) {
+        updateState { current ->
+            val p = current.player.copy(
+                gold = current.player.gold + gold,
+                prestige = current.player.prestige + prestige
+            )
+
+            // Update participating girls' stats, affinity points, and loyalty
+            val updatedCharacters = current.characters.map { girl ->
+                if (participatingGirlIds.contains(girl.id)) {
+                    val newAffinity = girl.affinityPoints + affinityGain
+                    val newLoyalty = (girl.loajalita + loyaltyGain).coerceAtMost(100)
+                    val newExp = girl.xp + xp / participatingGirlIds.size.coerceAtLeast(1)
+                    val combatSkill = (girl.skills["combat"] ?: 5) + 1
+                    val newSkills = girl.skills.toMutableMap().apply {
+                        put("combat", combatSkill)
+                    }
+                    girl.copy(
+                        affinityPoints = newAffinity,
+                        loajalita = newLoyalty,
+                        xp = newExp,
+                        skills = newSkills
+                    )
+                } else girl
+            }
+
+            current.copy(
+                player = p,
+                characters = updatedCharacters
+            )
+        }
+
+        addPlayerXp(xp)
+        addHaremExp(xp / 2)
+        addLog("🏆 Vítězství v týmovém souboji! Získáno: +$gold zlatých, +$xp XP, +$prestige prestiže a +$affinityGain náklonnosti pro zúčastněné dívky.")
+        autoSave()
+    }
+
     private fun addPlayerXp(amount: Int) {
         val p = _gameState.value.player
         p.xp += amount
@@ -3922,6 +3996,224 @@ class GameEngine(private val context: Context) {
         }
         if (removed) autoSave()
         return removed
+    }
+
+    fun awardPartyCombatVictoryWithDetails(rewards: com.example.haremdark.models.PartyCombatRewards, session: com.example.haremdark.models.PartyCombatSession): List<String> {
+        val logs = mutableListOf<String>()
+        logs.add("🏆 [${rewards.rank}] ${rewards.rankTitle}!")
+        logs.add("💰 Získáno: +${rewards.gold} Zlata, +${rewards.bloodRubies} Rubínů, +${rewards.prestigeGain} Prestiže.")
+
+        updateState { current ->
+            val player = current.player
+            val newItems = player.items.toMutableList()
+
+            // Add dropped items
+            rewards.itemDropDetails.forEach { drop ->
+                val existing = newItems.indexOfFirst { it.id == drop.id }
+                if (existing != -1) {
+                    val item = newItems[existing]
+                    newItems[existing] = item.copy(count = item.count + drop.count)
+                } else {
+                    newItems.add(drop)
+                }
+                logs.add("🎁 Získán předmět: ${drop.icon} ${drop.name} (${drop.rarity})")
+            }
+
+            // Update characters with XP, levels, SP, loyalty and affinity
+            val participatingIds = session.party.filter { !it.isPlayer }.map { it.id }.toSet()
+            val updatedCharacters = current.characters.map { girl ->
+                if (participatingIds.contains(girl.id)) {
+                    val xpGained = rewards.characterXpGains[girl.id] ?: (rewards.playerXp / 2)
+                    var newXp = girl.xp + xpGained
+                    var newLevel = girl.level
+                    var newSp = girl.skillPoints
+                    val isMvp = (girl.id == rewards.mvpCharacterId)
+
+                    while (newXp >= newLevel * 100) {
+                        newXp -= newLevel * 100
+                        newLevel++
+                        newSp += 1
+                        logs.add("✨ ${girl.name} postoupila na ÚROVEŇ $newLevel a získala +1 Dovednostní bod!")
+                    }
+
+                    val bonusAffinity = rewards.haremAffinityGain + (if (isMvp) 15 else 0)
+                    val bonusLoyalty = rewards.haremLoyaltyGain + (if (isMvp) 5 else 0)
+
+                    girl.copy(
+                        xp = newXp,
+                        level = newLevel,
+                        skillPoints = newSp,
+                        affinityPoints = girl.affinityPoints + bonusAffinity,
+                        loajalita = (girl.loajalita + bonusLoyalty).coerceIn(0, 100)
+                    )
+                } else girl
+            }
+
+            val updatedPlayer = player.copy(
+                gold = player.gold + rewards.gold,
+                mana = (player.mana + rewards.bloodRubies).coerceAtLeast(0),
+                prestige = player.prestige + rewards.prestigeGain,
+                xp = player.xp + rewards.playerXp,
+                items = newItems
+            )
+
+            current.copy(
+                player = updatedPlayer,
+                characters = updatedCharacters,
+                gameLog = current.gameLog + "⚔️ Vítězství v aréně [${rewards.rank}]: +${rewards.gold} Zlata, MVP: ${rewards.mvpName}"
+            )
+        }
+        autoSave()
+        return logs
+    }
+
+    fun unlockCharacterSkillWithXp(characterId: String, nodeId: String): Pair<Boolean, String> {
+        var result = Pair(false, "Chyba při odemykání schopnosti.")
+        val node = com.example.haremdark.data.CharacterSkillCatalog.ALL_SKILL_NODES.firstOrNull { it.id == nodeId }
+            ?: return Pair(false, "Schopnost nebyla nalezena v katalogu.")
+
+        updateState { current ->
+            val charIndex = current.characters.indexOfFirst { it.id == characterId }
+            if (charIndex == -1) return@updateState current
+
+            val char = current.characters[charIndex]
+            if (char.unlockedPassives.contains(nodeId) || char.unlockedCombatSkills.contains(nodeId)) {
+                result = Pair(false, "Tato schopnost již byla odemčena.")
+                return@updateState current
+            }
+
+            if (char.level < node.reqLevel) {
+                result = Pair(false, "Vyžadována úroveň ${node.reqLevel} (Aktuální: ${char.level}).")
+                return@updateState current
+            }
+
+            if (node.reqNodeId != null) {
+                val hasReq = char.unlockedPassives.contains(node.reqNodeId) || char.unlockedCombatSkills.contains(node.reqNodeId)
+                if (!hasReq) {
+                    result = Pair(false, "Nejprve musíš odemknout předchozí dovednost ve stromu.")
+                    return@updateState current
+                }
+            }
+
+            if (char.xp < node.xpCost) {
+                result = Pair(false, "Nedostatek ZK! Potřebuješ ${node.xpCost} ZK (Máš ${char.xp} ZK).")
+                return@updateState current
+            }
+
+            val updatedPassives = char.unlockedPassives.toMutableList()
+            val updatedCombatSkills = char.unlockedCombatSkills.toMutableList()
+
+            if (node.nodeType == com.example.haremdark.data.SkillNodeType.ACTIVE_ABILITY) {
+                updatedCombatSkills.add(nodeId)
+            } else {
+                updatedPassives.add(nodeId)
+            }
+
+            val updatedChar = char.copy(
+                xp = char.xp - node.xpCost,
+                unlockedPassives = updatedPassives,
+                unlockedCombatSkills = updatedCombatSkills
+            )
+
+            val newList = current.characters.toMutableList()
+            newList[charIndex] = updatedChar
+            result = Pair(true, "Úspěšně odemčena schopnost '${node.name}'!")
+
+            current.copy(
+                characters = newList,
+                gameLog = current.gameLog + "✨ ${char.name} odemkla schopnost: ${node.name} (${node.nodeType.label})"
+            )
+        }
+        if (result.first) autoSave()
+        return result
+    }
+
+    fun unlockCharacterSkillWithSp(characterId: String, nodeId: String): Pair<Boolean, String> {
+        var result = Pair(false, "Chyba při odemykání schopnosti.")
+        val node = com.example.haremdark.data.CharacterSkillCatalog.ALL_SKILL_NODES.firstOrNull { it.id == nodeId }
+            ?: return Pair(false, "Schopnost nebyla nalezena v katalogu.")
+
+        updateState { current ->
+            val charIndex = current.characters.indexOfFirst { it.id == characterId }
+            if (charIndex == -1) return@updateState current
+
+            val char = current.characters[charIndex]
+            if (char.unlockedPassives.contains(nodeId) || char.unlockedCombatSkills.contains(nodeId)) {
+                result = Pair(false, "Tato schopnost již byla odemčena.")
+                return@updateState current
+            }
+
+            if (char.level < node.reqLevel) {
+                result = Pair(false, "Vyžadována úroveň ${node.reqLevel} (Aktuální: ${char.level}).")
+                return@updateState current
+            }
+
+            if (node.reqNodeId != null) {
+                val hasReq = char.unlockedPassives.contains(node.reqNodeId) || char.unlockedCombatSkills.contains(node.reqNodeId)
+                if (!hasReq) {
+                    result = Pair(false, "Nejprve musíš odemknout předchozí dovednost ve stromu.")
+                    return@updateState current
+                }
+            }
+
+            if (char.skillPoints < node.spCost) {
+                result = Pair(false, "Nedostatek dovednostních bodů! Potřebuješ ${node.spCost} bodů (Máš ${char.skillPoints}).")
+                return@updateState current
+            }
+
+            val updatedPassives = char.unlockedPassives.toMutableList()
+            val updatedCombatSkills = char.unlockedCombatSkills.toMutableList()
+
+            if (node.nodeType == com.example.haremdark.data.SkillNodeType.ACTIVE_ABILITY) {
+                updatedCombatSkills.add(nodeId)
+            } else {
+                updatedPassives.add(nodeId)
+            }
+
+            val updatedChar = char.copy(
+                skillPoints = char.skillPoints - node.spCost,
+                unlockedPassives = updatedPassives,
+                unlockedCombatSkills = updatedCombatSkills
+            )
+
+            val newList = current.characters.toMutableList()
+            newList[charIndex] = updatedChar
+            result = Pair(true, "Úspěšně odemčena schopnost '${node.name}' pomocí dovednostního bodu!")
+
+            current.copy(
+                characters = newList,
+                gameLog = current.gameLog + "✨ ${char.name} odemkla schopnost: ${node.name} (${node.nodeType.label})"
+            )
+        }
+        if (result.first) autoSave()
+        return result
+    }
+
+    fun convertCharacterXpToSp(characterId: String): Pair<Boolean, String> {
+        var result = Pair(false, "Chyba při konverzi ZK.")
+        val costXp = 100
+        updateState { current ->
+            val charIndex = current.characters.indexOfFirst { it.id == characterId }
+            if (charIndex == -1) return@updateState current
+
+            val char = current.characters[charIndex]
+            if (char.xp < costXp) {
+                result = Pair(false, "Nedostatek ZK! Potřebuješ $costXp ZK pro získání 1 Dovednostního bodu (Máš ${char.xp} ZK).")
+                return@updateState current
+            }
+
+            val updatedChar = char.copy(
+                xp = char.xp - costXp,
+                skillPoints = char.skillPoints + 1
+            )
+
+            val newList = current.characters.toMutableList()
+            newList[charIndex] = updatedChar
+            result = Pair(true, "${char.name} vyměnila $costXp ZK za +1 Dovednostní bod!")
+            current.copy(characters = newList)
+        }
+        if (result.first) autoSave()
+        return result
     }
 
 }

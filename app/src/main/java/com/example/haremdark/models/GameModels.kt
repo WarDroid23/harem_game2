@@ -189,7 +189,9 @@ data class Character(
     var skills: MutableMap<String, Int> = mutableMapOf("combat" to 0, "defense" to 0, "production" to 0, "rental" to 0),
     var equippedWeapon: Weapon? = null,
     var equipment: MutableMap<String, InventoryItem?> = mutableMapOf("weapon" to null, "armor" to null, "accessory" to null),
-    var affinityHistory: MutableList<AffinityPointRecord> = mutableListOf()
+    var affinityHistory: MutableList<AffinityPointRecord> = mutableListOf(),
+    var unlockedPassives: MutableList<String> = mutableListOf(),
+    var unlockedCombatSkills: MutableList<String> = mutableListOf()
 ) {
     var loyalty: Int
         get() = loajalita
@@ -202,6 +204,8 @@ data class Character(
         loajalita >= 20 -> "Ostražitá"
         else -> "Vzpurná a zrádná"
     }
+
+    val archetype: String get() = archetypeId
 
     fun getStrengthStatus(): String = when {
         strength >= 80 -> "Legendární šampionka"

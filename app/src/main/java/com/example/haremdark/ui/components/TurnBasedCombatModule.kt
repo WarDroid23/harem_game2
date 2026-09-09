@@ -1270,6 +1270,7 @@ fun EnemyRosterView(
 ) {
     var selectedTierFilter by remember { mutableStateOf("all") }
     var selectedBossForCombat by remember { mutableStateOf<com.example.haremdark.models.Boss?>(null) }
+    var showPartyDialogForEncounter by remember { mutableStateOf<com.example.haremdark.data.PartyCombatCatalog.PartyEncounterDefinition?>(null) }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -1427,6 +1428,28 @@ fun EnemyRosterView(
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         item {
                             Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF5E1738)),
+                                border = BorderStroke(1.5.dp, Color(0xFFFF4081)),
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    val matchingEncounter = com.example.haremdark.data.PartyCombatCatalog.ENCOUNTERS.find { it.title.contains(boss.name) }
+                                        ?: com.example.haremdark.data.PartyCombatCatalog.ENCOUNTERS.first()
+                                    selectedBossForCombat = null
+                                    showPartyDialogForEncounter = matchingEncounter
+                                }
+                            ) {
+                                Row(modifier = Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("🛡️", fontSize = 24.sp)
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text("Bojová družina Harému (Až 4 dívky)", fontWeight = FontWeight.Bold, color = Color(0xFFFFD700))
+                                        Text("Vyslat sehraný tým s rolemi, synergiemi a kombem", fontSize = 11.sp, color = Color(0xFFFF80AB))
+                                    }
+                                }
+                            }
+                        }
+
+                        item {
+                            Card(
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                                 modifier = Modifier.fillMaxWidth().clickable {
                                     engine.startBossCombat(boss, null)
@@ -1437,7 +1460,7 @@ fun EnemyRosterView(
                                     Text("👑", fontSize = 24.sp)
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column {
-                                        Text("Pán Dominia (Ty)", fontWeight = FontWeight.Bold)
+                                        Text("Pán Dominia (Sólo)", fontWeight = FontWeight.Bold)
                                         Text("Boj: ${gameState.player.skills["boj"] ?: 0} | HP: ${gameState.player.hp}/${gameState.player.maxHp}", fontSize = 12.sp)
                                     }
                                 }
@@ -1477,6 +1500,21 @@ fun EnemyRosterView(
             }
         }
     }
+    }
+
+    if (showPartyDialogForEncounter != null) {
+        val encounter = showPartyDialogForEncounter
+        if (encounter != null) {
+            PartySelectionDialog(
+                gameState = gameState,
+                preselectedEncounter = encounter,
+                onDismiss = { showPartyDialogForEncounter = null },
+                onStartCombat = { selectedGirlIds, includePlayer, enc ->
+                    showPartyDialogForEncounter = null
+                    engine.startPartyCombat(selectedGirlIds, includePlayer, enc)
+                }
+            )
+        }
     }
 }
 

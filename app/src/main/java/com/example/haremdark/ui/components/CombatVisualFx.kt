@@ -2,6 +2,7 @@ package com.example.haremdark.ui.components
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -13,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -139,6 +141,21 @@ enum class ParticleShape {
 }
 
 /**
+ * Single floating damage / heal number indicator.
+ */
+data class FloatingDamageText(
+    val id: Long,
+    val text: String,
+    val color: Color,
+    val isCrit: Boolean,
+    val isHeal: Boolean = false,
+    val isShield: Boolean = false,
+    var xRatio: Float = 0.5f,
+    var yRatio: Float = 0.35f,
+    val startTime: Long = System.currentTimeMillis()
+)
+
+/**
  * Single dynamic particle.
  */
 class VisualParticle(
@@ -172,7 +189,7 @@ class VisualParticle(
 }
 
 /**
- * Controller holding combat animation states (screen shake, particles, ability banner, flash vignette).
+ * Controller holding combat animation states (screen shake, particles, ability banner, flash vignette, sprite lunges, floating numbers).
  */
 @Stable
 class CombatVisualFxState {
@@ -183,6 +200,113 @@ class CombatVisualFxState {
 
     var activeBanner by mutableStateOf<Pair<CombatAbilityType, String>?>(null)
     val particles = mutableStateListOf<VisualParticle>()
+    val floatingTexts = mutableStateListOf<FloatingDamageText>()
+
+    var activeAttackerPartyIndex by mutableStateOf<Int?>(-1)
+    var activeAttackerEnemyIndex by mutableStateOf<Int?>(-1)
+    var hitTargetEnemyIndex by mutableStateOf<Int?>(-1)
+    var hitTargetPartyIndex by mutableStateOf<Int?>(-1)
+
+    /**
+     * Trigger a floating combat number on screen.
+     */
+    fun triggerFloatingText(
+        text: String,
+        isCrit: Boolean = false,
+        isHeal: Boolean = false,
+        isShield: Boolean = false,
+        isEnemyTarget: Boolean = true,
+        scope: CoroutineScope
+    ) {
+        val color = when {
+            isHeal -> Color(0xFF00E676)
+            isShield -> Color(0xFF40C4FF)
+            isCrit -> Color(0xFFFFD700)
+            else -> if (isEnemyTarget) Color(0xFFFF1744) else Color(0xFFFF5252)
+        }
+
+        val item = FloatingDamageText(
+            id = System.nanoTime(),
+            text = text,
+            color = color,
+            isCrit = isCrit,
+            isHeal = isHeal,
+            isShield = isShield,
+            xRatio = 0.5f + (Random.nextFloat() - 0.5f) * 0.25f,
+            yRatio = if (isEnemyTarget) 0.32f + (Random.nextFloat() - 0.5f) * 0.1f else 0.65f + (Random.nextFloat() - 0.5f) * 0.1f
+        )
+
+        floatingTexts.add(item)
+        scope.launch {
+            delay(850)
+            floatingTexts.remove(item)
+        }
+    }
+
+    /**
+     * Executes a full hero attack sequence with sprite lunge, particle slash FX, impact vibration, and floating damage numbers.
+     */
+    fun triggerAttackSequence(
+        attackerPartyIndex: Int?,
+        targetEnemyIndex: Int?,
+        abilityType: CombatAbilityType,
+        customName: String? = null,
+        damageText: String? = null,
+        isCrit: Boolean = false,
+        scope: CoroutineScope,
+        onImpact: (() -> Unit)? = null
+    ) {
+        scope.launch {
+            // 1. Ally springs forward
+            activeAttackerPartyIndex = attackerPartyIndex
+            delay(120)
+
+            // 2. Enemy receives hit impact
+            hitTargetEnemyIndex = targetEnemyIndex
+            triggerAbility(abilityType, customName, this, onImpact = {
+                onImpact?.invoke()
+                if (damageText != null) {
+                    triggerFloatingText(damageText, isCrit = isCrit, isEnemyTarget = true, scope = this)
+                }
+            })
+
+            delay(280)
+            // 3. Reset positions
+            activeAttackerPartyIndex = -1
+            hitTargetEnemyIndex = -1
+        }
+    }
+
+    /**
+     * Executes enemy attack sequence against a party heroine.
+     */
+    fun triggerEnemyAttackSequence(
+        attackerEnemyIndex: Int?,
+        targetPartyIndex: Int?,
+        abilityType: CombatAbilityType,
+        customName: String? = null,
+        damageText: String? = null,
+        isCrit: Boolean = false,
+        scope: CoroutineScope,
+        onImpact: (() -> Unit)? = null
+    ) {
+        scope.launch {
+            activeAttackerEnemyIndex = attackerEnemyIndex
+            delay(120)
+
+            hitTargetPartyIndex = targetPartyIndex
+            triggerAbility(abilityType, customName, this, onImpact = {
+                onImpact?.invoke()
+                if (damageText != null) {
+                    triggerFloatingText(damageText, isCrit = isCrit, isEnemyTarget = false, scope = this)
+                }
+            })
+
+            delay(280)
+            activeAttackerEnemyIndex = -1
+            hitTargetPartyIndex = -1
+        }
+    }
 
     /**
      * Trigger subtle screen shake and particle explosion for a specific ability.
@@ -385,6 +509,41 @@ fun CombatVisualFxOverlay(
                             )
                         }
                     }
+                }
+            }
+        }
+
+        // 4. Floating Damage / Heal Numbers
+        fxState.floatingTexts.forEach { item ->
+            val elapsed = (System.currentTimeMillis() - item.startTime).coerceAtLeast(0)
+            val lifeRatio = (elapsed / 850f).coerceIn(0f, 1f)
+            val floatOffsetY = -lifeRatio * 50f
+            val alpha = (1f - lifeRatio * lifeRatio).coerceIn(0f, 1f)
+            val scale = if (item.isCrit) 1.35f + sin(lifeRatio * PI.toFloat()) * 0.25f else 1.0f
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .offset(y = floatOffsetY.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Black.copy(alpha = 0.8f * alpha),
+                    border = BorderStroke(
+                        1.dp,
+                        if (item.isCrit) Color(0xFFFFD700).copy(alpha = alpha) else Color.White.copy(alpha = 0.3f * alpha)
+                    ),
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .scale(scale)
+                ) {
+                    Text(
+                        text = if (item.isCrit) "⭐ KRIT! ${item.text}" else item.text,
+                        color = item.color.copy(alpha = alpha),
+                        fontWeight = FontWeight.Black,
+                        fontSize = if (item.isCrit) 18.sp else 15.sp,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
                 }
             }
         }
