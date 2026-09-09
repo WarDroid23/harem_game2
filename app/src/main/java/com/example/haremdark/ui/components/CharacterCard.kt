@@ -146,6 +146,21 @@ fun CharacterCard(
                                     }
                                 }
                             }
+                            if (character.isPinned) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFFE91E63).copy(alpha = 0.2f),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE91E63))
+                                ) {
+                                    Text(
+                                        text = "📌 Připnuto",
+                                        color = Color(0xFFE91E63),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
                             if (character.oblibena) {
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
@@ -507,6 +522,27 @@ fun CharacterGridCard(
             ) {
                 // Status Badges Column
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (character.isPinned) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFFE91E63).copy(alpha = 0.95f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF80AB))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Text("📌", fontSize = 8.sp)
+                                Text(
+                                    text = "Připnuto",
+                                    color = Color.White,
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.ExtraBold
+                                )
+                            }
+                        }
+                    }
                     if (hasActiveEvent) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),

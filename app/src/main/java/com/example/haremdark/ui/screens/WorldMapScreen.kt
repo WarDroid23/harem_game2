@@ -61,68 +61,13 @@ fun WorldMapScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(top = 10.dp, bottom = 95.dp)
     ) {
-        // Hero Map Header Banner
+        // Interactive Minimap Overlay Component tracking player position, quests, and interest points
         item {
-            Card(
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp)
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.img_fantasy_map),
-                        contentDescription = "Mapa svatyní a dominií",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color(0x33000000),
-                                        Color(0xAA12081C),
-                                        Color(0xEE12081C)
-                                    )
-                                )
-                            )
-                    )
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(14.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Map,
-                                contentDescription = null,
-                                tint = Color(0xFFFFD700),
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Text(
-                                text = "Mapa Temných Dominií",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        }
-                        Text(
-                            text = "Aktuální základna: ${currentDomain.name} • ${currentDomain.title}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFFFD700),
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
+            com.example.haremdark.ui.components.MinimapOverlay(
+                gameState = gameState,
+                selectedDomainId = selectedDomainId,
+                onDomainSelect = { id -> selectedDomainId = id }
+            )
         }
 
         // Domain Selection Horizontal Carousel
@@ -363,22 +308,44 @@ fun WorldMapScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             if (!isCurrent) {
-                                Button(
-                                    onClick = {
-                                        val res = engine.travelToDomain(selectedDomain.id)
-                                        Toast.makeText(context, res.second, Toast.LENGTH_SHORT).show()
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(10.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                                ) {
-                                    Icon(Icons.AutoMirrored.Filled.DirectionsWalk, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "Cestovat sem (${selectedDomain.travelCostEnergy} SE)",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                val alreadyVisited = gameState.unlockedDomains.contains(selectedDomain.id)
+                                if (alreadyVisited) {
+                                    Button(
+                                        onClick = {
+                                            val res = engine.fastTravelToDomain(selectedDomain.id)
+                                            Toast.makeText(context, res.second, Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF673AB7)) // Purple magic lightning
+                                    ) {
+                                        Icon(Icons.Default.Bolt, contentDescription = "Rychlé cestování", tint = Color(0xFFFFD700), modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "Rychlá cesta (1 SE)",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = {
+                                            val res = engine.travelToDomain(selectedDomain.id)
+                                            Toast.makeText(context, res.second, Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                    ) {
+                                        Icon(Icons.AutoMirrored.Filled.DirectionsWalk, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "Cestovat sem (${selectedDomain.travelCostEnergy} SE)",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             } else {
                                 Surface(

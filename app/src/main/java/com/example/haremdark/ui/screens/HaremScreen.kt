@@ -90,7 +90,7 @@ fun HaremScreen(
     // legacy variables to prevent unresolved references during transition
     val selectedFilter = 0
     val filters = listOf("Všechny")
-    val sortOptions = listOf("Náklonnost")
+    val sortOptions = listOf("Náklonnost", "Rarita / Úroveň", "Nedávno", "Role (Archetyp)", "Bojová síla")
     var sortExpanded by remember { mutableStateOf(false) }
     val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
     val bgRes = when (hour) {

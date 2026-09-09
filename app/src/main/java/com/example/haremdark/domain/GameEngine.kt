@@ -1088,6 +1088,38 @@ class GameEngine(private val context: Context) {
         return Pair(true, msg)
     }
 
+    fun fastTravelToDomain(domainId: String): Pair<Boolean, String> {
+        val current = _gameState.value
+        val domain = DomainData.getDomainById(domainId)
+
+        if (current.currentDomainId == domainId) {
+            return Pair(true, "Již se nacházíš v dominiu: ${domain.name}.")
+        }
+
+        if (!current.unlockedDomains.contains(domainId)) {
+            return Pair(false, "Do této lokace nemůžeš provést rychlé cestování, dokud ji nejdříve nenavštívíš standardní cestou!")
+        }
+
+        val energyCost = 1
+        if (current.player.sexEnergy < energyCost) {
+            return Pair(false, "Na rychlé cestování potřebuješ alespoň $energyCost Sexuální energie!")
+        }
+
+        val msg = "⚡ Rychlé cestování: Okamžitě ses teleportoval do již navštívené svatyně '${domain.name}'!"
+        updateState { state ->
+            val p = state.player.copy(
+                sexEnergy = (state.player.sexEnergy - energyCost).coerceAtLeast(0)
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(
+                player = p,
+                currentDomainId = domainId,
+                gameLog = logs
+            )
+        }
+        return Pair(true, msg)
+    }
+
     fun exploreDomain(domainId: String): Pair<Character?, String> {
         val current = _gameState.value
         val domain = DomainData.getDomainById(domainId)
