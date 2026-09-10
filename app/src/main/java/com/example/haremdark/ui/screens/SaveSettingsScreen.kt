@@ -29,6 +29,7 @@ import com.example.haremdark.models.GameSave
 fun SaveSettingsScreen(
     gameState: GameSave,
     currentTheme: String,
+    isLightMode: Boolean,
     engine: GameEngine,
     modifier: Modifier = Modifier
 ) {
@@ -96,6 +97,35 @@ fun SaveSettingsScreen(
                                 )
                             }
                         }
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Světlý režim rozhraní",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Přepíná celé dominium do světlých barev",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                        Switch(
+                            checked = isLightMode,
+                            onCheckedChange = { engine.setLightMode(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+                            )
+                        )
                     }
                 }
             }

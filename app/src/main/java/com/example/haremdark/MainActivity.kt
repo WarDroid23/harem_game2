@@ -43,6 +43,7 @@ class MainActivity : ComponentActivity() {
             val gameState by engine.gameState.collectAsState()
             val combatSession by engine.combatState.collectAsState()
             val currentTheme by engine.currentTheme.collectAsState()
+            val isLightMode by engine.isLightMode.collectAsState()
             val dailyReward by engine.dailyRewardAvailable.collectAsState()
             val context = LocalContext.current
             
@@ -61,8 +62,8 @@ class MainActivity : ComponentActivity() {
             
             var showRestDialog by remember { mutableStateOf(false) }
             val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-
-            HaremDarkTheme(themeName = currentTheme) {
+ 
+            HaremDarkTheme(themeName = currentTheme, isLightMode = isLightMode) {
                 ModalNavigationDrawer(
                     drawerState = drawerState,
                     drawerContent = {
@@ -253,7 +254,7 @@ class MainActivity : ComponentActivity() {
                                 ProgressionScreen(gameState = gameState, engine = engine)
                             }
                             composable("settings") {
-                                SaveSettingsScreen(gameState = gameState, currentTheme = currentTheme, engine = engine)
+                                SaveSettingsScreen(gameState = gameState, currentTheme = currentTheme, isLightMode = isLightMode, engine = engine)
                             }
                             composable("achievements") {
                                 com.example.haremdark.ui.screens.AchievementScreen(gameState = gameState, engine = engine, onMenuClick = { coroutineScope.launch { drawerState.open() } })

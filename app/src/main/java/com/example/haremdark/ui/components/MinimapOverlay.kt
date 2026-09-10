@@ -24,10 +24,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.haremdark.R
 import com.example.haremdark.data.DomainData
+import com.example.haremdark.data.GameContent
 import com.example.haremdark.models.DomainLocation
 import com.example.haremdark.models.GameSave
 
@@ -58,6 +60,32 @@ fun MinimapOverlay(
         ),
         label = "pulseScale"
     )
+
+    // Bouncing animation for active quest markers
+    val bounceY by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = -6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "bounceY"
+    )
+
+    val activeQuestDomains = remember(gameState) {
+        GameContent.QUESTS.filter { quest ->
+            !gameState.completedQuests.contains(quest.id) && gameState.player.level >= quest.reqLevel
+        }.mapNotNull { quest ->
+            val domainId = when (quest.id) {
+                "quest_1" -> "temny_hvozd"
+                "quest_2" -> "stoky_doupata"
+                "quest_3" -> "slechticke_panstvi"
+                "quest_4" -> "ruiny_chramu"
+                else -> null
+            }
+            if (domainId != null) domainId to quest else null
+        }.toMap()
+    }
 
     var showLegend by remember { mutableStateOf(false) }
 
@@ -371,6 +399,25 @@ fun MinimapOverlay(
                                 }
                             }
 
+                            // Quest Exclamation Mark above the node
+                            val activeQuest = activeQuestDomains[domain.id]
+                            if (activeQuest != null && isExplored) {
+                                Box(
+                                    modifier = Modifier
+                                        .offset(y = -22.dp + bounceY.dp)
+                                        .background(Color(0xFFFFC107), RoundedCornerShape(4.dp))
+                                        .border(1.dp, Color.Black, RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                                ) {
+                                    Text(
+                                        text = "❗",
+                                        color = Color.Black,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
                             // Minimal tooltip / label below/above active markers
                             Box(
                                 modifier = Modifier
@@ -443,6 +490,34 @@ fun MinimapOverlay(
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Box(modifier = Modifier.size(12.dp).border(1.dp, MaterialTheme.colorScheme.primary, CircleShape))
                                 Text("Vybrané území", color = Color.White, fontSize = 9.sp)
+                            }
+                            if (activeQuestDomains.isNotEmpty()) {
+                                HorizontalDivider(color = Color.White.copy(alpha = 0.15f))
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("❗", fontSize = 10.sp)
+                                    Text("Aktivní příběh / úkol", color = Color(0xFFFFC107), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                }
+                                activeQuestDomains.values.forEach { q ->
+                                    val domainName = DomainData.DOMAINS.find {
+                                        when (q.id) {
+                                            "quest_1" -> it.id == "temny_hvozd"
+                                            "quest_2" -> it.id == "stoky_doupata"
+                                            "quest_3" -> it.id == "slechticke_panstvi"
+                                            "quest_4" -> it.id == "ruiny_chramu"
+                                            else -> false
+                                        }
+                                    }?.name ?: "???"
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text("📜", fontSize = 9.sp)
+                                        Text(
+                                            text = "${q.title} ($domainName)",
+                                            color = Color.White.copy(alpha = 0.9f),
+                                            fontSize = 8.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

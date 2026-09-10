@@ -11,6 +11,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -331,24 +334,47 @@ fun CharacterCard(
                 }
             }
 
+            val scaleAnim = remember { androidx.compose.animation.core.Animatable(1f) }
+            LaunchedEffect(character.affinityPoints) {
+                scaleAnim.animateTo(1.15f, animationSpec = androidx.compose.animation.core.tween(150))
+                scaleAnim.animateTo(0.95f, animationSpec = androidx.compose.animation.core.tween(100))
+                scaleAnim.animateTo(1f, animationSpec = androidx.compose.animation.core.tween(100))
+            }
+
             // Affinity Tier & Passive Thought Snippet
             Surface(
                 shape = RoundedCornerShape(8.dp),
                 color = Color(affinityTier.colorHex).copy(alpha = 0.1f),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(affinityTier.colorHex).copy(alpha = 0.25f)),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer {
+                        scaleX = scaleAnim.value
+                        scaleY = scaleAnim.value
+                    }
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(affinityTier.icon, fontSize = 13.sp)
-                    Text(
-                        text = "Úr. ${affinityTier.level} ${affinityTier.title}",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(affinityTier.colorHex)
+                Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(affinityTier.icon, fontSize = 13.sp)
+                        Text(
+                            text = "Úr. ${affinityTier.level} ${affinityTier.title} (${character.affinityPoints % 100}/100 pts)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(affinityTier.colorHex)
+                        )
+                    }
+                    LinearProgressIndicator(
+                        progress = { (character.affinityPoints % 100 / 100f).coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                        color = Color(affinityTier.colorHex),
+                        trackColor = Color(affinityTier.colorHex).copy(alpha = 0.2f)
                     )
                     Text(
                         text = "• „${AffinityData.getRandomActiveDialogue(character.affinityPoints, character.archetypeId)}“",
@@ -356,8 +382,7 @@ fun CharacterCard(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                         fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }

@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.delay
 import com.example.haremdark.data.AffinityData
 import com.example.haremdark.data.DialogueChoice
 import com.example.haremdark.data.StaticData
@@ -55,8 +57,48 @@ fun HaremSpecialEventDialog(
     val affinityTier = AffinityData.getTierForPoints(character.affinityPoints)
     val tierColor = Color(affinityTier.colorHex)
 
+    var scale by remember { mutableStateOf(0.85f) }
+    var alpha by remember { mutableStateOf(0f) }
+    var shakeX by remember { mutableStateOf(0f) }
+    var shakeY by remember { mutableStateOf(0f) }
+    var shakeTrigger by remember { mutableStateOf(0) }
+
     LaunchedEffect(event.id) {
         SoundEffectManager.playEventTrigger()
+        shakeTrigger++
+    }
+
+    LaunchedEffect(Unit) {
+        androidx.compose.animation.core.animate(
+            initialValue = 0.85f,
+            targetValue = 1f,
+            animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.65f, stiffness = 350f)
+        ) { value, _ ->
+            scale = value
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        androidx.compose.animation.core.animate(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = androidx.compose.animation.core.tween(durationMillis = 200)
+        ) { value, _ ->
+            alpha = value
+        }
+    }
+
+    LaunchedEffect(shakeTrigger) {
+        if (shakeTrigger > 0) {
+            val strength = 10f
+            repeat(8) { i ->
+                shakeX = if (i % 2 == 0) strength else -strength
+                shakeY = if (i % 2 == 1) strength / 1.5f else -strength / 1.5f
+                delay(40)
+            }
+            shakeX = 0f
+            shakeY = 0f
+        }
     }
 
     Dialog(
@@ -69,6 +111,13 @@ fun HaremSpecialEventDialog(
             modifier = Modifier
                 .fillMaxWidth(0.95f)
                 .fillMaxHeight(0.88f)
+                .graphicsLayer(
+                    scaleX = scale,
+                    scaleY = scale,
+                    alpha = alpha,
+                    translationX = shakeX,
+                    translationY = shakeY
+                )
                 .clip(RoundedCornerShape(24.dp))
                 .border(2.dp, tierColor.copy(alpha = 0.6f), RoundedCornerShape(24.dp)),
             colors = CardDefaults.cardColors(
@@ -249,6 +298,7 @@ fun HaremSpecialEventDialog(
                                     .clickable {
                                         SoundEffectManager.playAffinityGain()
                                         selectedChoice = choice
+                                        shakeTrigger++
                                     },
                                 shape = RoundedCornerShape(14.dp),
                                 colors = CardDefaults.cardColors(

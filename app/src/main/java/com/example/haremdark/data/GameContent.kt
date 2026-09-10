@@ -291,6 +291,22 @@ object GameContent {
                 p.haremHarmony = (p.haremHarmony + 8).coerceAtMost(100)
                 "${c.name} si v horkých vodách vonných lázní užívala tvou přítomnost po boku ostatních dívek."
             }
+        ),
+        GameInteraction(
+            id = "soukroma_vecere",
+            name = "Soukromá večeře 🍷",
+            type = "odmena",
+            description = "Luxusní jídlo podávané jen pro ni v tvých soukromých komnatách s doprovodem tiché hudby.",
+            energyCost = 8,
+            goldCost = 20,
+            effectDescription = "+12 Důvěra, +10 Loajalita, +10 Srdce, -8 Strach",
+            applyEffect = { c, _ ->
+                c.duvera = (c.duvera + 12).coerceAtMost(100)
+                c.loajalita = (c.loajalita + 10).coerceAtMost(100)
+                c.srdce = (c.srdce + 10).coerceAtMost(100)
+                c.strach = (c.strach - 8).coerceAtLeast(0)
+                "${c.name} si s nadšením užila každý moment luxusní večeře a její oči zářily štěstím z tvé plné pozornosti."
+            }
         )
     )
 
@@ -368,6 +384,22 @@ object GameContent {
                 c.hp = (c.hp - 24).coerceAtLeast(1)
                 p.inquisitionInfluence = (p.inquisitionInfluence + 4).coerceAtMost(100)
                 "${c.name} má na těle vypálený tvůj znak. Její oči ztratily poslední jiskru odporu."
+            }
+        ),
+        GameInteraction(
+            id = "verejne_ponizeni",
+            name = "Veřejné ponížení (V pranýři harému)",
+            type = "trest",
+            description = "Uvázání dívky do pranýře uprostřed společného sálu před ostatními pro zlomení odporu.",
+            energyCost = 12,
+            darkCost = 5,
+            effectDescription = "+18 Ponížení, +15 Submisivita, +12 Strach, +6 Zlomení",
+            applyEffect = { c, _ ->
+                c.humiliation = (c.humiliation + 18).coerceAtMost(100)
+                c.submisivita = (c.submisivita + 15).coerceAtMost(100)
+                c.strach = (c.strach + 12).coerceAtMost(100)
+                c.broken = (c.broken + 6).coerceAtMost(100)
+                "${c.name} stála se skloněnou hlavou v pranýři harému, vystavena pohledům ostatních, čímž její hrdost dostala těžkou ránu."
             }
         )
     )
@@ -477,6 +509,22 @@ object GameContent {
                 c.bloodlust = (c.bloodlust + 20).coerceAtMost(100)
                 c.fazeZkazenosti = (c.fazeZkazenosti + 1).coerceAtMost(6)
                 "${c.name} ti podala ruku se zkrvavenou dlaní a políbila tvé rty. Vaše duše jsou nyní nerozlučně spojeny."
+            }
+        ),
+        GameInteraction(
+            id = "nocni_lazen_pan",
+            name = "Noční lázeň s pánem 🌙",
+            type = "intimni",
+            description = "Společný rituál odevzdání ve stínech ložnice za svitu měsíce.",
+            energyCost = 14,
+            darkCost = 6,
+            effectDescription = "+22 Touha, +18 Vlhkost, +12 Loajalita, +10 Důvěra",
+            applyEffect = { c, _ ->
+                c.touha = (c.touha + 22).coerceAtMost(100)
+                c.vlhkost = (c.vlhkost + 18).coerceAtMost(100)
+                c.loajalita = (c.loajalita + 12).coerceAtMost(100)
+                c.duvera = (c.duvera + 10).coerceAtMost(100)
+                "${c.name} se ti při měsíčním svitu zcela poddala, její horká kůže žhne a její vzdechy plní stíny komnaty."
             }
         )
     )

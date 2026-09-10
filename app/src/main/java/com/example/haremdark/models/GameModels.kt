@@ -190,6 +190,7 @@ data class Character(
     var equippedWeapon: Weapon? = null,
     var equipment: MutableMap<String, InventoryItem?> = mutableMapOf("weapon" to null, "armor" to null, "accessory" to null),
     var affinityHistory: MutableList<AffinityPointRecord> = mutableListOf(),
+    var relationshipHistory: MutableList<RelationshipRecord> = mutableListOf(),
     var unlockedPassives: MutableList<String> = mutableListOf(),
     var unlockedCombatSkills: MutableList<String> = mutableListOf()
 ) {
@@ -215,6 +216,15 @@ data class Character(
         else -> "Křehká kráska"
     }
 }
+
+@Serializable
+data class RelationshipRecord(
+    val day: Int,
+    val prompt: String,
+    val choice: String,
+    val feedback: String,
+    val outcomeEffects: String
+)
 
 @Serializable
 data class AffinityPointRecord(
@@ -449,6 +459,7 @@ data class GameSave(
     val unlockedDomains: List<String> = listOf("temny_hvozd", "ruiny_chramu"),
     val defeatedBosses: List<String> = emptyList(),
     val currentTheme: String = "Temné dominium",
+    val isLightMode: Boolean = false,
     val completedQuests: List<String> = emptyList(),
     val dailyMissions: List<DailyMission> = emptyList(),
     val lastMissionUpdateDay: Int = 0,

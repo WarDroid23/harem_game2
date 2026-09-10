@@ -35,6 +35,7 @@ import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import com.example.haremdark.R
 import com.example.haremdark.data.DomainData
+import com.example.haremdark.data.GameContent
 import com.example.haremdark.data.StaticData
 import com.example.haremdark.domain.GameEngine
 import com.example.haremdark.models.CharacterReward
@@ -188,6 +189,49 @@ fun WorldMapScreen(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                         lineHeight = 16.sp
                     )
+
+                    // Active Quest Banner if this domain is associated with an active quest
+                    val activeQuest = GameContent.QUESTS.find { quest ->
+                        val questDomainId = when (quest.id) {
+                            "quest_1" -> "temny_hvozd"
+                            "quest_2" -> "stoky_doupata"
+                            "quest_3" -> "slechticke_panstvi"
+                            "quest_4" -> "ruiny_chramu"
+                            else -> null
+                        }
+                        questDomainId == selectedDomain.id && 
+                            !gameState.completedQuests.contains(quest.id) && 
+                            gameState.player.level >= quest.reqLevel
+                    }
+                    if (activeQuest != null) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+                            border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text("📜", fontSize = 24.sp)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Aktivní příběhový úkol: ${activeQuest.title}",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = activeQuest.description,
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
 

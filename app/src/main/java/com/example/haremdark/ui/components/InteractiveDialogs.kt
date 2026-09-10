@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -78,15 +79,42 @@ fun CharacterDetailDialog(
     val portraitRes = StaticData.getPortraitForArchetype(character.archetypeId)
 
     var selectedSection by remember { mutableIntStateOf(0) }
-    val sectionTabs = listOf("📊 Profil", "🛡️ Výbava", "💖 Náklonnost", "🎁 Dary", "⚡ Akce", "✨ Dovednosti")
+    val sectionTabs = listOf("📖 Životopis", "📊 Profil", "🛡️ Výbava", "💖 Náklonnost", "🎁 Dary", "⚡ Akce", "✨ Dovednosti")
     var activeEmote by remember { mutableStateOf<String?>(null) }
     var emoteKey by remember { mutableLongStateOf(0L) }
+
+    val offsetY = remember { androidx.compose.animation.core.Animatable(150f) }
+    val alphaVal = remember { androidx.compose.animation.core.Animatable(0f) }
+
+    LaunchedEffect(character.id) {
+        launch {
+            offsetY.animateTo(
+                targetValue = 0f,
+                animationSpec = androidx.compose.animation.core.spring(
+                    dampingRatio = 0.72f,
+                    stiffness = 250f
+                )
+            )
+        }
+        launch {
+            alphaVal.animateTo(
+                targetValue = 1f,
+                animationSpec = androidx.compose.animation.core.tween(
+                    durationMillis = 250
+                )
+            )
+        }
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.92f),
+                .fillMaxHeight(0.92f)
+                .graphicsLayer(
+                    translationY = offsetY.value,
+                    alpha = alphaVal.value
+                ),
             shape = RoundedCornerShape(22.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 8.dp
@@ -216,10 +244,11 @@ fun CharacterDetailDialog(
                 }
 
                 // Section Navigation Tabs
-                TabRow(
+                ScrollableTabRow(
                     selectedTabIndex = selectedSection,
                     containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     contentColor = MaterialTheme.colorScheme.primary,
+                    edgePadding = 8.dp,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     sectionTabs.forEachIndexed { index, title ->
@@ -244,17 +273,18 @@ fun CharacterDetailDialog(
                         .padding(14.dp)
                 ) {
                     when (selectedSection) {
-                        0 -> ProfileAndStatsTab(character = character, loyaltyTier = loyalty, archetype = archetype, phase = phase)
-                        1 -> EquipmentTab(character = character, player = player, onEquip = onEquipItem, onUnequip = onUnequipItem, engine = engine)
-                        2 -> AffinityAndDialogueTab(character = character)
-                        3 -> GiftingAndItemsTab(
+                        0 -> BioTab(character = character)
+                        1 -> ProfileAndStatsTab(character = character, loyaltyTier = loyalty, archetype = archetype, phase = phase)
+                        2 -> EquipmentTab(character = character, player = player, onEquip = onEquipItem, onUnequip = onUnequipItem, engine = engine)
+                        3 -> AffinityAndDialogueTab(character = character, engine = engine)
+                        4 -> GiftingAndItemsTab(
                             character = character,
                             player = player,
                             onGiveDirectGift = onGiveDirectGift,
                             onUseInventoryItem = onUseInventoryItem,
                             engine = engine
                         )
-                        4 -> InteractionsSectionTab(
+                        5 -> InteractionsSectionTab(
                             character = character,
                             player = player,
                             onExecuteInteraction = onExecuteInteraction,
@@ -263,7 +293,7 @@ fun CharacterDetailDialog(
                             onRent = onRent,
                             onUpgradeSkill = onUpgradeSkill
                         )
-                        5 -> SkillTreeTab(
+                        6 -> SkillTreeTab(
                             character = character,
                             engine = engine,
                             onUpgradeSkill = onUpgradeSkill
@@ -274,6 +304,420 @@ fun CharacterDetailDialog(
         }
     }
 }
+
+@Composable
+fun BioTab(character: Character) {
+    val bio = remember(character.archetypeId) {
+        when (character.archetypeId) {
+            "subka" -> CharacterBio(
+                lore = "Pochází z chudého pohraničí. Byla prodána do područí dominia, aby zachránila svou rodinu před hladem. Postupem času v sobě objevila hlubokou potřebu sloužit pevné a nekompromisní ruce, která jí dává pocit bezpečí a řádu.",
+                traits = listOf("Poddajná 🌸", "Hledající uznání ✨", "Citlivá ❤️", "Oddaná 🤝"),
+                goals = listOf("Najít absolutní bezpečí v tvém stínu 🌌", "Stát se tvou nejvěrnější služebnicí 📜", "Získat uznání ostatních dívek v harému 👑")
+            )
+            "slechticna" -> CharacterBio(
+                lore = "Bývalá dcera vlivného barona ze severního království. Její rod byl svržen inkvizicí a ona sama byla uvržena do otroctví. I v řetězech si zachovává svou aristokratickou hrdost, pýchu a dokonalé společenské vystupování. Pohrdá slabostí.",
+                traits = listOf("Arogantní 💎", "Ambiciózní ⚡", "Inteligentní 🧠", "Hrdá 👑"),
+                goals = listOf("Pomstít se zrádcům jejího rodu ⚔️", "Získat zpět svůj ztracený vliv skrz tvou moc 💍", "Dosáhnout výsadního postavení v harému 🏰")
+            )
+            "touha" -> CharacterBio(
+                lore = "Bývalá společnice z hlavního města, která dokonale ovládá umění svádění a jemné manipulace. Její přítomnost je jako horký vítr, který rozpaluje vášně. Pod maskou sebejistoty však skrývá hluboký strach ze samoty a odmítnutí.",
+                traits = listOf("Smyslná 🔥", "Provokativní 💋", "Hravá 🎭", "Vnitřně nejistá 🩹"),
+                goals = listOf("Získat tvou plnou, exkluzivní pozornost 💖", "Ovládnout umění stínové magie rozkoše 🌌", "Stát se tvým osobním klenotem 💎")
+            )
+            "odvazna" -> CharacterBio(
+                lore = "Bojovnice z divokých kmenů jihu, zajatá během pohraničních válek. Považuje tě za nepřítele, ale hluboce respektuje čest, odvahu a bojovou sílu. Pohrdá zbabělostí.",
+                traits = listOf("Divoká 🦁", "Čestná 🛡️", "Fyzicky zdatná ⚔️", "Nedůvěřivá 👁️"),
+                goals = listOf("Dokázat svou hodnotu v bitvách po tvém boku 🛡️", "Nalézt pána, kterého může skutečně respektovat 👑", "Ochránit své spolubojovnice v dominiu 🤝")
+            )
+            "sukuba" -> CharacterBio(
+                lore = "Démon stínů vyvolaný z hlubin Pekla. Původně plánovala vysát tvou životní energii, ale tvá pevná vůle a temná magie ji spoutaly. Nyní ji fascinuje tvá nadvláda.",
+                traits = listOf("Démonická 😈", "Manipulativní 🧶", "Nenasytná 👅", "Věrná pod tlakem ⛓️"),
+                goals = listOf("Pohltit tvou temnou energii k posílení své moci ⚡", "Podmanit si mysli tvých nepřátel 🧠", "Učinit z tvého lože oltář rozkoše 🌙")
+            )
+            "draci_divka" -> CharacterBio(
+                lore = "Poslední dědička prastarého dračího klanu, který byl vyhlazen lovci. Její krev žhne horkostí a její tělo zdobí jemné šupiny. Její loajalita je absolutní, jakmile ji získáš.",
+                traits = listOf("Horkokrevná 🌋", "Povýšená 💅", "Nezlomná ✊", "Ochránitelská 🛡️"),
+                goals = listOf("Obnovit slávu dračího klanu 🐉", "Najít partnera s dostatečně silným plamenem 🔥", "Spálit všechny nepřátele tvého dominia ☄️")
+            )
+            "nymfomanka" -> CharacterBio(
+                lore = "Mladá dívka stižená kletbou neutišitelné touhy. Její vlastní tělo je jejím vězením. Hledá v tobě zachránce i přísného vůdce, který dokáže usměrnit její neovladatelné impulsy.",
+                traits = listOf("Obsedantní 🌀", "Plachá mimo ložnici 😳", "Neustále vzrušená 🌡️", "Vděčná 🙏"),
+                goals = listOf("Dosáhnout absolutního uspokojení pod tvým vedením 🌹", "Naučit se ovládat své tělesné touhy 🛑", "Sloužit ti bez ohledu na vlastní stud ⛓️")
+            )
+            "ticha_panenka" -> CharacterBio(
+                lore = "Dívka, která po prožitém traumatu téměř ztratila řeč. Je jako tichý stín v tvém dominiu. Její poslušnost je naprosto bezmezná, komunikuje pouze pohledy a gesty.",
+                traits = listOf("Mlčenlivá 🤫", "Dokonale poslušná 🧘", "Nenápadná 👤", "Křehká 🕊️"),
+                goals = listOf("Nalézt mír a ochranu před světem 🌿", "Sloužit ti bez kladení jakýchkoli otázek 🔗", "Být ti tiše nablízku ✨")
+            )
+            "krvava_subka" -> CharacterBio(
+                lore = "Bolest a rozkoš jsou pro ni nerozlučně spojeny. Hledá pána, který dokáže otestovat její hranice a uvolnit její vnitřní plamen skrze utrpení.",
+                traits = listOf("Masochistická 🩸", "Extatická ☄️", "Dychtivá 🐾", "Nekontrolovatelná 🌪️"),
+                goals = listOf("Otestovat hranice své bolesti 🩹", "Být potrestána za každou maličkost ⛓️", "Odevzdat svou krev svému vládci 🩸")
+            )
+            "posedla" -> CharacterBio(
+                lore = "Něco hluboko v ní se zlomilo. Cítí se jako prázdná skořápka, kterou může naplnit pouze tvá mocná temná vůle. Chce být tvým nástrojem.",
+                traits = listOf("Prázdná 🫙", "Vnímavá 📡", "Stínová 👤", "Fixovaná 🎯"),
+                goals = listOf("Ztratit vlastní identitu ve tvé vůli 🔗", "Být dokonale naplněna tvou energií ⚡", "Sloužit jako tvé prodloužené rameno stínů 👁️")
+            )
+            else -> CharacterBio(
+                lore = "Dívka se silným odhodláním přizpůsobit se novému životu v temném dominiu. Hledá své místo pod sluncem a snaží se pochopit záměry svého vládce.",
+                traits = listOf("Přizpůsobivá 🛠️", "Opatrná 🐾", "Pozorující 👁️"),
+                goals = listOf("Přežít v tomto drsném světě 🛡️", "Pochopit povahu svého pána 🧠", "Nalézt přátele mezi ostatními dívkami 🤝")
+            )
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Portrait & Relationship Status Card (Dynamic Badge & Frame)
+        val tier = AffinityData.getTierForPoints(character.affinityPoints)
+        val tierColor = Color(tier.colorHex)
+        val portraitRes = StaticData.getPortraitForArchetype(character.archetypeId)
+
+        // Dynamic border styling based on tier level
+        val (borderWidth, borderBrush, frameGlow) = remember(tier.level) {
+            when {
+                tier.level >= 4 -> Triple(
+                    4.dp,
+                    Brush.sweepGradient(listOf(Color(0xFFFFD700), Color(0xFFFF4081), Color(0xFFFFD700))),
+                    Color(0xFFFF4081).copy(alpha = 0.3f)
+                )
+                tier.level >= 2 -> Triple(
+                    2.5.dp,
+                    Brush.linearGradient(listOf(Color(0xFFE0E0E0), Color(0xFF81C784), Color(0xFFE0E0E0))),
+                    Color(0xFF81C784).copy(alpha = 0.15f)
+                )
+                else -> Triple(
+                    1.5.dp,
+                    Brush.linearGradient(listOf(Color(0xFFCD7F32), Color(0xFF9E9E9E), Color(0xFFCD7F32))),
+                    Color.Transparent
+                )
+            }
+        }
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Portrait with Frame
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .graphicsLayer {
+                            shadowElevation = if (frameGlow != Color.Transparent) 12f else 0f
+                            spotShadowColor = frameGlow
+                            ambientShadowColor = frameGlow
+                        }
+                        .background(MaterialTheme.colorScheme.surface, CircleShape)
+                        .border(borderWidth, borderBrush, CircleShape)
+                        .padding(borderWidth + 1.dp)
+                        .clip(CircleShape)
+                ) {
+                    SubcomposeAsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(portraitRes)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = character.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                // Info & Badge Column
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = character.name,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    // Relationship Tier Badge
+                    Surface(
+                        color = tierColor.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, tierColor.copy(alpha = 0.4f)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.wrapContentWidth()
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(tier.icon, fontSize = 12.sp)
+                            Text(
+                                text = "Úroveň ${tier.level}: ${tier.title}",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                color = tierColor
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(2.dp))
+
+                    // Progress Bar of points inside current level
+                    val nextTier = AffinityData.TIERS.firstOrNull { it.level == tier.level + 1 }
+                    val progress = if (nextTier != null) {
+                        val currentSpan = (character.affinityPoints - tier.minPoints).toFloat()
+                        val totalSpan = (nextTier.minPoints - tier.minPoints).toFloat()
+                        (currentSpan / totalSpan).coerceIn(0f, 1f)
+                    } else 1.0f
+
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "💖 Náklonnost",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                            Text(
+                                text = "${character.affinityPoints} / ${nextTier?.minPoints ?: "Max"}",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = tierColor
+                            )
+                        }
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            color = tierColor,
+                            trackColor = tierColor.copy(alpha = 0.15f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                        )
+                    }
+                }
+            }
+        }
+
+        // Unique Lore Card
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "📖 Osobní historie a původ",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = bio.lore,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    lineHeight = 20.sp
+                )
+            }
+        }
+
+        // Personality Traits Card
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "🎭 Osobnostní rysy",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color(0xFFCE93D8)
+                )
+                
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(bio.traits) { trait ->
+                        SuggestionChip(
+                            onClick = {},
+                            label = { Text(trait, fontSize = 11.sp) }
+                        )
+                    }
+                }
+            }
+        }
+
+        // Personal Goals Card
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            shape = RoundedCornerShape(14.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "🎯 Osobní cíle v dominiu",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color(0xFF81C784)
+                )
+                bio.goals.forEach { goal ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("•", fontWeight = FontWeight.Bold, color = Color(0xFF81C784), fontSize = 16.sp)
+                        Text(
+                            text = goal,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        }
+
+        // Relationship History Card
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text = "📜 Historie vztahu a rozhodnutí",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color(0xFF64B5F6)
+                )
+
+                if (character.relationshipHistory.isEmpty()) {
+                    Text(
+                        text = "Zatím jste neučinili žádná významná rozhodnutí v rozhovorech s touto dívkou. Navštiv záložku Náklonnost a zahaj s ní interaktivní rozhovor.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        lineHeight = 18.sp
+                    )
+                } else {
+                    character.relationshipHistory.forEach { record ->
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Den ${record.day} • Volba Pána",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF64B5F6)
+                                    )
+                                    if (record.outcomeEffects.isNotEmpty()) {
+                                        Text(
+                                            text = record.outcomeEffects,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 10.sp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                                
+                                Text(
+                                    text = "„${record.prompt}“",
+                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                    lineHeight = 16.sp
+                                )
+
+                                Spacer(modifier = Modifier.height(2.dp))
+
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Text("👑", fontSize = 12.sp)
+                                    Column {
+                                        Text(
+                                            text = "Tvá odpověď:",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 10.sp,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                        )
+                                        Text(
+                                            text = record.choice,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
+
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Text("💬", fontSize = 12.sp)
+                                    Column {
+                                        Text(
+                                            text = "Reakce dívky:",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 10.sp,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                        )
+                                        Text(
+                                            text = record.feedback,
+                                            fontSize = 11.sp,
+                                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+data class CharacterBio(
+    val lore: String,
+    val traits: List<String>,
+    val goals: List<String>
+)
 
 @Composable
 fun ProfileAndStatsTab(
@@ -336,6 +780,12 @@ fun ProfileAndStatsTab(
 
         // Quick Affinity Preview Card
         val affinityTier = AffinityData.getTierForPoints(character.affinityPoints)
+        val scaleAnim = remember { androidx.compose.animation.core.Animatable(1f) }
+        LaunchedEffect(character.affinityPoints) {
+            scaleAnim.animateTo(1.15f, animationSpec = androidx.compose.animation.core.tween(150))
+            scaleAnim.animateTo(0.95f, animationSpec = androidx.compose.animation.core.tween(100))
+            scaleAnim.animateTo(1f, animationSpec = androidx.compose.animation.core.tween(100))
+        }
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
             shape = RoundedCornerShape(12.dp)
@@ -363,7 +813,11 @@ fun ProfileAndStatsTab(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp)),
+                        .clip(RoundedCornerShape(3.dp))
+                        .graphicsLayer {
+                            scaleX = scaleAnim.value
+                            scaleY = scaleAnim.value
+                        },
                     color = Color(affinityTier.colorHex)
                 )
                 Text("💭 \"${AffinityData.getRandomActiveDialogue(character)}\"", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f), fontWeight = FontWeight.Medium)
@@ -459,7 +913,7 @@ fun ProfileAndStatsTab(
 }
 
 @Composable
-fun AffinityAndDialogueTab(character: Character) {
+fun AffinityAndDialogueTab(character: Character, engine: GameEngine? = null) {
     val tier = AffinityData.getTierForPoints(character.affinityPoints)
     val nextTier = AffinityData.TIERS.firstOrNull { it.level == tier.level + 1 }
     val progressInTier = if (nextTier != null) {
@@ -592,6 +1046,192 @@ fun AffinityAndDialogueTab(character: Character) {
                 }
             }
         }
+
+        // --- BRANCHING DIALOGUE MINI-GAME ---
+        var activeScenario by remember(character.id) { mutableStateOf<com.example.haremdark.data.DialogueScenario?>(null) }
+        var currentFeedback by remember(character.id) { mutableStateOf<String?>(null) }
+        var selectedOptionIdx by remember(character.id) { mutableStateOf<Int?>(null) }
+        var showOutcome by remember(character.id) { mutableStateOf(false) }
+
+        var shakeX by remember { mutableStateOf(0f) }
+        var shakeY by remember { mutableStateOf(0f) }
+        var shakeTrigger by remember { mutableStateOf(0) }
+
+        LaunchedEffect(shakeTrigger) {
+            if (shakeTrigger > 0) {
+                val strength = 8f
+                repeat(8) { i ->
+                    shakeX = if (i % 2 == 0) strength else -strength
+                    shakeY = if (i % 2 == 1) strength / 1.5f else -strength / 1.5f
+                    delay(40)
+                }
+                shakeX = 0f
+                shakeY = 0f
+            }
+        }
+
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            ),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset(x = shakeX.dp, y = shakeY.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "🗣️ Interaktivní Rozhovor",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color(0xFFFF80AB)
+                    )
+                    if (activeScenario == null && !showOutcome) {
+                        Button(
+                            onClick = {
+                                activeScenario = com.example.haremdark.data.AffinityData.getScenarioForArchetype(character.archetypeId, character.name)
+                                selectedOptionIdx = null
+                                currentFeedback = null
+                                showOutcome = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF80AB)),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Text("Zahájit rozhovor 💬", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                if (activeScenario != null) {
+                    Text(
+                        text = activeScenario!!.prompt,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        lineHeight = 20.sp,
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                            .padding(10.dp)
+                    )
+
+                    Text(
+                        text = "Vyber si svou odpověď jako Pán:",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    activeScenario!!.options.forEachIndexed { idx, option ->
+                        Card(
+                            onClick = {
+                                selectedOptionIdx = idx
+                                currentFeedback = option.feedback
+                                showOutcome = true
+                                val finalPrompt = activeScenario!!.prompt
+                                activeScenario = null
+                                shakeTrigger++
+                                
+                                val effectsList = mutableListOf<String>()
+                                if (option.affinity != 0) effectsList.add("💖 ${if (option.affinity > 0) "+" else ""}${option.affinity}")
+                                if (option.loyalty != 0) effectsList.add("👑 ${if (option.loyalty > 0) "+" else ""}${option.loyalty}")
+                                if (option.trust != 0) effectsList.add("🤝 ${if (option.trust > 0) "+" else ""}${option.trust}")
+                                if (option.submissiveness != 0) effectsList.add("⛓️ ${if (option.submissiveness > 0) "+" else ""}${option.submissiveness}")
+                                if (option.fear != 0) effectsList.add("😨 ${if (option.fear > 0) "+" else ""}${option.fear}")
+                                if (option.broken != 0) effectsList.add("💀 ${if (option.broken > 0) "+" else ""}${option.broken}")
+                                val outcomeEffects = effectsList.joinToString(", ")
+
+                                val logText = "★ Rozhovor s ${character.name}: vybrána možnost „${option.text}“ -> ${option.feedback}"
+                                engine?.applyDialogueChoiceOutcome(
+                                    characterId = character.id,
+                                    affinityGain = option.affinity,
+                                    loyaltyGain = option.loyalty,
+                                    trustGain = option.trust,
+                                    submissivenessGain = option.submissiveness,
+                                    fearGain = option.fear,
+                                    brokenGain = option.broken,
+                                    logText = logText,
+                                    prompt = finalPrompt,
+                                    optionText = option.text,
+                                    feedback = option.feedback,
+                                    outcomeEffects = outcomeEffects
+                                )
+                            },
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surface
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(text = option.text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    if (option.affinity != 0) Text("💖 ${if (option.affinity > 0) "+" else ""}${option.affinity}", fontSize = 10.sp, color = Color(0xFFFF80AB), fontWeight = FontWeight.Bold)
+                                    if (option.loyalty != 0) Text("👑 ${if (option.loyalty > 0) "+" else ""}${option.loyalty}", fontSize = 10.sp, color = Color(0xFFFFD700), fontWeight = FontWeight.Bold)
+                                    if (option.trust != 0) Text("🤝 ${if (option.trust > 0) "+" else ""}${option.trust}", fontSize = 10.sp, color = Color(0xFF8BC34A), fontWeight = FontWeight.Bold)
+                                    if (option.submissiveness != 0) Text("⛓️ ${if (option.submissiveness > 0) "+" else ""}${option.submissiveness}", fontSize = 10.sp, color = Color(0xFF9C27B0), fontWeight = FontWeight.Bold)
+                                    if (option.fear != 0) Text("😨 ${if (option.fear > 0) "+" else ""}${option.fear}", fontSize = 10.sp, color = Color(0xFFFF9800), fontWeight = FontWeight.Bold)
+                                    if (option.broken != 0) Text("💀 ${if (option.broken > 0) "+" else ""}${option.broken}", fontSize = 10.sp, color = Color(0xFF7E57C2), fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                } else if (showOutcome && currentFeedback != null) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF81C784).copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                            .border(1.dp, Color(0xFF81C784).copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "Důsledky tvého rozhodnutí:",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = Color(0xFF81C784)
+                        )
+                        Text(
+                            text = currentFeedback!!,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Button(
+                            onClick = { showOutcome = false; currentFeedback = null },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF81C784)),
+                            modifier = Modifier.align(Alignment.End).height(28.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                        ) {
+                            Text("Rozumím", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "Vstup do interaktivního, větveného rozhovoru se svou dívkou. Tvé odpovědi ovlivní její pocity, věrnost, strach i oddanost na základě její jedinečné povahy a archetypu.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        lineHeight = 16.sp
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Roadmap of Milestones & Rewards
         Text("🗺️ Cesta náklonnosti a odměny:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
@@ -1681,6 +2321,13 @@ fun AffinityProgressBarComponent(character: Character, modifier: Modifier = Modi
 
     val pointsNeeded = if (nextTier != null) nextTier.minPoints - character.affinityPoints else 0
 
+    val scaleAnim = remember { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(character.affinityPoints) {
+        scaleAnim.animateTo(1.15f, animationSpec = androidx.compose.animation.core.tween(150))
+        scaleAnim.animateTo(0.95f, animationSpec = androidx.compose.animation.core.tween(100))
+        scaleAnim.animateTo(1f, animationSpec = androidx.compose.animation.core.tween(100))
+    }
+
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -1743,6 +2390,10 @@ fun AffinityProgressBarComponent(character: Character, modifier: Modifier = Modi
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(8.dp)
+                    .graphicsLayer {
+                        scaleX = scaleAnim.value
+                        scaleY = scaleAnim.value
+                    }
                     .clip(RoundedCornerShape(4.dp))
                     .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
             ) {

@@ -61,6 +61,9 @@ class GameEngine(private val context: Context) {
     private val _currentTheme = MutableStateFlow("Temné dominium")
     val currentTheme: StateFlow<String> = _currentTheme.asStateFlow()
 
+    private val _isLightMode = MutableStateFlow(false)
+    val isLightMode: StateFlow<Boolean> = _isLightMode.asStateFlow()
+
 
     private val _dailyRewardAvailable = MutableStateFlow<DailyRewardState?>(null)
     val dailyRewardAvailable: StateFlow<DailyRewardState?> = _dailyRewardAvailable.asStateFlow()
@@ -148,6 +151,7 @@ class GameEngine(private val context: Context) {
 
     init {
         _currentTheme.value = _gameState.value.currentTheme
+        _isLightMode.value = _gameState.value.isLightMode
         
                 kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             val savedState = loadStateSuspend("save_slot_autosave") 
@@ -156,6 +160,7 @@ class GameEngine(private val context: Context) {
             if (savedState != null) {
                 _gameState.value = savedState
                 _currentTheme.value = savedState.currentTheme
+                _isLightMode.value = savedState.isLightMode
             }
             
             checkDailyLogin()
@@ -439,6 +444,12 @@ class GameEngine(private val context: Context) {
     fun setTheme(themeName: String) {
         _currentTheme.value = themeName
         updateState { it.copy(currentTheme = themeName) }
+        saveToSlot(slot = it_slot_number)
+    }
+
+    fun setLightMode(enabled: Boolean) {
+        _isLightMode.value = enabled
+        updateState { it.copy(isLightMode = enabled) }
         saveToSlot(slot = it_slot_number)
     }
 
@@ -895,6 +906,86 @@ class GameEngine(private val context: Context) {
         }
         
         return Pair(true, fullMessage)
+    }
+
+    fun applyDialogueChoiceOutcome(
+        characterId: String,
+        affinityGain: Int,
+        loyaltyGain: Int,
+        trustGain: Int,
+        submissivenessGain: Int,
+        fearGain: Int,
+        brokenGain: Int,
+        logText: String,
+        prompt: String = "",
+        optionText: String = "",
+        feedback: String = "",
+        outcomeEffects: String = ""
+    ): Pair<Boolean, String> {
+        val current = _gameState.value
+        val character = current.characters.firstOrNull { it.id == characterId }
+            ?: return Pair(false, "Dívka nebyla nalezena.")
+
+        if (prompt.isNotEmpty()) {
+            character.relationshipHistory.add(
+                com.example.haremdark.models.RelationshipRecord(
+                    day = current.player.day,
+                    prompt = prompt,
+                    choice = optionText,
+                    feedback = feedback,
+                    outcomeEffects = outcomeEffects
+                )
+            )
+        }
+
+        val prevAffinityLevel = character.affinityLevel
+
+        character.affinityPoints = (character.affinityPoints + affinityGain).coerceAtLeast(0)
+        character.loajalita = (character.loajalita + loyaltyGain).coerceIn(0, 100)
+        character.duvera = (character.duvera + trustGain).coerceIn(0, 100)
+        character.submisivita = (character.submisivita + submissivenessGain).coerceIn(0, 100)
+        character.strach = (character.strach + fearGain).coerceIn(0, 100)
+        character.broken = (character.broken + brokenGain).coerceIn(0, 100)
+
+        val newAffinityLevel = com.example.haremdark.data.AffinityData.getLevelForPoints(character.affinityPoints)
+        character.affinityLevel = newAffinityLevel
+        if (affinityGain > 0) {
+            character.affinityHistory.add(AffinityPointRecord(current.player.day, character.affinityPoints, "Rozhovor (+$affinityGain pts)"))
+        }
+
+        // Recalculate degradation phase
+        val newPhase = StaticData.calculatePhase(
+            broken = character.broken,
+            mindbreak = character.mindbreak,
+            poslusnost = character.poslusnost,
+            loajalita = character.loajalita,
+            painAddiction = character.painAddiction,
+            scarred = character.scarred,
+            touha = character.touha,
+            humiliation = character.humiliation,
+            zavislost = character.zavislost,
+            age = character.age,
+            pregnant = character.tehotna
+        )
+        if (newPhase > character.fazeZkazenosti) {
+            character.fazeZkazenosti = newPhase
+            addLog("★ ${character.name} postoupila do fáze zkázanosti: ${StaticData.DEGRADATION_PHASES[newPhase]?.name ?: "$newPhase"}!")
+        }
+
+        addLog(logText)
+        updateState { it.copy() }
+
+        if (newAffinityLevel > prevAffinityLevel) {
+            SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
+            com.example.haremdark.domain.VoiceManager.playTriggerVoice(
+                com.example.haremdark.domain.VoiceTriggerType.AFFINITY_LEVEL_UP,
+                character
+            )
+        } else {
+            SoundEffectManager.playHarem(HaremSound.FLIRT)
+        }
+
+        return Pair(true, logText)
     }
 
     fun setFavorite(characterId: String): String {
@@ -3422,6 +3513,7 @@ class GameEngine(private val context: Context) {
         val loaded = loadStateSuspend(key) ?: return false
         _gameState.value = loaded
         _currentTheme.value = loaded.currentTheme
+        _isLightMode.value = loaded.isLightMode
         addLog("📂 Hra načtena ze slotu $slot.")
         return true
     }

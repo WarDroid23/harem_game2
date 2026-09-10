@@ -42,15 +42,17 @@ object StaticData {
         "nymfomanka" to CharacterArchetype("nymfomanka", "Nymfomanka", "Tělo ji zrazuje. Touha je silnější než pýcha.", 1.1f, 0.95f, 1.0f, 0.7f, 1.6f, 1.4f, 1.0f, 1.0f, 1.0f, 1.0f, 0.85f, 1.5f, 0.04f),
         "ticha_panenka" to CharacterArchetype("ticha_panenka", "Tichá panenka", "Mluví málo. Dokonalá, tichá hračka v rukou pána.", 1.2f, 1.15f, 0.9f, 1.1f, 1.0f, 1.0f, 1.0f, 1.0f, 1.2f, 1.0f, 1.15f, 1.1f, 0.03f),
         "krvava_subka" to CharacterArchetype("krvava_subka", "Krvavá subka", "Bolest ji vzrušuje. Čím víc ran, tím víc se otevírá.", 1.25f, 1.0f, 1.0f, 0.6f, 1.15f, 1.0f, 1.0f, 1.5f, 1.0f, 1.2f, 1.4f, 0.9f, 0.02f),
-        "posedla" to CharacterArchetype("posedla", "Posedlá", "Něco v ní se zlomilo. Hledá pána, který ji dokončí.", 1.3f, 1.2f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.25f, 1.0f, 1.35f, 1.2f, 0.01f)
+        "posedla" to CharacterArchetype("posedla", "Posedlá", "Něco v ní se zlomilo. Hledá pána, který ji dokončí.", 1.3f, 1.2f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.25f, 1.0f, 1.35f, 1.2f, 0.01f),
+        "sukuba" to CharacterArchetype("sukuba", "Zajatá sukuba", "Démonická svůdnice poháněná touhou. Nyní slouží tvým stínům.", 1.1f, 0.8f, 0.8f, 0.9f, 1.6f, 1.5f, 1.2f, 1.0f, 1.0f, 1.0f, 0.9f, 1.4f, 0.04f),
+        "draci_divka" to CharacterArchetype("draci_divka", "Dračí princezna", "Poslední z dračího klanu. Její hrdost žhne, ale loajalita je neochvějná.", 0.7f, 0.6f, 1.2f, 0.6f, 1.1f, 1.0f, 1.0f, 1.2f, 1.0f, 1.1f, 0.8f, 1.1f, 0.10f)
     )
 
     fun getPortraitForArchetype(archetypeId: String): Int {
         return when (archetypeId) {
             "subka", "ustrasena", "ticha_panenka" -> R.drawable.portrait_submissive
             "slechticna", "manipulativni", "chladna" -> R.drawable.portrait_noble
-            "touha", "nymfomanka", "posedla", "hysterialni" -> R.drawable.portrait_sorceress
-            "odvazna", "vzdorna", "krvava_subka", "zlomena" -> R.drawable.portrait_warrior
+            "touha", "nymfomanka", "posedla", "hysterialni", "sukuba" -> R.drawable.portrait_sorceress
+            "odvazna", "vzdorna", "krvava_subka", "zlomena", "draci_divka" -> R.drawable.portrait_warrior
             else -> R.drawable.portrait_submissive
         }
     }
@@ -237,6 +239,32 @@ object StaticData {
             recruitmentHint = "Taverna v přístavní čtvrti",
             difficulty = "Střední",
             perk = "Vysoké skoky v touze a rozkoši"
+        ),
+        GalleryArchetypeEntry(
+            archetypeId = "sukuba",
+            title = "Démonická sukuba",
+            subtitle = "Zajatá svůdnice z jiného světa",
+            drawableRes = R.drawable.portrait_sorceress,
+            accentColor = 0xFFD500F9,
+            loreDescription = "Démonická svůdnice, která se živí touhou a hříchem. Její přítomnost rozpaluje celý harém, ale její podmanění vyžaduje pevnou vůli pána.",
+            favoriteGifts = listOf("Elixír touhy", "Hedvábné prádlo", "Klenot stínů"),
+            quote = "„Myslíš, že jsi mým pánem? Tvou životní sílu si ráda vezmu, ale tvým rozkazům se podvolím... prozatím.“",
+            recruitmentHint = "Vyvolání rituálem v Ruinách starého chrámu",
+            difficulty = "Těžká",
+            perk = "+30% Regenerace sexuální energie a +15% zisk bodů náklonnosti"
+        ),
+        GalleryArchetypeEntry(
+            archetypeId = "draci_divka",
+            title = "Dračí princezna",
+            subtitle = "Poslední svého druhu se žhnoucí krví",
+            drawableRes = R.drawable.portrait_warrior,
+            accentColor = 0xFFFF3D00,
+            loreDescription = "Poslední dědička dračího klanu. Její hrdost žhne jako oheň v krbu, ale pokud se podvolí tvé moci, bude tě bránit do posledního dechu.",
+            favoriteGifts = listOf("Ocelový náramek", "Silné víno", "Rubínový přívěsek"),
+            quote = "„Můj oheň spálí každého, kdo se mě dotkne bez mého svolení... Ale tebe, můj pane, nechám cítit mé teplo.“",
+            recruitmentHint = "Lov na Dračím vrcholu nebo porážka bossů",
+            difficulty = "Legendární",
+            perk = "+20 Útočné sily v soubojích a +15% k celkové obraně týmu"
         )
     )
 
