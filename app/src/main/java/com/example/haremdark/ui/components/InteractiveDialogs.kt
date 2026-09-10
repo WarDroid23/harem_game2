@@ -468,6 +468,38 @@ fun BioTab(character: Character) {
                         }
                     }
 
+                    // Mood Indicator Badge
+                    val (moodText, moodColor, moodIcon) = remember(character.nalada) {
+                        when (character.nalada.lowercase()) {
+                            "veselá", "happy" -> Triple("Veselá (+25% dárky)", Color(0xFF81C784), "🌟")
+                            "rozmarná", "playful" -> Triple("Rozmarná (+10% dárky)", Color(0xFF64B5F6), "🍓")
+                            "znuděná", "bored" -> Triple("Znuděná (-20% dárky)", Color(0xFFFFB74D), "💤")
+                            "rozzlobená", "angry" -> Triple("Rozzlobená (-40% dárky)", Color(0xFFE57373), "⚡")
+                            else -> Triple("Neutrální", Color(0xFF9E9E9E), "😐")
+                        }
+                    }
+
+                    Surface(
+                        color = moodColor.copy(alpha = 0.12f),
+                        border = BorderStroke(1.dp, moodColor.copy(alpha = 0.35f)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.wrapContentWidth()
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(moodIcon, fontSize = 12.sp)
+                            Text(
+                                text = "Nálada: $moodText",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                color = moodColor
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(2.dp))
 
                     // Progress Bar of points inside current level
@@ -1123,12 +1155,65 @@ fun AffinityAndDialogueTab(character: Character, engine: GameEngine? = null) {
                             .padding(10.dp)
                     )
 
-                    Text(
-                        text = "Vyber si svou odpověď jako Pán:",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Vyber si svou odpověď jako Pán:",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        Button(
+                            onClick = {
+                                val idx = 0
+                                val option = activeScenario!!.options[idx]
+                                selectedOptionIdx = idx
+                                currentFeedback = option.feedback
+                                showOutcome = true
+                                val finalPrompt = activeScenario!!.prompt
+                                activeScenario = null
+                                shakeTrigger++
+                                
+                                val effectsList = mutableListOf<String>()
+                                if (option.affinity != 0) effectsList.add("💖 ${if (option.affinity > 0) "+" else ""}${option.affinity}")
+                                if (option.loyalty != 0) effectsList.add("👑 ${if (option.loyalty > 0) "+" else ""}${option.loyalty}")
+                                if (option.trust != 0) effectsList.add("🤝 ${if (option.trust > 0) "+" else ""}${option.trust}")
+                                if (option.submissiveness != 0) effectsList.add("⛓️ ${if (option.submissiveness > 0) "+" else ""}${option.submissiveness}")
+                                if (option.fear != 0) effectsList.add("😨 ${if (option.fear > 0) "+" else ""}${option.fear}")
+                                if (option.broken != 0) effectsList.add("💀 ${if (option.broken > 0) "+" else ""}${option.broken}")
+                                val outcomeEffects = effectsList.joinToString(", ")
+
+                                val logText = "★ Rozhovor s ${character.name}: vybrána možnost „${option.text}“ -> ${option.feedback}"
+                                engine?.applyDialogueChoiceOutcome(
+                                    characterId = character.id,
+                                    affinityGain = option.affinity,
+                                    loyaltyGain = option.loyalty,
+                                    trustGain = option.trust,
+                                    submissivenessGain = option.submissiveness,
+                                    fearGain = option.fear,
+                                    brokenGain = option.broken,
+                                    logText = logText,
+                                    prompt = finalPrompt,
+                                    optionText = option.text,
+                                    feedback = option.feedback,
+                                    outcomeEffects = outcomeEffects
+                                )
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFD32F2F).copy(alpha = 0.85f),
+                                contentColor = Color.White
+                            ),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            modifier = Modifier.height(26.dp),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text("⚡ Přeskočit", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
 
                     activeScenario!!.options.forEachIndexed { idx, option ->
                         Card(

@@ -184,13 +184,37 @@ fun HaremSpecialEventDialog(
                             }
                         }
 
-                        IconButton(
-                            onClick = onDismiss,
-                            modifier = Modifier
-                                .size(32.dp)
-                                .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Zavřít", tint = Color.White, modifier = Modifier.size(18.dp))
+                            if (selectedChoice == null && event.dialogueSequence.options.isNotEmpty()) {
+                                Button(
+                                    onClick = {
+                                        SoundEffectManager.playAffinityGain()
+                                        selectedChoice = event.dialogueSequence.options.first()
+                                        shakeTrigger++
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFFD32F2F),
+                                        contentColor = Color.White
+                                    ),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                    modifier = Modifier.height(30.dp),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("⚡ Přeskočit dialog", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            IconButton(
+                                onClick = onDismiss,
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Zavřít", tint = Color.White, modifier = Modifier.size(18.dp))
+                            }
                         }
                     }
 

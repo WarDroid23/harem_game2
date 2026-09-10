@@ -509,8 +509,10 @@ class GameEngine(private val context: Context) {
 
             // Process slave rentals
             var rentalIncome = 0
+            val moodsList = listOf("veselá", "rozmarná", "neutrální", "znuděná", "rozzlobená")
             val updatedCharacters = current.characters.map { c ->
                 val copy = c.copy()
+                copy.nalada = moodsList.random()
                 val rel = copy.getRelationship()
                 if (copy.naNajmu) {
                     var dailyIncome = when (copy.klient) {
@@ -2248,7 +2250,15 @@ class GameEngine(private val context: Context) {
         val singleDesire = gift.calculateDesireGain(character.archetypeId)
         val singleTrust = gift.calculateTrustGain(character.archetypeId)
 
-        val totalAffinity = singleAffinity * count
+        val moodMultiplier = when (character.nalada.lowercase()) {
+            "veselá", "happy" -> 1.25f
+            "rozmarná", "playful" -> 1.10f
+            "znuděná", "bored" -> 0.80f
+            "rozzlobená", "angry" -> 0.60f
+            else -> 1.00f
+        }
+
+        val totalAffinity = (singleAffinity * count * moodMultiplier).toInt().coerceAtLeast(1)
         val totalLoyalty = singleLoyalty * count
         val totalDesire = singleDesire * count
         val totalTrust = singleTrust * count
@@ -2264,7 +2274,14 @@ class GameEngine(private val context: Context) {
             "\n🌟 Pouto posíleno! ${character.name} dosáhla úrovně ${tierInfo.level}: ${tierInfo.title}! ${tierInfo.combatBonusDescription}"
         } else ""
 
-        val actionLog = "🎁 Darováno $count× ${gift.name} (${gift.icon}) pro ${character.name} (+$totalAffinity nákl., +$totalLoyalty loaj., +$totalDesire touha)$levelUpMsg"
+        val moodLabel = when (character.nalada.lowercase()) {
+            "veselá", "happy" -> " (veselá: +25% nákl.)"
+            "rozmarná", "playful" -> " (rozmarná: +10% nákl.)"
+            "znuděná", "bored" -> " (znuděná: -20% nákl.)"
+            "rozzlobená", "angry" -> " (rozzlobená: -40% nákl.)"
+            else -> ""
+        }
+        val actionLog = "🎁 Darováno $count× ${gift.name} (${gift.icon}) pro ${character.name} (+$totalAffinity nákl.$moodLabel, +$totalLoyalty loaj., +$totalDesire touha)$levelUpMsg"
 
         updateState { state ->
             val updatedItems = state.player.items.mapNotNull { item ->
