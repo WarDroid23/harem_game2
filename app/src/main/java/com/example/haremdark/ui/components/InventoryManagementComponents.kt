@@ -1339,8 +1339,20 @@ private fun InventoryItemCard(
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, false)
                     )
+                    IconButton(
+                        onClick = onToggleFavorite,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (item.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = "Oblíbené (Chráněno)",
+                            tint = if (item.isFavorite) Color(0xFFFF4081) else Color.Gray,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
 
                 // Badges Row: Category, Origin, Location, Affinity Bonus

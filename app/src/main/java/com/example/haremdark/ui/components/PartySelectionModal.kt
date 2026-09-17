@@ -29,6 +29,7 @@ import coil.request.ImageRequest
 import com.example.haremdark.data.AffinityData
 import com.example.haremdark.data.PartyCombatCatalog
 import com.example.haremdark.data.StaticData
+import com.example.haremdark.domain.GameEngine
 import com.example.haremdark.models.Character
 import com.example.haremdark.models.CombatRole
 import com.example.haremdark.models.GameSave
@@ -36,13 +37,20 @@ import com.example.haremdark.models.GameSave
 @Composable
 fun PartySelectionDialog(
     gameState: GameSave,
+    engine: GameEngine,
     preselectedEncounter: PartyCombatCatalog.PartyEncounterDefinition?,
     onDismiss: () -> Unit,
-    onStartCombat: (selectedGirlIds: List<String>, includePlayer: Boolean, encounter: PartyCombatCatalog.PartyEncounterDefinition) -> Unit
+    onStartCombat: (selectedGirlIds: List<String>, includePlayer: Boolean, encounter: PartyCombatCatalog.PartyEncounterDefinition) -> Unit,
+    onSaveFormation: ((name: String, icon: String, memberIds: List<String>, includePlayer: Boolean) -> Unit)? = null,
+    onDeleteFormation: ((id: String) -> Unit)? = null
 ) {
     var selectedEncounter by remember {
         mutableStateOf(preselectedEncounter ?: PartyCombatCatalog.ENCOUNTERS.first())
     }
+
+    var showSaveFormationDialog by remember { mutableStateOf(false) }
+    var formationNameInput by remember { mutableStateOf("Boss Squad") }
+    var formationIconInput by remember { mutableStateOf("🐉") }
 
     // Default select up to 3 healthiest girls
     val availableGirls = remember(gameState.characters) {
@@ -126,6 +134,68 @@ fun PartySelectionDialog(
                                 Column {
                                     Text(encounter.title, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = if (isSelected) Color(0xFFFFD700) else Color.White, maxLines = 1)
                                     Text(encounter.tierName, fontSize = 9.sp, color = Color(0xFFB0BEC5))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // --- SAVED PARTY FORMATIONS CAROUSEL ---
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("🛡️ Uložené formace týmu:", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFFFFD700))
+                    TextButton(
+                        onClick = { showSaveFormationDialog = true },
+                        contentPadding = PaddingValues(4.dp)
+                    ) {
+                        Icon(Icons.Default.BookmarkAdd, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFFFF4081))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Uložit aktuální", fontSize = 10.sp, color = Color(0xFFFF4081))
+                    }
+                }
+
+                val allFormations = remember(gameState.savedPartyFormations) {
+                    val defaultPresets = listOf(
+                        com.example.haremdark.models.PartyFormation("preset_1", "Úderná trojka", "⚔️", availableGirls.take(3).map { it.id }, true),
+                        com.example.haremdark.models.PartyFormation("preset_2", "Obranná falanga", "🛡️", availableGirls.take(3).map { it.id }, false)
+                    )
+                    defaultPresets + gameState.savedPartyFormations
+                }
+
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(allFormations) { formation ->
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF261536),
+                            border = BorderStroke(1.dp, Color(0xFF9C27B0).copy(alpha = 0.5f)),
+                            modifier = Modifier.clickable {
+                                selectedGirls = formation.memberIds.filter { id -> availableGirls.any { it.id == id } }
+                                includePlayer = formation.includePlayer
+                            }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(formation.icon, fontSize = 14.sp)
+                                Column {
+                                    Text(formation.name, fontWeight = FontWeight.Bold, fontSize = 10.sp, color = Color.White, maxLines = 1)
+                                    Text("${formation.memberIds.size} hrdinek", fontSize = 8.sp, color = Color(0xFFB39DDB))
+                                }
+                                if (!formation.id.startsWith("preset_")) {
+                                    IconButton(
+                                        onClick = { onDeleteFormation?.invoke(formation.id) },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Smazat", tint = Color.Gray, modifier = Modifier.size(12.dp))
+                                    }
                                 }
                             }
                         }
@@ -367,4 +437,222 @@ fun PartySelectionDialog(
             }
         }
     }
+
+    if (showSaveFormationDialog) {
+        AlertDialog(
+            onDismissRequest = { showSaveFormationDialog = false },
+            title = { Text("Uložit bojovou formaci", color = Color.White, fontSize = 14.sp) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = formationNameInput,
+                        onValueChange = { formationNameInput = it },
+                        label = { Text("Název formace") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = formationIconInput,
+                        onValueChange = { formationIconInput = it },
+                        label = { Text("Ikona / Emoji") },
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onSaveFormation?.invoke(formationNameInput, formationIconInput, selectedGirls, includePlayer)
+                        showSaveFormationDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7B1FA2))
+                ) {
+                    Text("Uložit")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSaveFormationDialog = false }) {
+                    Text("Zrušit", color = Color.Gray)
+                }
+            },
+            containerColor = Color(0xFF1E122B)
+        )
+    }
 }
+
+@Composable
+fun CompanionEquipmentCard(
+    char: Character,
+    engine: GameEngine,
+    gameState: GameSave
+) {
+    var showEquipment by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val combatBonus = char.equipment.values.filterNotNull().sumOf { it.combatBonus }
+                val defBonus = char.equipment.values.filterNotNull().sumOf { it.defenseBonus }
+                if (combatBonus > 0 || defBonus > 0) {
+                    Text("⚔️ +$combatBonus | 🛡️ +$defBonus", fontSize = 9.sp, color = Color(0xFFFFD700))
+                }
+            }
+
+            TextButton(
+                onClick = { showEquipment = !showEquipment },
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = if (showEquipment) "Skrýt výbavu ▲" else "🛡️ Výbava ▼",
+                    fontSize = 10.sp,
+                    color = Color(0xFFFF80AB)
+                )
+            }
+        }
+
+        if (showEquipment) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF140810), RoundedCornerShape(8.dp))
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                val equippedItems = char.equipment.values.filterNotNull()
+                val matchingSetCount = equippedItems.groupBy { it.source }.entries.maxByOrNull { it.value.size }?.let { if (it.value.size >= 2) it.value.size else 0 } ?: 0
+                if (matchingSetCount >= 2) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFF673AB7).copy(alpha = 0.3f),
+                        border = BorderStroke(1.dp, Color(0xFFE040FB)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text("✨", fontSize = 12.sp)
+                            Column {
+                                Text("Aktivní set výbavy (${matchingSetCount}ks ze stejného zdroje)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE040FB))
+                                Text("Bonus: +15% Útok & +15% Obrana", fontSize = 9.sp, color = Color(0xFFFFD700))
+                            }
+                        }
+                    }
+                }
+                val slots = listOf(
+                    "weapon" to "Zbraň 🗡️",
+                    "accessory" to "Doplněk 💍",
+                    "armor" to "Zbroj 🛡️"
+                )
+
+                for ((slotId, slotName) in slots) {
+                    val equippedItem = char.equipment[slotId]
+                    val availableItems = gameState.player.items.filter { it.category == "equipment" && it.equipSlot == slotId && it.count > 0 }
+                    var showSlotPicker by remember { mutableStateOf(false) }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFF220A17), RoundedCornerShape(6.dp))
+                            .padding(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(equippedItem?.icon ?: "⭕", fontSize = 16.sp)
+                            Column {
+                                Text(slotName, fontSize = 9.sp, color = Color(0xFFB39DDB))
+                                Text(
+                                    text = equippedItem?.name ?: "Prázdno",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp,
+                                    color = if (equippedItem != null) Color(0xFFFF80AB) else Color.Gray
+                                )
+                                if (equippedItem != null && !equippedItem.effectDescription.isNullOrEmpty()) {
+                                    Text(
+                                        text = equippedItem.effectDescription,
+                                        fontSize = 9.sp,
+                                        color = Color(0xFF00E5FF)
+                                    )
+                                }
+                            }
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (equippedItem != null) {
+                                TextButton(
+                                    onClick = { engine.unequipItemFromCharacter(char.id, slotId) },
+                                    contentPadding = PaddingValues(4.dp),
+                                    modifier = Modifier.height(24.dp)
+                                ) {
+                                    Text("Odebrat", fontSize = 9.sp, color = Color(0xFFFF5252))
+                                }
+                            }
+                            Button(
+                                onClick = { showSlotPicker = true },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(24.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7B1FA2))
+                            ) {
+                                Text(if (equippedItem != null) "Změnit" else "Vybavit", fontSize = 9.sp)
+                            }
+                        }
+                    }
+
+                    if (showSlotPicker) {
+                        AlertDialog(
+                            onDismissRequest = { showSlotPicker = false },
+                            title = { Text("Vyber předmět pro: $slotName", color = Color.White, fontSize = 14.sp) },
+                            text = {
+                                if (availableItems.isEmpty()) {
+                                    Text("Nemáš v inventáři žádné volné předměty pro tento slot.", color = Color.Gray, fontSize = 12.sp)
+                                } else {
+                                    LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        items(availableItems) { item ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(Color(0xFF2B1638))
+                                                    .clickable {
+                                                        engine.equipItemToCharacter(char.id, item.id, slotId)
+                                                        showSlotPicker = false
+                                                    }
+                                                    .padding(8.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Text(item.icon, fontSize = 20.sp)
+                                                    Column {
+                                                        Text(item.name, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
+                                                        Text(item.effectDescription ?: "", fontSize = 10.sp, color = Color(0xFF00E5FF))
+                                                    }
+                                                }
+                                                Text("Vybavit", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFD700))
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showSlotPicker = false }) {
+                                    Text("Zavřít", color = Color.Gray)
+                                }
+                            },
+                            containerColor = Color(0xFF160D1E)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+

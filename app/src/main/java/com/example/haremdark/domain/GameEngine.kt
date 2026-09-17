@@ -4648,6 +4648,43 @@ class GameEngine(private val context: Context) {
         return removed
     }
 
+    fun getAllPartyFormations(): List<PartyFormation> {
+        val defaultFormations = listOf(
+            PartyFormation("default_strike", "Úderná jednotka", "⚔️", _gameState.value.characters.take(3).map { it.id }, true),
+            PartyFormation("default_boss", "Boss Squad", "🐉", _gameState.value.characters.sortedByDescending { (it.skills["combat"] ?: 0) + it.affinityPoints }.take(3).map { it.id }, true)
+        )
+        return defaultFormations + _gameState.value.savedPartyFormations
+    }
+
+    fun savePartyFormation(name: String, icon: String, memberIds: List<String>, includePlayer: Boolean): PartyFormation {
+        val formation = PartyFormation(
+            id = "formation_${System.currentTimeMillis()}",
+            name = name.ifBlank { "Vlastní formace" },
+            icon = icon.ifBlank { "🛡️" },
+            memberIds = memberIds,
+            includePlayer = includePlayer
+        )
+        updateState { state ->
+            val updated = state.savedPartyFormations.filter { it.id != formation.id } + formation
+            state.copy(savedPartyFormations = updated)
+        }
+        autoSave()
+        return formation
+    }
+
+    fun deletePartyFormation(formationId: String): Boolean {
+        var removed = false
+        updateState { state ->
+            val filtered = state.savedPartyFormations.filter { it.id != formationId }
+            if (filtered.size != state.savedPartyFormations.size) {
+                removed = true
+                state.copy(savedPartyFormations = filtered)
+            } else state
+        }
+        if (removed) autoSave()
+        return removed
+    }
+
     fun awardPartyCombatVictoryWithDetails(rewards: com.example.haremdark.models.PartyCombatRewards, session: com.example.haremdark.models.PartyCombatSession): List<String> {
         val logs = mutableListOf<String>()
         logs.add("🏆 [${rewards.rank}] ${rewards.rankTitle}!")

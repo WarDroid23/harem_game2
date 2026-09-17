@@ -1527,11 +1527,18 @@ fun EnemyRosterView(
         if (encounter != null) {
             PartySelectionDialog(
                 gameState = gameState,
+                engine = engine,
                 preselectedEncounter = encounter,
                 onDismiss = { showPartyDialogForEncounter = null },
                 onStartCombat = { selectedGirlIds, includePlayer, enc ->
                     showPartyDialogForEncounter = null
                     engine.startPartyCombat(selectedGirlIds, includePlayer, enc)
+                },
+                onSaveFormation = { name, icon, memberIds, includePlayer ->
+                    engine.savePartyFormation(name, icon, memberIds, includePlayer)
+                },
+                onDeleteFormation = { id ->
+                    engine.deletePartyFormation(id)
                 }
             )
         }

@@ -949,6 +949,7 @@ private fun RewardPill(title: String, value: String, color: Color) {
 @Composable
 fun PartyCombatLogModal(
     logs: List<CombatLogEntry>,
+    comboChainCount: Int,
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
@@ -958,7 +959,7 @@ fun PartyCombatLogModal(
             border = BorderStroke(1.dp, Color(0xFFFF80AB).copy(alpha = 0.5f)),
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 500.dp)
+                .heightIn(max = 540.dp)
                 .padding(8.dp)
         ) {
             Column(
@@ -978,6 +979,40 @@ fun PartyCombatLogModal(
                     )
                     IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
                         Icon(Icons.Default.Close, contentDescription = "Zavřít", tint = Color.White)
+                    }
+                }
+
+                // Combo Chain Tracker Banner inside Log Modal
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0x33FF9800),
+                    border = BorderStroke(1.dp, Color(0xFFFF9800).copy(alpha = 0.4f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text("🔥", fontSize = 16.sp)
+                            Column {
+                                Text(
+                                    text = "Kombo Řetězec: $comboChainCount úderů",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFFB74D)
+                                )
+                                Text(
+                                    text = "Bonus: +${(comboChainCount * 4)}% Poškození | +${(comboChainCount * 2)}% Šance na Krit",
+                                    fontSize = 9.sp,
+                                    color = Color(0xFFFFE0B2)
+                                )
+                            }
+                        }
                     }
                 }
 

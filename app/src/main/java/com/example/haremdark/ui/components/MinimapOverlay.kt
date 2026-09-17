@@ -72,6 +72,26 @@ fun MinimapOverlay(
         label = "bounceY"
     )
 
+    // Fog-of-war reveal animation pulse for unlocked domains
+    val fogPulseRadius by infiniteTransition.animateFloat(
+        initialValue = 25f,
+        targetValue = 70f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "fogPulseRadius"
+    )
+    val fogPulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.6f,
+        targetValue = 0.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "fogPulseAlpha"
+    )
+
     val activeQuestDomains = remember(gameState) {
         GameContent.QUESTS.filter { quest ->
             !gameState.completedQuests.contains(quest.id) && gameState.player.level >= quest.reqLevel
@@ -240,6 +260,16 @@ fun MinimapOverlay(
                                 ),
                                 center = Offset(fx, fy),
                                 radius = 75f
+                            )
+                        } else {
+                            // Fog reveal discovery pulse ring for unlocked regions
+                            val fx = d.mapX * w
+                            val fy = d.mapY * h
+                            drawCircle(
+                                color = Color(0xFFFFD700).copy(alpha = fogPulseAlpha * 0.45f),
+                                radius = fogPulseRadius,
+                                center = Offset(fx, fy),
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f)
                             )
                         }
                     }

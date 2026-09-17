@@ -160,13 +160,16 @@ object PartyCombatManager {
         val target = aliveEnemies.getOrNull(targetEnemyIndex) ?: aliveEnemies.firstOrNull()
             ?: return Pair(session, "Žádný platný cíl!")
 
-        // Calculate damage
-        val isCrit = Random.nextInt(100) < (activeMember.critRatePercent + (session.activeSynergies.sumOf { it.critBonusPercent }))
+        // Calculate damage with combo chain bonus
+        val newChain = session.comboChainCount + 1
+        val comboDmgMult = 1.0f + (newChain * 0.04f)
+        val comboCritBonus = newChain * 2
+        val isCrit = Random.nextInt(100) < (activeMember.critRatePercent + (session.activeSynergies.sumOf { it.critBonusPercent }) + comboCritBonus)
         val critMult = if (isCrit) 1.65f else 1.0f
         val synergyAtkBonus = 1.0f + session.activeSynergies.map { it.attackBonusPercent }.sum()
         val buffAtk = activeMember.statusEffects.filter { it.type == "ATK_BUFF" }.sumOf { it.value }
 
-        val rawDmg = (activeMember.attack + buffAtk + Random.nextInt(-2, 4)) * activeMember.affinityBonusDmg * synergyAtkBonus
+        val rawDmg = (activeMember.attack + buffAtk + Random.nextInt(-2, 4)) * activeMember.affinityBonusDmg * synergyAtkBonus * comboDmgMult
         val finalDmg = ((rawDmg - (target.defense * 0.4f)) * critMult).toInt().coerceAtLeast(8)
 
         // Apply damage to enemy
@@ -183,22 +186,24 @@ object PartyCombatManager {
         }
 
         val critTag = if (isCrit) " 💥 KRITICKÝ ZÁSAH!" else ""
-        val logMsg = "🗡️ ${activeMember.name} zaútočila na ${target.name} a udělila $finalDmg poškození!$critTag"
+        val chainTag = if (newChain > 1) " 🔥 [Kombo x$newChain]" else ""
+        val logMsg = "🗡️ ${activeMember.name} zaútočila na ${target.name} a udělila $finalDmg poškození!$critTag$chainTag"
 
         val newLog = CombatLogEntry(
             turn = session.currentRound,
             type = if (isCrit) "player_special" else "player_attack",
             message = logMsg,
             actor = activeMember.name,
-            actionName = "Základní útok",
+            actionName = "Základní útok (Kombo x$newChain)",
             damageDealt = finalDmg,
-            damageCalculation = "[Síla: ${activeMember.attack}] * [Krit: x${"%.2f".format(critMult)}] * [Synergie: x${"%.2f".format(synergyAtkBonus)}] - [Obrana: ${(target.defense * 0.4f).toInt()}] = $finalDmg DMG"
+            damageCalculation = "[Síla: ${activeMember.attack}] * [Krit: x${"%.2f".format(critMult)}] * [Kombo: x${"%.2f".format(comboDmgMult)}] = $finalDmg DMG"
         )
 
         val updatedLogs = listOf(newLog) + session.combatLogs
 
         var nextSession = session.copy(
             haremComboGauge = newCombo,
+            comboChainCount = newChain,
             combatLogs = updatedLogs
         )
 
@@ -232,7 +237,9 @@ object PartyCombatManager {
         val newLogs = mutableListOf<CombatLogEntry>()
         var comboGain = 12
 
-        val synergyAtk = 1.0f + session.activeSynergies.map { it.attackBonusPercent }.sum()
+        val newChain = session.comboChainCount + 1
+        val comboDmgMult = 1.0f + (newChain * 0.04f)
+        val synergyAtk = (1.0f + session.activeSynergies.map { it.attackBonusPercent }.sum()) * comboDmgMult
 
         when (skill.targetType) {
             SkillTargetType.SINGLE_ENEMY -> {
@@ -370,6 +377,7 @@ object PartyCombatManager {
         val updatedCombo = (session.haremComboGauge + comboGain).coerceAtMost(session.maxHaremComboGauge)
         var nextSession = session.copy(
             haremComboGauge = updatedCombo,
+            comboChainCount = newChain,
             combatLogs = newLogs + session.combatLogs
         )
 
@@ -401,6 +409,7 @@ object PartyCombatManager {
         )
 
         val nextSession = session.copy(
+            comboChainCount = 0,
             combatLogs = listOf(log) + session.combatLogs
         )
 

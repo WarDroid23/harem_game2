@@ -227,6 +227,7 @@ data class PartyCombatSession(
     var selectedTargetAllyIndex: Int = 0,
     var haremComboGauge: Int = 25, // 0 to 100
     val maxHaremComboGauge: Int = 100,
+    var comboChainCount: Int = 0,
     val activeSynergies: List<PartySynergy> = emptyList(),
     val weather: CombatWeather = CombatWeather.getWeatherForLocation("Arena"),
     val combatLogs: List<CombatLogEntry> = emptyList(),

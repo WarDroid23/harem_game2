@@ -482,6 +482,8 @@ fun SkillNodeProgressionCard(
     onUnlockWithXp: () -> Unit,
     onUnlockWithSp: () -> Unit
 ) {
+    var showDetailModal by remember { mutableStateOf(false) }
+
     val borderColor = when {
         isUnlocked -> Color(0xFFFFD700)
         canUnlock -> Color(0xFFFF4081)
@@ -497,7 +499,8 @@ fun SkillNodeProgressionCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.2.dp, borderColor, RoundedCornerShape(14.dp)),
+            .border(1.2.dp, borderColor, RoundedCornerShape(14.dp))
+            .clickable { showDetailModal = true },
         colors = CardDefaults.cardColors(containerColor = containerBg),
         shape = RoundedCornerShape(14.dp)
     ) {
@@ -627,6 +630,18 @@ fun SkillNodeProgressionCard(
                 }
             }
 
+            // Detail prompt
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Text(
+                    text = "🔍 Klepni pro matematický vzorec a detaily ➔",
+                    fontSize = 10.sp,
+                    color = Color(0xFFFF80AB)
+                )
+            }
+
             // Action / Requirement footer
             if (!isUnlocked) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -689,4 +704,166 @@ fun SkillNodeProgressionCard(
             }
         }
     }
+
+    if (showDetailModal) {
+        SkillNodeDetailModal(
+            node = node,
+            character = character,
+            isUnlocked = isUnlocked,
+            canUnlock = canUnlock,
+            onDismiss = { showDetailModal = false },
+            onUnlockWithXp = {
+                onUnlockWithXp()
+                showDetailModal = false
+            },
+            onUnlockWithSp = {
+                onUnlockWithSp()
+                showDetailModal = false
+            }
+        )
+    }
+}
+
+@Composable
+fun SkillNodeDetailModal(
+    node: CharacterSkillNode,
+    character: Character,
+    isUnlocked: Boolean,
+    canUnlock: Boolean,
+    onDismiss: () -> Unit,
+    onUnlockWithXp: () -> Unit,
+    onUnlockWithSp: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(node.icon, fontSize = 24.sp)
+                Column {
+                    Text(node.name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+                    Text("Podrobná analýza schopnosti • Stupeň ${node.tier}", fontSize = 11.sp, color = Color(0xFFFF80AB))
+                }
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Description
+                Text(node.description, fontSize = 13.sp, color = Color(0xFFE0E0E0))
+
+                // Scaling math breakdown for active skills
+                if (node.activeSkill != null) {
+                    val act = node.activeSkill
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF220918),
+                        border = BorderStroke(1.dp, Color(0xFFFF4081).copy(alpha = 0.5f))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text("📐 Matematický vzorec a škálování", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFFFFD700))
+                            Text(
+                                text = "• Základní násobič: ${act.powerMultiplier}x Útok\n• Základní bonus k poškození: ${act.baseDamageBonus}\n• Výpočet poškození: ((Útok × ${act.powerMultiplier}) + ${act.baseDamageBonus}) × Afinitní bonus × Synergie\n• Spotřeba many: ${act.manaCost} MP\n• Obnova (Cooldown): ${act.cooldownTurns} kola\n• Typ cíle: ${act.targetType.name}",
+                                fontSize = 11.sp,
+                                color = Color(0xFFCFD8DC),
+                                lineHeight = 16.sp
+                            )
+                            if (act.appliedStatus != null) {
+                                Text(
+                                    text = "• Efekt stavu: ${act.appliedStatus.icon} ${act.appliedStatus.name} (${act.appliedStatus.durationTurns} kola, síla ${act.appliedStatus.value})",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFFFF80AB),
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            if (act.voiceQuote != null) {
+                                Text(
+                                    text = "💬 Hláška: \"${act.voiceQuote}\"",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF00E5FF),
+                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Stat bonuses breakdown
+                if (node.attackBonus > 0 || node.defenseBonus > 0 || node.hpBonus > 0 || node.critBonus > 0 || node.lifestealPercent > 0) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF141C2E),
+                        border = BorderStroke(1.dp, Color(0xFF00E5FF).copy(alpha = 0.4f))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text("⭐ Trvalé pasivní bonusy", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF00E5FF))
+                            if (node.attackBonus > 0) Text("• +${node.attackBonus} Útok", fontSize = 11.sp, color = Color.White)
+                            if (node.defenseBonus > 0) Text("• +${node.defenseBonus} Obrana", fontSize = 11.sp, color = Color.White)
+                            if (node.hpBonus > 0) Text("• +${node.hpBonus} Max HP", fontSize = 11.sp, color = Color.White)
+                            if (node.critBonus > 0) Text("• +${node.critBonus}% Kritická šance", fontSize = 11.sp, color = Color.White)
+                            if (node.lifestealPercent > 0) Text("• +${node.lifestealPercent}% Vysávání HP (Lifesteal)", fontSize = 11.sp, color = Color.White)
+                        }
+                    }
+                }
+
+                // Requirements & Costs
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0xFF1F121C),
+                    border = BorderStroke(1.dp, Color(0xFF9C27B0).copy(alpha = 0.4f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text("📌 Požadavky na odemknutí", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFFE1BEE7))
+                        Text("• Požadovaná úroveň hrdinky: ${node.reqLevel} (Aktuálně: ${character.level})", fontSize = 11.sp, color = if (character.level >= node.reqLevel) Color(0xFF00E676) else Color(0xFFFF5252))
+                        Text("• Náklady v ZK: ${node.xpCost} ZK (Aktuálně: ${character.xp})", fontSize = 11.sp, color = if (character.xp >= node.xpCost) Color(0xFF00E676) else Color(0xFFFF5252))
+                        Text("• Náklady v SP: ${node.spCost} SP (Aktuálně: ${character.skillPoints})", fontSize = 11.sp, color = if (character.skillPoints >= node.spCost) Color(0xFF00E676) else Color(0xFFFF5252))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (!isUnlocked) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = onUnlockWithXp,
+                        enabled = canUnlock && character.xp >= node.xpCost,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF4081))
+                    ) {
+                        Text("Odemknout (${node.xpCost} ZK)")
+                    }
+                    Button(
+                        onClick = onUnlockWithSp,
+                        enabled = canUnlock && character.skillPoints >= node.spCost,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700))
+                    ) {
+                        Text("Odemknout (${node.spCost} SP)", color = Color.Black)
+                    }
+                }
+            } else {
+                TextButton(onClick = onDismiss) {
+                    Text("Zavřít", color = Color(0xFFFFD700))
+                }
+            }
+        },
+        dismissButton = {
+            if (!isUnlocked) {
+                TextButton(onClick = onDismiss) {
+                    Text("Zpět", color = Color.Gray)
+                }
+            }
+        },
+        containerColor = Color(0xFF140810)
+    )
 }

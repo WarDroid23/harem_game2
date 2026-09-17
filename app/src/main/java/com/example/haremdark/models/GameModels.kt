@@ -487,7 +487,17 @@ data class GameSave(
     val activeDrugBuffs: List<ActiveDrugBuff> = emptyList(),
     val resourceHistory: List<DailyResourceStat> = emptyList(),
     val savedLoadouts: List<EquipmentLoadout> = emptyList(),
-    val activeLoadoutId: String? = null
+    val activeLoadoutId: String? = null,
+    val savedPartyFormations: List<PartyFormation> = emptyList()
+)
+
+@Serializable
+data class PartyFormation(
+    val id: String,
+    val name: String,
+    val icon: String,
+    val memberIds: List<String>,
+    val includePlayer: Boolean = true
 )
 
 @Serializable

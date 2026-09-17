@@ -449,6 +449,7 @@ fun PartyCombatScreen(
     if (showLogsModal) {
         PartyCombatLogModal(
             logs = session.combatLogs,
+            comboChainCount = session.comboChainCount,
             onDismiss = { showLogsModal = false }
         )
     }

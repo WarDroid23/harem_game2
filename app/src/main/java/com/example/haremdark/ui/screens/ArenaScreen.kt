@@ -409,11 +409,18 @@ fun ArenaScreen(
     if (showPartyBuilderDialog) {
         PartySelectionDialog(
             gameState = gameState,
+            engine = engine,
             preselectedEncounter = selectedEncounterForDialog,
             onDismiss = { showPartyBuilderDialog = false },
             onStartCombat = { selectedGirlIds, includePlayer, encounter ->
                 showPartyBuilderDialog = false
                 engine.startPartyCombat(selectedGirlIds, includePlayer, encounter)
+            },
+            onSaveFormation = { name, icon, memberIds, includePlayer ->
+                engine.savePartyFormation(name, icon, memberIds, includePlayer)
+            },
+            onDeleteFormation = { id ->
+                engine.deletePartyFormation(id)
             }
         )
     }
