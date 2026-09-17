@@ -1334,6 +1334,10 @@ class GameEngine(private val context: Context) {
         val droppedItem = explorationLootPool.random()
         val message = "⚔️ Úspěšná výprava v dominiu '${domain.name}'! Nalezena dívka ${newGirl.name} (${archetypeData?.name ?: chosenArchetype})! Získáno: +$goldFound zl., kořist [$bonusDrop] a nalezen předmět ${droppedItem.icon} ${droppedItem.name} (${droppedItem.rarity})!"
 
+        val newExplorationPct = ((current.regionExplorationProgress[domainId] ?: 0) + 20).coerceAtMost(100)
+        val updatedExplorationMap = current.regionExplorationProgress.toMutableMap()
+        updatedExplorationMap[domainId] = newExplorationPct
+
         updateState { state ->
             val newItems = state.player.items.toMutableList()
             val existingIdx = newItems.indexOfFirst { it.id == droppedItem.id }
@@ -1358,6 +1362,7 @@ class GameEngine(private val context: Context) {
                 characters = state.characters + newGirl,
                 currentDomainId = domainId,
                 unlockedDomains = updatedUnlocked,
+                regionExplorationProgress = updatedExplorationMap,
                 gameLog = logs
             )
         }
@@ -1365,6 +1370,247 @@ class GameEngine(private val context: Context) {
         addPlayerXp(30 + domain.difficultyStars * 15)
         progressMission("EXPLORE", 1)
         return Pair(newGirl, message)
+    }
+
+    // --- STORY MILESTONES & REGION EXPLORATION ---
+
+    fun checkMilestoneEligibility(milestone: StoryMilestone): Pair<Boolean, List<Pair<String, Boolean>>> {
+        val current = _gameState.value
+        val player = current.player
+        val checks = mutableListOf<Pair<String, Boolean>>()
+
+        // Level requirement
+        val levelOk = player.level >= milestone.requiredPlayerLevel
+        checks.add("Úroveň pána ${milestone.requiredPlayerLevel}+ (Aktuální: ${player.level})" to levelOk)
+
+        // Harem count
+        if (milestone.requiredHaremCount > 0) {
+            val haremOk = current.characters.size >= milestone.requiredHaremCount
+            checks.add("Harém: alespoň ${milestone.requiredHaremCount} dívek (Aktuální: ${current.characters.size})" to haremOk)
+        }
+
+        // Quests
+        milestone.requiredQuests.forEach { qId ->
+            val q = GameContent.QUESTS.find { it.id == qId }
+            val qTitle = q?.title ?: qId
+            val qOk = current.completedQuests.contains(qId)
+            checks.add("Příběhový úkol: '$qTitle'" to qOk)
+        }
+
+        // Defeated Bosses
+        milestone.requiredDefeatedBosses.forEach { bId ->
+            val boss = GameContent.BOSSES.find { it.id == bId }
+            val bName = boss?.name ?: bId
+            val bOk = current.defeatedBosses.contains(bId)
+            checks.add("Porazit bosse: '$bName'" to bOk)
+        }
+
+        val allSatisfied = checks.all { it.second }
+        return Pair(allSatisfied, checks)
+    }
+
+    fun claimStoryMilestone(milestoneId: String): Pair<Boolean, String> {
+        val current = _gameState.value
+        val milestone = StoryMilestoneData.getMilestoneById(milestoneId)
+            ?: return Pair(false, "Neznámý příběhový milník!")
+
+        if (current.completedMilestones.contains(milestoneId)) {
+            return Pair(false, "Tento milník '${milestone.chapterTitle}' již byl dokončen a odměny převzaty.")
+        }
+
+        val (eligible, _) = checkMilestoneEligibility(milestone)
+        if (!eligible) {
+            return Pair(false, "Ještě jsi nesplnil všechny podmínky pro odemčení kapitoly '${milestone.chapterTitle}'!")
+        }
+
+        val newlyUnlockedRegions = milestone.unlocksRegionIds.filter { !current.unlockedDomains.contains(it) }
+        val unlockedNames = newlyUnlockedRegions.map { DomainData.getDomainById(it).name }.joinToString(", ")
+        
+        val unlockMsg = if (newlyUnlockedRegions.isNotEmpty()) {
+            "🔓 Odemčena nová teritoria na mapě: $unlockedNames!"
+        } else "Všechna teritoria této kapitoly již byla přístupná."
+
+        val titleMsg = if (milestone.rewardTitle != null) {
+            " Získán nový titul: '${milestone.rewardTitle}'!"
+        } else ""
+
+        val mainMsg = "🌟 DOKONČEN PŘÍBĚHOVÝ MILNÍK: ${milestone.chapterTitle}! +${milestone.rewardGold} zl., +${milestone.rewardDarkEnergy} temné energie, +${milestone.rewardXp} XP.$titleMsg $unlockMsg"
+
+        updateState { state ->
+            val updatedUnlocked = (state.unlockedDomains + milestone.unlocksRegionIds).distinct()
+            val updatedMilestones = (state.completedMilestones + milestoneId).distinct()
+            val p = state.player.copy(
+                gold = state.player.gold + milestone.rewardGold,
+                darkEnergy = (state.player.darkEnergy + milestone.rewardDarkEnergy).coerceAtMost(state.player.maxDarkEnergy),
+                sexEnergy = (state.player.sexEnergy + milestone.rewardSexEnergy).coerceAtMost(state.player.maxSexEnergy),
+                activeTitle = milestone.rewardTitle ?: state.player.activeTitle
+            )
+            val logs = (listOf(mainMsg) + state.gameLog).take(30)
+            state.copy(
+                player = p,
+                unlockedDomains = updatedUnlocked,
+                completedMilestones = updatedMilestones,
+                gameLog = logs
+            )
+        }
+        addPlayerXp(milestone.rewardXp)
+        addHaremExp(50)
+        return Pair(true, mainMsg)
+    }
+
+    fun scoutRegion(domainId: String): Pair<Boolean, String> {
+        val current = _gameState.value
+        val domain = DomainData.getDomainById(domainId)
+        val player = current.player
+        val energyCost = 8
+
+        if (player.sexEnergy < energyCost) {
+            return Pair(false, "Na rychlý průzkum potřebuješ alespoň $energyCost Sexuální energie (Máš: ${player.sexEnergy})!")
+        }
+
+        val currentProg = current.regionExplorationProgress[domainId] ?: 0
+        val addProg = Random.nextInt(15, 30)
+        val newProg = (currentProg + addProg).coerceAtMost(100)
+
+        val goldFound = Random.nextInt(25, 75) + domain.difficultyStars * 20
+        val manaFound = Random.nextInt(10, 25)
+
+        val updatedMap = current.regionExplorationProgress.toMutableMap()
+        updatedMap[domainId] = newProg
+
+        val msg = "🧭 Průzkum teritoria '${domain.name}': Zmapováno +$addProg% (Celkem: $newProg%). Získáno: +$goldFound zl., +$manaFound many."
+
+        updateState { state ->
+            val p = state.player.copy(
+                sexEnergy = (state.player.sexEnergy - energyCost).coerceAtLeast(0),
+                gold = state.player.gold + goldFound,
+                mana = (state.player.mana + manaFound).coerceAtMost(state.player.maxMana)
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(
+                player = p,
+                regionExplorationProgress = updatedMap,
+                gameLog = logs
+            )
+        }
+        addPlayerXp(20 + domain.difficultyStars * 5)
+        progressMission("EXPLORE", 1)
+        return Pair(true, msg)
+    }
+
+    fun interactWithRegionPoi(poiId: String, domainId: String): Pair<Boolean, String> {
+        val current = _gameState.value
+        val domain = DomainData.getDomainById(domainId)
+        val poi = domain.pointsOfInterest.find { it.id == poiId }
+            ?: return Pair(false, "Neznámé místo zájmu!")
+
+        if (current.player.sexEnergy < poi.energyCost) {
+            return Pair(false, "Na interakci s '${poi.name}' potřebuješ alespoň ${poi.energyCost} Sexuální energie!")
+        }
+
+        val currentProg = current.regionExplorationProgress[domainId] ?: 0
+        val newProg = (currentProg + 25).coerceAtMost(100)
+        val updatedMap = current.regionExplorationProgress.toMutableMap()
+        updatedMap[domainId] = newProg
+
+        val updatedLandmarks = (current.discoveredLandmarks + poiId).distinct()
+
+        var outcomeMsg = ""
+        updateState { state ->
+            val p = state.player.copy(
+                sexEnergy = (state.player.sexEnergy - poi.energyCost).coerceAtLeast(0)
+            )
+            when (poi.type) {
+                PointOfInterestType.ALTAR -> {
+                    p.darkEnergy = (p.darkEnergy + 30).coerceAtMost(p.maxDarkEnergy)
+                    p.mana = (p.mana + 25).coerceAtMost(p.maxMana)
+                    outcomeMsg = "⛩️ Vykonal jsi temný rituál u '${poi.name}'. Získáno: +30 Temná energie, +25 Mana!"
+                }
+                PointOfInterestType.BLOOD_FOUNTAIN -> {
+                    p.hp = p.maxHp
+                    state.characters.forEach { it.touha = (it.touha + 20).coerceAtMost(100) }
+                    outcomeMsg = "🩸 Všichni se napili z '${poi.name}'. Plné uzdravení HP a +20 Touha celého harému!"
+                }
+                PointOfInterestType.SECRET_SANCTUARY -> {
+                    p.sexEnergy = (p.sexEnergy + 35).coerceAtMost(p.maxSexEnergy)
+                    state.characters.forEach { 
+                        it.duvera = (it.duvera + 15).coerceAtMost(100)
+                        it.srdce = (it.srdce + 15).coerceAtMost(100)
+                    }
+                    outcomeMsg = "✨ Navštívili jste '${poi.name}'. Prohloubení důvěry a lásky dívek (+15 Důvěra/Srdce)!"
+                }
+                PointOfInterestType.TRADER -> {
+                    p.gold = p.gold + 100
+                    outcomeMsg = "💎 Obchodník na místě '${poi.name}' ti vyplatil odměnu +100 zlaťáků za informace!"
+                }
+                PointOfInterestType.MONSTER_LAIR -> {
+                    p.killCount += 5
+                    p.battlesWon += 1
+                    p.gold += 150
+                    outcomeMsg = "💀 Vybílil jsi doupě nestvůr '${poi.name}'. Získáno +150 zl. a bojové trofeje!"
+                }
+                PointOfInterestType.WATCHTOWER -> {
+                    p.influence = (p.influence + 20).coerceAtMost(p.maxInfluence)
+                    outcomeMsg = "🗼 Z pozorovací věže '${poi.name}' jsi rozšířil svůj vliv (+20 Vliv) a odhalil okolní cesty!"
+                }
+                PointOfInterestType.RUINS -> {
+                    p.gold += 120
+                    p.mana = (p.mana + 30).coerceAtMost(p.maxMana)
+                    outcomeMsg = "🏛️ Prozkoumal jsi prastaré ruiny '${poi.name}'. Nalezeny staré poklady (+120 zl., +30 Mana)!"
+                }
+            }
+            val logs = (listOf(outcomeMsg) + state.gameLog).take(30)
+            state.copy(
+                player = p,
+                regionExplorationProgress = updatedMap,
+                discoveredLandmarks = updatedLandmarks,
+                gameLog = logs
+            )
+        }
+        addPlayerXp(35)
+        return Pair(true, outcomeMsg)
+    }
+
+    fun subjugateRegionDominion(domainId: String): Pair<Boolean, String> {
+        val current = _gameState.value
+        val domain = DomainData.getDomainById(domainId)
+        val currentLevel = current.regionDominionLevel[domainId] ?: 0
+
+        if (currentLevel >= 100) {
+            return Pair(false, "Teritorium '${domain.name}' je již stoprocentně podrobeno tvé nadvládě!")
+        }
+
+        val explProg = current.regionExplorationProgress[domainId] ?: 0
+        if (explProg < 50) {
+            return Pair(false, "Pro podrobení teritoria musíš nejprve dosáhnout alespoň 50% prozkoumanosti (Aktuálně: $explProg%)!")
+        }
+
+        val goldCost = 150 + domain.difficultyStars * 50
+        if (current.player.gold < goldCost) {
+            return Pair(false, "Na vybudování nadvlády a zřízení posádky potřebuješ $goldCost zlatých (Máš: ${current.player.gold})!")
+        }
+
+        val newLevel = (currentLevel + 50).coerceAtMost(100)
+        val updatedDominionMap = current.regionDominionLevel.toMutableMap()
+        updatedDominionMap[domainId] = newLevel
+
+        val msg = "👑 PODROBENÍ REGIONU: Vybudoval jsi pevnost a podmanil region '${domain.name}' na $newLevel% nadvlády! Denní produkce byla posílena."
+
+        updateState { state ->
+            val p = state.player.copy(
+                gold = state.player.gold - goldCost,
+                influence = (state.player.influence + 25).coerceAtMost(state.player.maxInfluence),
+                prestige = state.player.prestige + 10
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(
+                player = p,
+                regionDominionLevel = updatedDominionMap,
+                gameLog = logs
+            )
+        }
+        addPlayerXp(60)
+        return Pair(true, msg)
     }
 
     // --- AUCTION HOUSE ---

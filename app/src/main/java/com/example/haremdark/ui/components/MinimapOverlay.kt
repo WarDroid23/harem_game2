@@ -202,16 +202,8 @@ fun MinimapOverlay(
                         )
                     }
 
-                    // Predefined connections between domains to look like trade/magic lanes
-                    val connections = listOf(
-                        Pair("temny_hvozd", "stoky_doupata"),
-                        Pair("ruiny_chramu", "stoky_doupata"),
-                        Pair("mesicni_pristav", "stoky_doupata"),
-                        Pair("stoky_doupata", "slechticke_panstvi"),
-                        Pair("slechticke_panstvi", "propast_behemoth")
-                    )
-
-                    connections.forEach { (srcId, destId) ->
+                    // Connections between domains from DomainData (trade lanes, mountain passes, ley lines)
+                    DomainData.MAP_CONNECTIONS.forEach { (srcId, destId) ->
                         val src = DomainData.DOMAINS.find { it.id == srcId }
                         val dest = DomainData.DOMAINS.find { it.id == destId }
                         if (src != null && dest != null) {
@@ -220,15 +212,15 @@ fun MinimapOverlay(
                             val endX = dest.mapX * w
                             val endY = dest.mapY * h
 
-                            // Draw lane only if both domains are explored
+                            // Draw lane with glowing color if unlocked
                             val srcExplored = gameState.unlockedDomains.contains(srcId) || gameState.currentDomainId == srcId
                             val destExplored = gameState.unlockedDomains.contains(destId) || gameState.currentDomainId == destId
 
                             drawLine(
-                                color = if (srcExplored && destExplored) Color(0x99FF80AB) else Color(0x11FF80AB),
+                                color = if (srcExplored && destExplored) Color(0xAAFF4081) else Color(0x18FF80AB),
                                 start = Offset(startX, startY),
                                 end = Offset(endX, endY),
-                                strokeWidth = 2.5f,
+                                strokeWidth = if (srcExplored && destExplored) 3f else 1.5f,
                                 pathEffect = dashedEffect
                             )
                         }

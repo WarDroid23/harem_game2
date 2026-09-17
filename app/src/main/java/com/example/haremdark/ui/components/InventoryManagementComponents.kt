@@ -1407,7 +1407,7 @@ private fun InventoryItemCard(
                             color = when (item.source) {
                                 "Průzkum" -> Color(0xFF26A69A)
                                 "Boj" -> Color(0xFFEF5350)
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant,
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
                             },
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                         )

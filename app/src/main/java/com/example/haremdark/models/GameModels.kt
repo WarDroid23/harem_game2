@@ -133,7 +133,15 @@ data class DomainLocation(
     val mapX: Float = 0.5f,
     val mapY: Float = 0.5f,
     val npcTrader: Boolean = false,
-    val npcName: String? = null
+    val npcName: String? = null,
+    val storyChapter: Int = 1,
+    val requiredMilestoneId: String? = null,
+    val requiredMilestoneTitle: String? = null,
+    val subjugationRequirement: String? = null,
+    val environmentWeather: String = "Mlha stínů",
+    val environmentBonus: String = "+10% šance na průzkum",
+    val pointsOfInterest: List<RegionPointOfInterest> = emptyList(),
+    val loreChronicle: String = ""
 )
 
 @Serializable
@@ -468,6 +476,10 @@ data class GameSave(
     val currentTheme: String = "Temné dominium",
     val isLightMode: Boolean = false,
     val completedQuests: List<String> = emptyList(),
+    val completedMilestones: List<String> = listOf("milestone_chapter_1"),
+    val regionExplorationProgress: Map<String, Int> = emptyMap(),
+    val discoveredLandmarks: List<String> = emptyList(),
+    val regionDominionLevel: Map<String, Int> = emptyMap(),
     val dailyMissions: List<DailyMission> = emptyList(),
     val lastMissionUpdateDay: Int = 0,
     val gameLog: List<String> = emptyList(),
