@@ -149,11 +149,14 @@ fun HuntingTab(gameState: GameSave, engine: GameEngine) {
 fun AuctionTab(gameState: GameSave, engine: GameEngine) {
     val context = LocalContext.current
     val auctionOffers = listOf(
-        Triple("slechticna", "Bývalá hraběnka z rodu Valerius", 280),
+        Triple("slechticna", "Bývalá hraběnka z rodu Valerius - Zlomená šlechtična", 280),
         Triple("nymfomanka", "Nespoutaná kurtizána z přístavní čtvrti", 190),
-        Triple("krvava_subka", "Krvavá gladiátorka z arény", 240),
-        Triple("ticha_panenka", "Tajemná dívka bez minulosti", 210),
-        Triple("posedla", "Posedlá vyznavačka temného rituálu", 320)
+        Triple("krvava_subka", "Krvavá gladiátorka z arény s jizvami bojovnice", 240),
+        Triple("ticha_panenka", "Tajemná dívka bez minulosti v hedvábném závoji", 210),
+        Triple("posedla", "Posedlá vyznavačka temného rituálu", 320),
+        Triple("subka", "Poslušná služebná z vesnické usedlosti", 150),
+        Triple("sukuba", "Zajatá démonická sukuba z podzemních ruin", 380),
+        Triple("draci_divka", "Hrdá dračí princezna z východních hor", 450)
     )
 
     LazyColumn(

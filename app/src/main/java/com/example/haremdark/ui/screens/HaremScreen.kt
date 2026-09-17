@@ -1,6 +1,7 @@
 package com.example.haremdark.ui.screens
 
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -202,6 +203,47 @@ fun HaremScreen(
                     onTriggerManualEvent = { haremViewModel.triggerTimeLimitedEvent() },
                     canTriggerManual = activeEvent == null && gameState.characters.isNotEmpty()
                 )
+
+                val lowMoraleGirls = remember(gameState.characters) {
+                    gameState.characters.filter { it.morale < 35 || it.loajalita < 25 }
+                }
+
+                if (lowMoraleGirls.isNotEmpty()) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF3E1212),
+                        border = BorderStroke(1.dp, Color(0xFFFF5252)),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text("⚠️", fontSize = 22.sp)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "VAROVÁNÍ SÍSTÉMU DOHLEDU HARÉMU",
+                                    color = Color(0xFFFF5252),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp
+                                )
+                                Text(
+                                    "${lowMoraleGirls.size} otrokyní má nízkou morálku! (Např. ${lowMoraleGirls.first().name}). Hrozí vzpoura nebo pokus o útěk!",
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    fontSize = 10.sp
+                                )
+                            }
+                            Button(
+                                onClick = { haremViewModel.openInteraction(lowMoraleGirls.first()) },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text("Zasáhnout", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
 
                 Box(modifier = Modifier.weight(1f)) {
             when (selectedHaremTab) {

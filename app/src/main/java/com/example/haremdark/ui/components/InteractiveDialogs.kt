@@ -48,6 +48,8 @@ import com.example.haremdark.data.GameInteraction
 import com.example.haremdark.data.StaticData
 import com.example.haremdark.models.Character
 import com.example.haremdark.models.InventoryItem
+import com.example.haremdark.models.InteractionLogEntry
+import com.example.haremdark.models.getSafeInteractionLogs
 import com.example.haremdark.models.Player
 import com.example.haremdark.domain.GameEngine
 import com.example.haremdark.domain.VoiceManager
@@ -83,7 +85,7 @@ fun CharacterDetailDialog(
     val portraitRes = StaticData.getPortraitForArchetype(currentActiveCharacter.archetypeId)
 
     var selectedSection by remember { mutableIntStateOf(initialTab) }
-    val sectionTabs = listOf("📖 Životopis", "📊 Profil", "🛡️ Výbava", "💖 Náklonnost", "🎁 Dary", "📦 Sklad & Inventář", "⚡ Akce", "✨ Dovednosti")
+    val sectionTabs = listOf("📖 Životopis", "📊 Profil", "🛡️ Výbava", "💖 Náklonnost", "🎁 Dary", "📦 Sklad & Inventář", "⚡ Akce", "✨ Dovednosti", "🎯 Výcvik", "📜 Historie")
     var activeEmote by remember { mutableStateOf<String?>(null) }
     var emoteKey by remember { mutableLongStateOf(0L) }
 
@@ -280,6 +282,11 @@ fun CharacterDetailDialog(
                     }
                 )
 
+                LowMoraleWarningBanner(
+                    character = currentActiveCharacter,
+                    onOpenTraining = { selectedSection = 8 }
+                )
+
                 // Section Navigation Tabs
                 ScrollableTabRow(
                     selectedTabIndex = selectedSection,
@@ -354,6 +361,14 @@ fun CharacterDetailDialog(
                             character = currentActiveCharacter,
                             engine = engine,
                             onUpgradeSkill = onUpgradeSkill
+                        )
+                        8 -> TrainingMiniGameComponent(
+                            character = currentActiveCharacter,
+                            engine = engine
+                        )
+                        9 -> SlaveInteractionLogTab(
+                            character = currentActiveCharacter,
+                            engine = engine
                         )
                     }
                 }
@@ -2933,5 +2948,444 @@ fun FloatingEmoteAnimation(emote: String) {
                 )
             )
         )
+    }
+}
+
+@Composable
+fun LowMoraleWarningBanner(character: Character, onOpenTraining: () -> Unit) {
+    if (character.morale < 35 || character.loajalita < 25) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF3E1212)),
+            border = BorderStroke(1.dp, Color(0xFFFF5252)),
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("⚠️", fontSize = 24.sp)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "VAROVÁNÍ: KRITICKY NÍZKÁ MORÁLKA (${character.morale}%)",
+                        color = Color(0xFFFF5252),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp
+                    )
+                    Text(
+                        "Hrozí vzpoura, pokus o útěk nebo odmítnutí poslušnosti v bojích!",
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 10.sp
+                    )
+                }
+                Button(
+                    onClick = onOpenTraining,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text("Zahájit Výcvik", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TrainingMiniGameComponent(
+    character: Character,
+    engine: GameEngine?
+) {
+    var gameMode by remember { mutableIntStateOf(0) }
+    var isPlaying by remember { mutableStateOf(false) }
+    var gameCompleted by remember { mutableStateOf(false) }
+    var score by remember { mutableIntStateOf(0) }
+    var hits by remember { mutableIntStateOf(0) }
+    var totalAttempts by remember { mutableIntStateOf(0) }
+    var rankResult by remember { mutableStateOf("") }
+    var loyaltyGain by remember { mutableIntStateOf(0) }
+    var moraleGain by remember { mutableIntStateOf(0) }
+
+    var activeBeat by remember { mutableIntStateOf(1) }
+
+    var reflexPrompt by remember { mutableStateOf("") }
+    var reflexStartTime by remember { mutableLongStateOf(0L) }
+    var reactionMs by remember { mutableLongStateOf(0L) }
+    var waitingForReflex by remember { mutableStateOf(false) }
+
+    val prompts = remember { listOf("POKLEKNI!", "POSLECHNI PÁNA!", "DÍVEJ SE DO OČÍ!", "SOUSTŘEĎ SE!", "PODROB SE!") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("🎯 Interaktivní Výcvik Otrokyně", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    "Výcvikové minihry s reflexními a rytmickými úkoly zvyšují morálku a násobí růst loajality podle vašeho výkonu!",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = gameMode == 0,
+                        onClick = { if (!isPlaying) gameMode = 0 },
+                        label = { Text("🎵 Rytmický výcvik", fontSize = 11.sp) }
+                    )
+                    FilterChip(
+                        selected = gameMode == 1,
+                        onClick = { if (!isPlaying) gameMode = 1 },
+                        label = { Text("⚡ Reflexní test", fontSize = 11.sp) }
+                    )
+                }
+            }
+        }
+
+        if (gameMode == 0) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E2C)),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text("Rytmické plnění rozkazů", fontWeight = FontWeight.Bold, color = Color(0xFFFFD700), fontSize = 14.sp)
+                    Text("Stiskněte správné tlačítko v přesném rytmu, když svítí zeleně!", fontSize = 11.sp, color = Color.White.copy(alpha = 0.8f))
+
+                    if (!isPlaying && !gameCompleted) {
+                        Button(
+                            onClick = {
+                                isPlaying = true
+                                score = 0
+                                hits = 0
+                                totalAttempts = 0
+                                activeBeat = (1..4).random()
+                            },
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("▶️ Spustit Rytmický Výcvik", fontWeight = FontWeight.Bold)
+                        }
+                    } else if (isPlaying) {
+                        Text("Zásahy: $hits / 8  |  Skóre: $score", fontWeight = FontWeight.Bold, color = Color.White)
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            (1..4).forEach { btnIndex ->
+                                val isTarget = btnIndex == activeBeat
+                                Button(
+                                    onClick = {
+                                        totalAttempts++
+                                        if (isTarget) {
+                                            hits++
+                                            score += 15
+                                        } else {
+                                            score = (score - 5).coerceAtLeast(0)
+                                        }
+                                        if (totalAttempts >= 8) {
+                                            isPlaying = false
+                                            gameCompleted = true
+                                            val pct = (hits.toFloat() / 8f) * 100f
+                                            val (rank, mult) = when {
+                                                pct >= 85f -> "S (3.0x Násobič)" to 3.0f
+                                                pct >= 65f -> "A (2.0x Násobič)" to 2.0f
+                                                pct >= 45f -> "B (1.2x Násobič)" to 1.2f
+                                                else -> "F (0.5x Násobič)" to 0.5f
+                                            }
+                                            rankResult = rank
+                                            loyaltyGain = (12 * mult).toInt()
+                                            moraleGain = (10 * mult).toInt()
+
+                                            character.loajalita = (character.loajalita + loyaltyGain).coerceIn(0, 100)
+                                            character.morale = (character.morale + moraleGain).coerceIn(0, 100)
+                                            character.poslusnost = (character.poslusnost + (8 * mult).toInt()).coerceIn(0, 100)
+
+                                            character.interactionLogs.add(
+                                                com.example.haremdark.models.InteractionLogEntry(
+                                                    day = engine?.gameState?.value?.player?.day ?: 1,
+                                                    type = "výcvik",
+                                                    title = "Rytmický výcvik poslušnosti",
+                                                    description = "Splněno $hits z 8 úkonů s přesností ${(hits/8f*100).toInt()}%.",
+                                                    statChanges = "+$loyaltyGain Loajalita, +$moraleGain Morálka",
+                                                    rank = rank.take(1)
+                                                )
+                                            )
+                                        } else {
+                                            activeBeat = (1..4).random()
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isTarget) Color(0xFF4CAF50) else Color(0xFF333344)
+                                    ),
+                                    modifier = Modifier.size(60.dp),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("$btnIndex", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF2C1E1E)),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, Color(0xFFFF5252).copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text("Reflexní test okamžité poslušnosti", fontWeight = FontWeight.Bold, color = Color(0xFFFF8A80), fontSize = 14.sp)
+                    Text("Reagujte na příkaz pána okamžitě po jeho zobrazení!", fontSize = 11.sp, color = Color.White.copy(alpha = 0.8f))
+
+                    if (!isPlaying && !gameCompleted) {
+                        Button(
+                            onClick = {
+                                isPlaying = true
+                                waitingForReflex = true
+                                reflexPrompt = "PŘIPRAV SE..."
+                                score = 0
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("⚡ Spustit Reflexní Test", fontWeight = FontWeight.Bold)
+                        }
+                    } else if (isPlaying) {
+                        LaunchedEffect(waitingForReflex) {
+                            if (waitingForReflex) {
+                                val delayMs = (1500..3500).random().toLong()
+                                kotlinx.coroutines.delay(delayMs)
+                                reflexPrompt = prompts.random()
+                                reflexStartTime = System.currentTimeMillis()
+                                waitingForReflex = false
+                            }
+                        }
+
+                        if (waitingForReflex) {
+                            CircularProgressIndicator(color = Color(0xFFFF5252))
+                            Text("Čekej na příkaz...", fontSize = 12.sp, color = Color.Gray)
+                        } else {
+                            Text(
+                                reflexPrompt,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color(0xFFFFD700)
+                            )
+
+                            Button(
+                                onClick = {
+                                    reactionMs = System.currentTimeMillis() - reflexStartTime
+                                    isPlaying = false
+                                    gameCompleted = true
+                                    val (rank, mult) = when {
+                                        reactionMs < 550L -> "S (3.0x Násobič)" to 3.0f
+                                        reactionMs < 900L -> "A (2.0x Násobič)" to 2.0f
+                                        reactionMs < 1400L -> "B (1.2x Násobič)" to 1.2f
+                                        else -> "F (0.5x Násobič)" to 0.5f
+                                    }
+                                    rankResult = rank
+                                    loyaltyGain = (15 * mult).toInt()
+                                    moraleGain = (12 * mult).toInt()
+
+                                    character.loajalita = (character.loajalita + loyaltyGain).coerceIn(0, 100)
+                                    character.morale = (character.morale + moraleGain).coerceIn(0, 100)
+                                    character.poslusnost = (character.poslusnost + (10 * mult).toInt()).coerceIn(0, 100)
+
+                                    character.interactionLogs.add(
+                                        com.example.haremdark.models.InteractionLogEntry(
+                                            day = engine?.gameState?.value?.player?.day ?: 1,
+                                            type = "výcvik",
+                                            title = "Reflexní test okamžité poslušnosti",
+                                            description = "Reakční čas: ${reactionMs} ms na rozkaz \"$reflexPrompt\".",
+                                            statChanges = "+$loyaltyGain Loajalita, +$moraleGain Morálka",
+                                            rank = rank.take(1)
+                                        )
+                                    )
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                                modifier = Modifier.fillMaxWidth().height(55.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("🔥 POSLECHNOUT HNED!", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (gameCompleted) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1B3320)),
+                border = BorderStroke(1.dp, Color(0xFF4CAF50)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("🏆 Výsledek výcviku: Hodnocení $rankResult", fontWeight = FontWeight.Bold, color = Color(0xFFFFD700), fontSize = 16.sp)
+                    if (reactionMs > 0) {
+                        Text("Reakční čas: ${reactionMs} ms", fontSize = 11.sp, color = Color.White)
+                    }
+                    Text("Bonus k loajalitě: +$loyaltyGain  |  Zvýšení morálky: +$moraleGain", fontWeight = FontWeight.Bold, color = Color(0xFF81C784), fontSize = 12.sp)
+
+                    Button(
+                        onClick = {
+                            gameCompleted = false
+                            isPlaying = false
+                            reactionMs = 0L
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                    ) {
+                        Text("Opakovat výcvik", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SlaveInteractionLogTab(
+    character: Character,
+    engine: GameEngine?
+) {
+    val logs = remember(character.interactionLogs.size, engine?.gameState?.value?.player?.day) {
+        character.getSafeInteractionLogs(engine?.gameState?.value?.player?.day ?: 1)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        "📜 Deník interakcí a výcviku",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        "Záznamy o výsledcích výcviku, rozhovorech a fluktuaci morálky.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                ) {
+                    Text(
+                        "${logs.size} Záznamů",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            items(items = logs) { entry ->
+                InteractionLogCard(entry)
+            }
+        }
+    }
+}
+
+@Composable
+fun InteractionLogCard(entry: com.example.haremdark.models.InteractionLogEntry) {
+    val (typeIcon, typeColor) = when (entry.type) {
+        "výcvik" -> "🎯" to Color(0xFF4CAF50)
+        "rozhovor" -> "💬" to Color(0xFF2196F3)
+        "trest" -> "⚡" to Color(0xFFE91E63)
+        "odměna" -> "🎁" to Color(0xFFFF9800)
+        "morálka" -> "📈" to Color(0xFF9C27B0)
+        else -> "📜" to Color(0xFF00BCD4)
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)),
+        border = BorderStroke(1.dp, typeColor.copy(alpha = 0.35f)),
+        shape = RoundedCornerShape(10.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(typeIcon, fontSize = 16.sp)
+                    Text(entry.title, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (entry.rank != null) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFFFFD700).copy(alpha = 0.2f),
+                            border = BorderStroke(1.dp, Color(0xFFFFD700))
+                        ) {
+                            Text("Rank ${entry.rank}", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFD700), modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
+                        }
+                    }
+                    Text("Den ${entry.day}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                }
+            }
+
+            Text(entry.description, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+
+            if (entry.statChanges.isNotEmpty()) {
+                Text(entry.statChanges, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = typeColor)
+            }
+        }
     }
 }

@@ -890,6 +890,21 @@ class GameEngine(private val context: Context) {
         character.affinityLevel = newAffinityLevel
         character.affinityHistory.add(AffinityPointRecord(_gameState.value.player.day, character.affinityPoints, "${interaction.name} (+$affinityGain pts)"))
 
+        character.interactionLogs.add(
+            com.example.haremdark.models.InteractionLogEntry(
+                day = _gameState.value.player.day,
+                type = when (interaction.type) {
+                    "intimni" -> "odměna"
+                    "disciplina", "vycvik" -> "trest"
+                    "rozmluva" -> "rozhovor"
+                    else -> "morálka"
+                },
+                title = interaction.name,
+                description = message,
+                statChanges = "+$affinityGain Náklonnost, Morálka: ${character.morale}%"
+            )
+        )
+
         val tierInfo = com.example.haremdark.data.AffinityData.getTierForPoints(character.affinityPoints)
         val levelUpAnnouncement = if (newAffinityLevel > prevAffinityLevel) {
             "\n🌟 Pouto posíleno! ${character.name} dosáhla úrovně vztahu ${tierInfo.level}: ${tierInfo.title}! ${tierInfo.combatBonusDescription}"

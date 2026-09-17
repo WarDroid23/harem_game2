@@ -162,6 +162,7 @@ data class Character(
     var loajalita: Int = 30,
     var strength: Int = 15,
     var nalada: String = "neutrální",
+    var morale: Int = 50,
     var plodnost: Int = 50,
     var duvera: Int = 30,
     var touha: Int = 50,
@@ -205,7 +206,8 @@ data class Character(
     var affinityHistory: MutableList<AffinityPointRecord> = mutableListOf(),
     var relationshipHistory: MutableList<RelationshipRecord> = mutableListOf(),
     var unlockedPassives: MutableList<String> = mutableListOf(),
-    var unlockedCombatSkills: MutableList<String> = mutableListOf()
+    var unlockedCombatSkills: MutableList<String> = mutableListOf(),
+    var interactionLogs: MutableList<InteractionLogEntry> = mutableListOf()
 ) {
     var loyalty: Int
         get() = loajalita
@@ -238,6 +240,47 @@ data class RelationshipRecord(
     val feedback: String,
     val outcomeEffects: String
 )
+
+@Serializable
+data class InteractionLogEntry(
+    val day: Int,
+    val type: String, // "výcvik", "rozhovor", "trest", "odměna", "morálka", "dar"
+    val title: String,
+    val description: String,
+    val statChanges: String = "",
+    val rank: String? = null
+)
+
+fun Character.getSafeInteractionLogs(currentDay: Int = 1): List<InteractionLogEntry> {
+    if (interactionLogs.isNotEmpty()) {
+        return interactionLogs.sortedByDescending { it.day }
+    }
+    val startDay = (currentDay - 2).coerceAtLeast(1)
+    return listOf(
+        InteractionLogEntry(
+            day = startDay,
+            type = "příchod",
+            title = "Příchod do sídla pána",
+            description = "Dívka byla zařazena do komnat a složila první přísahu poslušnosti.",
+            statChanges = "+15 Loajalita, +50 Morálka"
+        ),
+        InteractionLogEntry(
+            day = startDay + 1,
+            type = "rozhovor",
+            title = "První důvěrný rozhovor",
+            description = "Osobní rozprava o její minulosti a očekáváních v harému.",
+            statChanges = "+10 Důvěra, +8 Loajalita"
+        ),
+        InteractionLogEntry(
+            day = currentDay,
+            type = "výcvik",
+            title = "Úvodní výcvik poslušnosti",
+            description = "Absolvování základního tréninku kázzně a plnění rozkazů.",
+            statChanges = "+12 Poslušnost, +10 Morálka",
+            rank = "A"
+        )
+    )
+}
 
 @Serializable
 data class AffinityPointRecord(
