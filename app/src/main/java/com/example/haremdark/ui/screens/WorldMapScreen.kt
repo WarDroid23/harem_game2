@@ -39,6 +39,8 @@ import com.example.haremdark.data.DomainData
 import com.example.haremdark.data.GameContent
 import com.example.haremdark.data.StaticData
 import com.example.haremdark.domain.GameEngine
+import com.example.haremdark.domain.LocationAmbientSound
+import com.example.haremdark.domain.SoundEffectManager
 import com.example.haremdark.models.*
 
 @Composable
@@ -51,6 +53,16 @@ fun WorldMapScreen(
     var selectedDomainId by remember { mutableStateOf(gameState.currentDomainId) }
     val selectedDomain = DomainData.getDomainById(selectedDomainId)
     val player = gameState.player
+
+    val currentAmbient by SoundEffectManager.currentAmbient.collectAsState()
+    val isAmbientPlaying by SoundEffectManager.isAmbientPlaying.collectAsState()
+    val isAmbientLoopEnabled by SoundEffectManager.isAmbientLoopEnabled.collectAsState()
+    val isMuted by SoundEffectManager.isMuted.collectAsState()
+
+    // Trigger ambient background soundscape on location change or initial load
+    LaunchedEffect(gameState.currentDomainId) {
+        SoundEffectManager.startAmbientAtmosphereLoop(gameState.currentDomainId)
+    }
 
     var showMilestonesModal by remember { mutableStateOf(false) }
     var selectedPoiForModal by remember { mutableStateOf<RegionPointOfInterest?>(null) }
@@ -78,6 +90,25 @@ fun WorldMapScreen(
             repeatMode = RepeatMode.Reverse
         ),
         label = "glow"
+    )
+
+    val equalizer1 by infiniteTransition.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(tween(400, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+        label = "eq1"
+    )
+    val equalizer2 by infiniteTransition.animateFloat(
+        initialValue = 0.8f,
+        targetValue = 0.3f,
+        animationSpec = infiniteRepeatable(tween(550, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+        label = "eq2"
+    )
+    val equalizer3 by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 0.95f,
+        animationSpec = infiniteRepeatable(tween(320, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
+        label = "eq3"
     )
 
     LazyColumn(
@@ -239,8 +270,162 @@ fun WorldMapScreen(
             com.example.haremdark.ui.components.MinimapOverlay(
                 gameState = gameState,
                 selectedDomainId = selectedDomainId,
-                onDomainSelect = { id -> selectedDomainId = id }
+                onDomainSelect = { id ->
+                    selectedDomainId = id
+                    SoundEffectManager.playLocationAmbient(id, force = true)
+                }
             )
+        }
+
+        // --- 2.5. LOCATION AMBIENT SOUNDSCAPES & ATMOSPHERE BAR ---
+        item {
+            val activeAmbient = LocationAmbientSound.fromDomainId(selectedDomainId)
+            val isCurrentLocation = gameState.currentDomainId == selectedDomainId
+
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF140D24)),
+                border = androidx.compose.foundation.BorderStroke(
+                    width = 1.dp,
+                    color = if (isAmbientPlaying) Color(0xFFE91E63).copy(alpha = 0.8f) else Color(0xFF9C27B0).copy(alpha = 0.35f)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(activeAmbient.icon, fontSize = 22.sp)
+                            Column {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = activeAmbient.title,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isAmbientPlaying) Color(0xFFFF80AB) else MaterialTheme.colorScheme.onSurface
+                                    )
+                                    if (isCurrentLocation) {
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = Color(0xFF4CAF50).copy(alpha = 0.2f),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF4CAF50))
+                                        ) {
+                                            Text(
+                                                text = "ZDE STOJÍŠ",
+                                                color = Color(0xFF81C784),
+                                                fontSize = 8.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                Text(
+                                    text = activeAmbient.description,
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        // Equalizer Waveform Animation
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            verticalAlignment = Alignment.Bottom,
+                            modifier = Modifier
+                                .height(20.dp)
+                                .padding(end = 4.dp)
+                        ) {
+                            val h1 = if (isAmbientPlaying && !isMuted) 18.dp * equalizer1 else 4.dp
+                            val h2 = if (isAmbientPlaying && !isMuted) 18.dp * equalizer2 else 6.dp
+                            val h3 = if (isAmbientPlaying && !isMuted) 18.dp * equalizer3 else 3.dp
+                            val h4 = if (isAmbientPlaying && !isMuted) 18.dp * ((equalizer1 + equalizer2) / 2f) else 5.dp
+
+                            Box(modifier = Modifier.width(3.dp).height(h1).background(Color(0xFFE91E63), RoundedCornerShape(2.dp)))
+                            Box(modifier = Modifier.width(3.dp).height(h2).background(Color(0xFFFF4081), RoundedCornerShape(2.dp)))
+                            Box(modifier = Modifier.width(3.dp).height(h3).background(Color(0xFFBA68C8), RoundedCornerShape(2.dp)))
+                            Box(modifier = Modifier.width(3.dp).height(h4).background(Color(0xFF80D8FF), RoundedCornerShape(2.dp)))
+                        }
+                    }
+
+                    // Ambient Action Controls
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = {
+                                SoundEffectManager.playLocationAmbient(selectedDomainId, force = true)
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isAmbientPlaying) Color(0xFFE91E63) else Color(0xFF2C163D)
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = if (isAmbientPlaying) "🔊 Hraje atmosféra..." else "🎧 Spustit zvuk lokace",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                SoundEffectManager.toggleAmbientLoop()
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = if (isAmbientLoopEnabled) Color(0xFF80D8FF) else Color.Gray
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isAmbientLoopEnabled) Color(0xFF80D8FF).copy(alpha = 0.6f) else Color.Gray.copy(alpha = 0.3f)
+                            ),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = if (isAmbientLoopEnabled) "🔁 Kulisa: ZAP" else "🔁 Kulisa: VYP",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                SoundEffectManager.toggleMute()
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Text(
+                                text = if (isMuted) "🔇" else "🔊",
+                                fontSize = 16.sp
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // --- 3. REGION SELECTOR CAROUSEL ---
@@ -277,7 +462,10 @@ fun WorldMapScreen(
                         isCurrent = domainCurrent,
                         isUnlocked = domainUnlocked,
                         explorationPercent = domainExpl,
-                        onClick = { selectedDomainId = domain.id }
+                        onClick = {
+                            selectedDomainId = domain.id
+                            SoundEffectManager.playLocationAmbient(domain.id, force = true)
+                        }
                     )
                 }
             }

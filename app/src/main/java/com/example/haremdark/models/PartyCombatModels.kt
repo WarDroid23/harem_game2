@@ -180,6 +180,36 @@ data class PartyCombatRewards(
 )
 
 /**
+ * Dynamic combat weather affecting visibility and status effects.
+ */
+@Serializable
+data class CombatWeather(
+    val id: String,
+    val name: String,
+    val icon: String,
+    val description: String,
+    val attackModifierPercent: Float = 0f,
+    val defenseModifierPercent: Float = 0f,
+    val dodgeChanceBonus: Int = 0,
+    val statusEffectName: String? = null // e.g. "Chilled", "Sun-drenched", "Electrified"
+) {
+    companion object {
+        fun getWeatherForLocation(location: String): CombatWeather {
+            return when {
+                location.contains("Led", ignoreCase = true) || location.contains("Hory", ignoreCase = true) ->
+                    CombatWeather("blizzard", "Ledová vánice", "❄️", "Mrznoucí vichr udílí stav 'Chilled' (-15% Rychlosti, +10% Uhýbání).", -0.05f, 0.05f, 15, "Chilled")
+                location.contains("Poušť", ignoreCase = true) || location.contains("Chrám", ignoreCase = true) || location.contains("Věž", ignoreCase = true) ->
+                    CombatWeather("sunny", "Slunečný žár", "☀️", "Žhnoucí paprsky udílí stav 'Sun-drenched' (+15% Poškození, -10% Obrana).", 0.15f, -0.10f, 5, "Sun-drenched")
+                location.contains("Dungeon", ignoreCase = true) || location.contains("Podzemí", ignoreCase = true) || location.contains("Katakomby", ignoreCase = true) ->
+                    CombatWeather("fog", "Tmavá mlha", "🌫️", "Hustá temná mlha zastiňuje bojiště (+20% Uhýbání, snížená viditelnost).", 0f, 0f, 20, "Shadow Veil")
+                else ->
+                    CombatWeather("storm", "Temná bouře", "⚡", "Hromobití a déšť zvyšují kritickou rezonanci (+15% Šance na kritický úder).", 0.10f, 0f, 10, "Electrified")
+            }
+        }
+    }
+}
+
+/**
  * Active Party Combat Session.
  */
 @Serializable
@@ -198,6 +228,7 @@ data class PartyCombatSession(
     var haremComboGauge: Int = 25, // 0 to 100
     val maxHaremComboGauge: Int = 100,
     val activeSynergies: List<PartySynergy> = emptyList(),
+    val weather: CombatWeather = CombatWeather.getWeatherForLocation("Arena"),
     val combatLogs: List<CombatLogEntry> = emptyList(),
     var isFinished: Boolean = false,
     var isVictory: Boolean = false,

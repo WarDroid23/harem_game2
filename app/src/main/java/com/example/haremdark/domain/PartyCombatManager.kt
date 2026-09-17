@@ -115,6 +115,7 @@ object PartyCombatManager {
         // Deep copy enemies
         val clonedEnemies = encounterDef.enemies.map { it.copy(statusEffects = mutableListOf()) }
         val synergies = PartyCombatCatalog.calculateSynergies(partyList)
+        val combatWeather = CombatWeather.getWeatherForLocation(encounterDef.location)
 
         SoundEffectManager.playCombat(CombatSound.COMBAT_START)
 
@@ -132,13 +133,14 @@ object PartyCombatManager {
             selectedTargetAllyIndex = 0,
             haremComboGauge = 20,
             activeSynergies = synergies,
+            weather = combatWeather,
             combatLogs = listOf(
                 CombatLogEntry(
                     turn = 1,
                     type = "system",
-                    message = "⚔️ Střet začíná! Tvá družina (${partyList.size} členů) čelí nepřátelům: ${encounterDef.title}.",
-                    actor = "Aréna Dominia",
-                    actionName = "Zahájení boje"
+                    message = "⚔️ Střet začíná! Počasí na bojišti: ${combatWeather.icon} ${combatWeather.name} (${combatWeather.description}).",
+                    actor = "Meteorologická anomálie",
+                    actionName = "Klima bojiště"
                 )
             ),
             isFinished = false,

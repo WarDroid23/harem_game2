@@ -43,6 +43,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         com.example.haremdark.domain.VoiceManager.init(applicationContext)
+        com.example.haremdark.domain.HapticManager.init(applicationContext)
         val engine = GameEngine(applicationContext)
 
         setContent {

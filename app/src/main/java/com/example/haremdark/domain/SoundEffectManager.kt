@@ -9,8 +9,10 @@ import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.exp
@@ -44,6 +46,98 @@ enum class CombatSound {
     DEFEAT
 }
 
+enum class LocationAmbientSound(
+    val domainId: String,
+    val title: String,
+    val description: String,
+    val icon: String,
+    val weatherTheme: String
+) {
+    DARK_FOREST(
+        domainId = "temny_hvozd",
+        title = "Šepot nočního hvozdu",
+        description = "Mlžný vánek v korunách stromů a tiché noční šelesty",
+        icon = "🌲",
+        weatherTheme = "Mlžný hvozd"
+    ),
+    BLOOD_TAVERN(
+        domainId = "hostinec_u_krvave_panny",
+        title = "Hostinec U Krvavé Panny",
+        description = "Akustická loutna barda, praskání krbu a šum hospody",
+        icon = "🍻",
+        weatherTheme = "Teplý krb & víno"
+    ),
+    TEMPLE_RUINS(
+        domainId = "ruiny_chramu",
+        title = "Ztracený chrám Luny",
+        description = "Sakrální mystický chór, éterická rezonance a chrámový zvon",
+        icon = "🏛️",
+        weatherTheme = "Posvátná mlha"
+    ),
+    SEWER_UNDERWORLD(
+        domainId = "stoky_doupata",
+        title = "Podzemní stoky & Doupata",
+        description = "Rytmické kapky vody v kryptách a hluboká ozvěna temnoty",
+        icon = "🐀",
+        weatherTheme = "Kryptová vlhkost"
+    ),
+    MOONLIT_PORT(
+        domainId = "mesicni_pristav",
+        title = "Měsíční přístav",
+        description = "Šumění mořského příboje, vítr plachet a mlžný maják",
+        icon = "🌊",
+        weatherTheme = "Příboj & Mlha"
+    ),
+    MERCENARY_CAMP(
+        domainId = "tabor_zoldnerek",
+        title = "Tábor Černých Růží",
+        description = "Rytmus válečných bubnů a rinčení ocelových čepelí",
+        icon = "⚔️",
+        weatherTheme = "Válečné ohně"
+    ),
+    NOBLE_MANOR(
+        domainId = "slechticke_panstvi",
+        title = "Šlechtické panství",
+        description = "Aristokratický cembalový valčík a křišťálový třpyt",
+        icon = "🏰",
+        weatherTheme = "Palácový lesk"
+    ),
+    BLOOD_CATACOMBS(
+        domainId = "krvave_katakomby",
+        title = "Krvavé katakomby",
+        description = "Tlukot temného srdce a hluboké okultní basové vibrace",
+        icon = "🩸",
+        weatherTheme = "Krvavá aura"
+    ),
+    DEMONIC_ABYSS(
+        domainId = "propast_behemoth",
+        title = "Trhlina v propasti",
+        description = "Hučení lávy, démonický ryk a sálající žár podsvětí",
+        icon = "🌋",
+        weatherTheme = "Magmatický žár"
+    ),
+    ASTRAL_CITADEL(
+        domainId = "astralni_citadela",
+        title = "Astrální citadela",
+        description = "Kosmické krystalické zvonkohry a harmonie astrálních sfér",
+        icon = "✨",
+        weatherTheme = "Hvězdný svit"
+    ),
+    NYMPH_VALLEY(
+        domainId = "zakazane_udoli_nymf",
+        title = "Zakázané údolí nymf",
+        description = "Rajská nymfí harfa, zurčící pramen a něžný šepot víl",
+        icon = "🌸",
+        weatherTheme = "Věčné jaro"
+    );
+
+    companion object {
+        fun fromDomainId(domainId: String): LocationAmbientSound {
+            return entries.find { it.domainId == domainId } ?: DARK_FOREST
+        }
+    }
+}
+
 object SoundEffectManager {
     private const val TAG = "SoundEffectManager"
     private const val SAMPLE_RATE = 22050
@@ -52,7 +146,18 @@ object SoundEffectManager {
     private val _isMuted = MutableStateFlow(false)
     val isMuted = _isMuted.asStateFlow()
 
+    private val _isAmbientLoopEnabled = MutableStateFlow(true)
+    val isAmbientLoopEnabled = _isAmbientLoopEnabled.asStateFlow()
+
+    private val _currentAmbient = MutableStateFlow<LocationAmbientSound?>(null)
+    val currentAmbient = _currentAmbient.asStateFlow()
+
+    private val _isAmbientPlaying = MutableStateFlow(false)
+    val isAmbientPlaying = _isAmbientPlaying.asStateFlow()
+
     private var toneGenerator: ToneGenerator? = null
+    private var ambientLoopJob: kotlinx.coroutines.Job? = null
+    private var currentAmbientDomainId: String? = null
 
     init {
         try {
@@ -60,6 +165,81 @@ object SoundEffectManager {
         } catch (e: Exception) {
             Log.w(TAG, "ToneGenerator initialization error: ${e.message}")
         }
+    }
+
+    fun toggleAmbientLoop() {
+        _isAmbientLoopEnabled.value = !_isAmbientLoopEnabled.value
+        if (!_isAmbientLoopEnabled.value) {
+            ambientLoopJob?.cancel()
+            ambientLoopJob = null
+        } else {
+            currentAmbientDomainId?.let { startAmbientAtmosphereLoop(it) }
+        }
+    }
+
+    fun setAmbientLoopEnabled(enabled: Boolean) {
+        _isAmbientLoopEnabled.value = enabled
+        if (!enabled) {
+            ambientLoopJob?.cancel()
+            ambientLoopJob = null
+        } else {
+            currentAmbientDomainId?.let { startAmbientAtmosphereLoop(it) }
+        }
+    }
+
+    fun playLocationAmbient(domainId: String, force: Boolean = false) {
+        val ambient = LocationAmbientSound.fromDomainId(domainId)
+        _currentAmbient.value = ambient
+        currentAmbientDomainId = domainId
+
+        if (_isMuted.value) return
+        if (_isAmbientPlaying.value && !force) return
+
+        scope.launch {
+            _isAmbientPlaying.value = true
+            try {
+                val samples = when (ambient) {
+                    LocationAmbientSound.DARK_FOREST -> synthesizeDarkForestAmbient()
+                    LocationAmbientSound.BLOOD_TAVERN -> synthesizeTavernAmbient()
+                    LocationAmbientSound.TEMPLE_RUINS -> synthesizeTempleRuinsAmbient()
+                    LocationAmbientSound.SEWER_UNDERWORLD -> synthesizeSewerAmbient()
+                    LocationAmbientSound.MOONLIT_PORT -> synthesizeMoonlitPortAmbient()
+                    LocationAmbientSound.MERCENARY_CAMP -> synthesizeMercenaryCampAmbient()
+                    LocationAmbientSound.NOBLE_MANOR -> synthesizeNobleManorAmbient()
+                    LocationAmbientSound.BLOOD_CATACOMBS -> synthesizeBloodCatacombsAmbient()
+                    LocationAmbientSound.DEMONIC_ABYSS -> synthesizeDemonicAbyssAmbient()
+                    LocationAmbientSound.ASTRAL_CITADEL -> synthesizeAstralCitadelAmbient()
+                    LocationAmbientSound.NYMPH_VALLEY -> synthesizeNymphValleyAmbient()
+                }
+                playPcmTrack(samples)
+            } catch (e: Exception) {
+                Log.w(TAG, "playLocationAmbient error: ${e.message}")
+            } finally {
+                _isAmbientPlaying.value = false
+            }
+        }
+    }
+
+    fun startAmbientAtmosphereLoop(domainId: String) {
+        val ambient = LocationAmbientSound.fromDomainId(domainId)
+        _currentAmbient.value = ambient
+        currentAmbientDomainId = domainId
+
+        ambientLoopJob?.cancel()
+        if (!_isAmbientLoopEnabled.value || _isMuted.value) return
+
+        ambientLoopJob = scope.launch {
+            while (isActive && _isAmbientLoopEnabled.value && !_isMuted.value) {
+                playLocationAmbient(domainId, force = true)
+                // Wait between atmospheric sound pulses (e.g. 7-10 seconds)
+                delay(8000L)
+            }
+        }
+    }
+
+    fun stopAmbientAtmosphere() {
+        ambientLoopJob?.cancel()
+        ambientLoopJob = null
     }
 
     fun toggleMute() {
@@ -448,6 +628,278 @@ object SoundEffectManager {
             val alarm = sin(2.0 * PI * 440.0 * t) * 0.5 + sin(2.0 * PI * 466.16 * t) * 0.5 // minor 2nd clash
             val sample = alarm * envelope * Short.MAX_VALUE * 0.85
             buffer[i] = sample.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return buffer
+    }
+
+    // --- LOCATION AMBIENT SOUNDSCAPES ---
+
+    private fun synthesizeDarkForestAmbient(): ShortArray {
+        val durationSec = 1.3
+        val count = (SAMPLE_RATE * durationSec).toInt()
+        val buffer = ShortArray(count)
+        for (i in 0 until count) {
+            val t = i.toDouble() / SAMPLE_RATE
+            val progress = i.toDouble() / count
+            val env = sin(PI * progress) // smooth fade in/out
+            // Rustling wind filtered noise
+            val windNoise = (Math.random() * 2.0 - 1.0) * 0.25 * (sin(2.0 * PI * 1.5 * t) * 0.5 + 0.5)
+            // Eerie nocturnal flute (A4 -> C5 gently fluctuating)
+            val woodwind = sin(2.0 * PI * (440.0 + sin(2.0 * PI * 3.0 * t) * 15.0) * t) * 0.4
+            // Night cricket trill in the background
+            val cricket = if ((t * 8).toInt() % 2 == 0) sin(2.0 * PI * 3600.0 * t) * 0.15 else 0.0
+            val total = (windNoise + woodwind + cricket) * env * Short.MAX_VALUE * 0.75
+            buffer[i] = total.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeTavernAmbient(): ShortArray {
+        val durationSec = 1.2
+        val count = (SAMPLE_RATE * durationSec).toInt()
+        val buffer = ShortArray(count)
+        val luteNotes = listOf(293.66, 349.23, 440.0, 587.33) // D minor lute strum
+        for (i in 0 until count) {
+            val t = i.toDouble() / SAMPLE_RATE
+            val progress = i.toDouble() / count
+            var luteSum = 0.0
+            for (idx in luteNotes.indices) {
+                val noteOffset = idx * 0.12
+                if (t >= noteOffset) {
+                    val noteT = t - noteOffset
+                    val noteEnv = exp(-6.0 * noteT)
+                    val freq = luteNotes[idx]
+                    // Pluck harmonic
+                    luteSum += (sin(2.0 * PI * freq * noteT) * 0.6 + sin(4.0 * PI * freq * noteT) * 0.3 + sin(6.0 * PI * freq * noteT) * 0.1) * noteEnv
+                }
+            }
+            // Tavern glass clink at t = 0.6s
+            var clink = 0.0
+            if (t in 0.6..0.9) {
+                val cT = t - 0.6
+                clink = sin(2.0 * PI * 2200.0 * cT) * exp(-20.0 * cT) * 0.4
+            }
+            val env = if (progress < 0.9) 1.0 else (1.0 - progress) / 0.1
+            val total = (luteSum * 0.3 + clink) * env * Short.MAX_VALUE * 0.8
+            buffer[i] = total.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeTempleRuinsAmbient(): ShortArray {
+        val durationSec = 1.5
+        val count = (SAMPLE_RATE * durationSec).toInt()
+        val buffer = ShortArray(count)
+        val choirFreqs = listOf(110.0, 164.81, 220.0, 329.63) // Sacred E minor / A drone
+        for (i in 0 until count) {
+            val t = i.toDouble() / SAMPLE_RATE
+            val progress = i.toDouble() / count
+            val env = sin(PI * progress) // bell curve
+            var choir = 0.0
+            for (f in choirFreqs) {
+                choir += sin(2.0 * PI * f * t) * 0.25
+            }
+            // Crystal chime bell ping at t = 0.2s
+            var bell = 0.0
+            if (t >= 0.2) {
+                val bT = t - 0.2
+                bell = (sin(2.0 * PI * 1760.0 * bT) * 0.5 + sin(2.0 * PI * 2640.0 * bT) * 0.3) * exp(-3.5 * bT)
+            }
+            val total = (choir * 0.6 + bell * 0.4) * env * Short.MAX_VALUE * 0.8
+            buffer[i] = total.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeSewerAmbient(): ShortArray {
+        val durationSec = 1.2
+        val count = (SAMPLE_RATE * durationSec).toInt()
+        val buffer = ShortArray(count)
+        val dropTimes = listOf(0.1, 0.45, 0.8)
+        for (i in 0 until count) {
+            val t = i.toDouble() / SAMPLE_RATE
+            // Low cavern hum
+            val cavernHum = sin(2.0 * PI * 70.0 * t) * 0.15
+            var drops = 0.0
+            for (dt in dropTimes) {
+                if (t >= dt) {
+                    val dropT = t - dt
+                    val dropFreq = 1800.0 - 1000.0 * (dropT * 8.0).coerceAtMost(1.0)
+                    val dropEnv = exp(-18.0 * dropT)
+                    val echo = exp(-6.0 * dropT) * sin(2.0 * PI * 440.0 * dropT) * 0.2
+                    drops += (sin(2.0 * PI * dropFreq * dropT) * dropEnv + echo) * 0.4
+                }
+            }
+            val total = (cavernHum + drops) * Short.MAX_VALUE * 0.85
+            buffer[i] = total.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeMoonlitPortAmbient(): ShortArray {
+        val durationSec = 1.4
+        val count = (SAMPLE_RATE * durationSec).toInt()
+        val buffer = ShortArray(count)
+        for (i in 0 until count) {
+            val t = i.toDouble() / SAMPLE_RATE
+            val progress = i.toDouble() / count
+            // Ocean wave swell
+            val swellEnv = sin(PI * progress)
+            val waveNoise = (Math.random() * 2.0 - 1.0) * 0.3 * swellEnv
+            // Distant foghorn tone at 146Hz
+            val foghorn = if (progress in 0.2..0.8) {
+                sin(2.0 * PI * 146.83 * t) * 0.35 * sin(PI * ((progress - 0.2) / 0.6))
+            } else 0.0
+            // Port buoy bell ping
+            val bell = if (t >= 0.7) {
+                sin(2.0 * PI * 1046.5 * (t - 0.7)) * exp(-7.0 * (t - 0.7)) * 0.25
+            } else 0.0
+            val total = (waveNoise + foghorn + bell) * Short.MAX_VALUE * 0.8
+            buffer[i] = total.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeMercenaryCampAmbient(): ShortArray {
+        val durationSec = 1.2
+        val count = (SAMPLE_RATE * durationSec).toInt()
+        val buffer = ShortArray(count)
+        val drumHits = listOf(0.05, 0.45, 0.85)
+        for (i in 0 until count) {
+            val t = i.toDouble() / SAMPLE_RATE
+            var drums = 0.0
+            for (dh in drumHits) {
+                if (t >= dh) {
+                    val dT = t - dh
+                    val drumFreq = 65.0 - 20.0 * (dT * 5.0).coerceAtMost(1.0)
+                    drums += sin(2.0 * PI * drumFreq * dT) * exp(-9.0 * dT) * 0.6
+                }
+            }
+            // Blade clang at t = 0.3s
+            val blade = if (t >= 0.3) {
+                val bT = t - 0.3
+                (sin(2.0 * PI * 2200.0 * bT) * 0.5 + sin(2.0 * PI * 2900.0 * bT) * 0.3) * exp(-16.0 * bT) * 0.35
+            } else 0.0
+            val total = (drums + blade) * Short.MAX_VALUE * 0.85
+            buffer[i] = total.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeNobleManorAmbient(): ShortArray {
+        val durationSec = 1.3
+        val count = (SAMPLE_RATE * durationSec).toInt()
+        val buffer = ShortArray(count)
+        // Baroque Harpsichord arpeggio (C Major 7: C5, E5, G5, B5, C6)
+        val harpsiNotes = listOf(523.25, 659.25, 783.99, 987.77, 1046.5)
+        for (i in 0 until count) {
+            val t = i.toDouble() / SAMPLE_RATE
+            var harpSum = 0.0
+            for (idx in harpsiNotes.indices) {
+                val noteOffset = idx * 0.14
+                if (t >= noteOffset) {
+                    val nT = t - noteOffset
+                    val nEnv = exp(-7.0 * nT)
+                    val freq = harpsiNotes[idx]
+                    // Bright plucky timbre with 2nd and 3rd harmonics
+                    harpSum += (sin(2.0 * PI * freq * nT) * 0.5 + sin(4.0 * PI * freq * nT) * 0.3 + sin(6.0 * PI * freq * nT) * 0.2) * nEnv
+                }
+            }
+            val total = harpSum * 0.4 * Short.MAX_VALUE * 0.85
+            buffer[i] = total.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeBloodCatacombsAmbient(): ShortArray {
+        val durationSec = 1.3
+        val count = (SAMPLE_RATE * durationSec).toInt()
+        val buffer = ShortArray(count)
+        val heartbeatTimes = listOf(0.1, 0.35, 0.75, 1.0)
+        for (i in 0 until count) {
+            val t = i.toDouble() / SAMPLE_RATE
+            // Dark occult sub drone
+            val occultDrone = (sin(2.0 * PI * 55.0 * t) * 0.3 + sin(2.0 * PI * 110.0 * t) * 0.2) * sin(PI * (i.toDouble() / count))
+            var heartbeat = 0.0
+            for (hT in heartbeatTimes) {
+                if (t >= hT) {
+                    val dt = t - hT
+                    val hbFreq = 50.0 - 15.0 * (dt * 10.0).coerceAtMost(1.0)
+                    heartbeat += sin(2.0 * PI * hbFreq * dt) * exp(-12.0 * dt) * 0.55
+                }
+            }
+            val total = (occultDrone + heartbeat) * Short.MAX_VALUE * 0.85
+            buffer[i] = total.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeDemonicAbyssAmbient(): ShortArray {
+        val durationSec = 1.3
+        val count = (SAMPLE_RATE * durationSec).toInt()
+        val buffer = ShortArray(count)
+        for (i in 0 until count) {
+            val t = i.toDouble() / SAMPLE_RATE
+            val progress = i.toDouble() / count
+            val env = sin(PI * progress)
+            // Infernal lava rumble noise
+            val magmaRumble = (Math.random() * 2.0 - 1.0) * 0.3 * (sin(2.0 * PI * 3.0 * t) * 0.5 + 0.5)
+            // Demonic sub bass roar (80Hz to 55Hz pitch bend)
+            val roarFreq = 85.0 - 30.0 * progress
+            val subRoar = (sin(2.0 * PI * roarFreq * t) * 0.5 + sin(4.0 * PI * roarFreq * t) * 0.25)
+            val total = (magmaRumble + subRoar * 0.5) * env * Short.MAX_VALUE * 0.85
+            buffer[i] = total.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeAstralCitadelAmbient(): ShortArray {
+        val durationSec = 1.4
+        val count = (SAMPLE_RATE * durationSec).toInt()
+        val buffer = ShortArray(count)
+        val astralNotes = listOf(659.25, 830.61, 987.77, 1318.51, 1661.22) // Celestial Pentatonic
+        for (i in 0 until count) {
+            val t = i.toDouble() / SAMPLE_RATE
+            var celestialSum = 0.0
+            for (idx in astralNotes.indices) {
+                val nOffset = idx * 0.12
+                if (t >= nOffset) {
+                    val nT = t - nOffset
+                    val shimmer = sin(2.0 * PI * 18.0 * nT) * 0.2 + 0.8 // shimmering twinkle
+                    val nEnv = exp(-4.0 * nT) * shimmer
+                    celestialSum += sin(2.0 * PI * astralNotes[idx] * nT) * nEnv
+                }
+            }
+            val total = celestialSum * 0.35 * Short.MAX_VALUE * 0.8
+            buffer[i] = total.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeNymphValleyAmbient(): ShortArray {
+        val durationSec = 1.4
+        val count = (SAMPLE_RATE * durationSec).toInt()
+        val buffer = ShortArray(count)
+        val harpNotes = listOf(349.23, 440.0, 523.25, 659.25, 783.99, 1046.5) // F Maj 9 glissando
+        for (i in 0 until count) {
+            val t = i.toDouble() / SAMPLE_RATE
+            var harpSum = 0.0
+            for (idx in harpNotes.indices) {
+                val nOffset = idx * 0.1
+                if (t >= nOffset) {
+                    val nT = t - nOffset
+                    val nEnv = exp(-5.0 * nT)
+                    harpSum += (sin(2.0 * PI * harpNotes[idx] * nT) * 0.7 + sin(4.0 * PI * harpNotes[idx] * nT) * 0.3) * nEnv
+                }
+            }
+            // Gentle bird chirp at t = 0.7s
+            val bird = if (t in 0.7..1.0) {
+                val bT = t - 0.7
+                val birdFreq = 2800.0 + sin(2.0 * PI * 35.0 * bT) * 500.0
+                sin(2.0 * PI * birdFreq * bT) * exp(-10.0 * bT) * 0.3
+            } else 0.0
+            val total = (harpSum * 0.35 + bird) * Short.MAX_VALUE * 0.8
+            buffer[i] = total.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
         }
         return buffer
     }

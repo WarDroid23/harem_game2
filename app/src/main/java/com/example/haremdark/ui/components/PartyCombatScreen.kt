@@ -12,11 +12,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.haremdark.domain.GameEngine
@@ -25,8 +28,10 @@ import com.example.haremdark.domain.SoundEffectManager
 import com.example.haremdark.models.CombatLogEntry
 import com.example.haremdark.models.GameSave
 import com.example.haremdark.models.PartyCombatSession
+import com.example.haremdark.models.SkillCategory
 import com.example.haremdark.models.SkillTargetType
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 @Composable
 fun PartyCombatScreen(
@@ -48,6 +53,25 @@ fun PartyCombatScreen(
     val activeMember = session.currentActiveMember
 
     val targetEnemy = aliveEnemies.getOrNull(session.selectedTargetEnemyIndex) ?: aliveEnemies.firstOrNull()
+
+    // Screen Shake & Camera Scale values
+    val shakeX = fxState.shakeOffsetX.value
+    val shakeY = fxState.shakeOffsetY.value
+    val shakeRot = fxState.shakeRotation.value
+    val camScale = fxState.cameraScale.value
+
+    // Auto feedback for incoming enemy actions
+    LaunchedEffect(session.combatLogs.firstOrNull()?.turn, session.combatLogs.firstOrNull()?.message) {
+        val latest = session.combatLogs.firstOrNull() ?: return@LaunchedEffect
+        if (latest.type == "enemy_special") {
+            fxState.triggerAbility(
+                type = CombatAbilityType.HEAVY_STRIKE,
+                customName = "💥 ${latest.actor}: ${latest.actionName}",
+                scope = coroutineScope,
+                isCritical = true
+            )
+        }
+    }
 
     Box(
         modifier = modifier
@@ -83,10 +107,15 @@ fun PartyCombatScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Main Combat Layout
+        // Main Combat Layout with Screen Shake and Camera Impact Scale
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .scale(camScale)
+                .graphicsLayer {
+                    rotationZ = shakeRot
+                }
+                .offset { IntOffset(shakeX.roundToInt(), shakeY.roundToInt()) }
                 .padding(10.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
@@ -183,6 +212,55 @@ fun PartyCombatScreen(
                 }
             }
 
+            // --- DYNAMIC WEATHER & STATUS EFFECT BANNER ---
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0x991C0E28),
+                border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.3f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(session.weather.icon, fontSize = 16.sp)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Klima: ${session.weather.name}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFFD700)
+                            )
+                            if (session.weather.statusEffectName != null) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color(0xFFC2185B).copy(alpha = 0.7f)
+                                ) {
+                                    Text(
+                                        text = session.weather.statusEffectName!!,
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                        }
+                        Text(
+                            text = session.weather.description,
+                            fontSize = 9.sp,
+                            color = Color(0xFFE1BEE7),
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+
             // --- ENEMY BATTLE LINE ---
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
@@ -234,12 +312,13 @@ fun PartyCombatScreen(
                 maxGauge = session.maxHaremComboGauge,
                 onTriggerCombo = {
                     coroutineScope.launch {
+                        val baseDmg = ((activeMember?.attack ?: 30) * 3.2f).toInt()
                         fxState.triggerAttackSequence(
                             attackerPartyIndex = session.currentTurnIndex,
                             targetEnemyIndex = session.selectedTargetEnemyIndex,
-                            abilityType = CombatAbilityType.CHAR_SPECIAL,
+                            abilityType = CombatAbilityType.HAREM_ULTIMATE,
                             customName = "Harémové Kombo Dominia",
-                            damageText = "-${(activeMember?.attack ?: 30) * 3}",
+                            damageText = "-$baseDmg HP",
                             isCrit = true,
                             scope = coroutineScope
                         )
@@ -277,36 +356,41 @@ fun PartyCombatScreen(
                 playerItems = gameState.player.items,
                 onBasicAttack = {
                     coroutineScope.launch {
-                        val baseDmg = (activeMember?.attack ?: 20)
+                        val (next, msg) = PartyCombatManager.executeBasicAttack(session, session.selectedTargetEnemyIndex)
+                        val isCrit = msg.contains("KRITICKÝ ZÁSAH") || msg.contains("KRIT")
+                        val damageDealt = next.combatLogs.firstOrNull()?.damageDealt ?: (activeMember?.attack ?: 20)
+
                         fxState.triggerAttackSequence(
                             attackerPartyIndex = session.currentTurnIndex,
                             targetEnemyIndex = session.selectedTargetEnemyIndex,
-                            abilityType = CombatAbilityType.SLASH,
-                            customName = "Bojový Výpad",
-                            damageText = "-$baseDmg",
-                            isCrit = false,
+                            abilityType = if (isCrit) CombatAbilityType.CRITICAL_SUPERNOVA else CombatAbilityType.SLASH,
+                            customName = if (isCrit) "Kritický výpad (${activeMember?.name ?: "Bojovnice"})" else "Bojový Výpad",
+                            damageText = "-$damageDealt HP",
+                            isCrit = isCrit,
                             scope = coroutineScope
                         )
-                        val (next, _) = PartyCombatManager.executeBasicAttack(session, session.selectedTargetEnemyIndex)
                         onSessionUpdated(next)
                     }
                 },
                 onSkillSelect = { skill ->
                     coroutineScope.launch {
-                        val animType = when (skill.animationType) {
-                            "DARK_BURST" -> CombatAbilityType.DARK_BURST
-                            "SHADOW_CURSE" -> CombatAbilityType.SHADOW_CURSE
-                            "BLEED_STRIKE" -> CombatAbilityType.BLEED_STRIKE
-                            "HEAVY_STRIKE" -> CombatAbilityType.HEAVY_STRIKE
-                            "HAREM_SUPPORT" -> CombatAbilityType.HAREM_SUPPORT
-                            "DEFEND" -> CombatAbilityType.DEFEND
+                        val isSpecial = skill.category == SkillCategory.ULTIMATE_COMBO || skill.powerMultiplier >= 1.5f
+                        val isCrit = skill.powerMultiplier >= 1.4f || isSpecial
+                        val animType = when {
+                            skill.animationType == "DARK_BURST" -> CombatAbilityType.DARK_BURST
+                            skill.animationType == "SHADOW_CURSE" -> CombatAbilityType.SHADOW_CURSE
+                            skill.animationType == "BLEED_STRIKE" -> CombatAbilityType.BLEED_STRIKE
+                            skill.animationType == "HEAVY_STRIKE" -> CombatAbilityType.HEAVY_STRIKE
+                            skill.animationType == "HAREM_SUPPORT" -> CombatAbilityType.HAREM_SUPPORT
+                            skill.animationType == "DEFEND" -> CombatAbilityType.DEFEND
+                            skill.category == SkillCategory.ULTIMATE_COMBO -> CombatAbilityType.CHAR_SPECIAL
                             else -> CombatAbilityType.SLASH
                         }
                         val isAllyTarget = (skill.targetType == SkillTargetType.SINGLE_ALLY || skill.targetType == SkillTargetType.ALL_ALLIES)
                         val estimatedDmg = ((activeMember?.attack ?: 20) * skill.powerMultiplier).toInt()
 
                         if (isAllyTarget) {
-                            fxState.triggerAbility(animType, skill.name, coroutineScope)
+                            fxState.triggerAbility(animType, skill.name, coroutineScope, isCritical = isCrit)
                             fxState.triggerFloatingText(
                                 text = "+${estimatedDmg.coerceAtLeast(30)} HP",
                                 isHeal = true,
@@ -318,9 +402,9 @@ fun PartyCombatScreen(
                                 attackerPartyIndex = session.currentTurnIndex,
                                 targetEnemyIndex = session.selectedTargetEnemyIndex,
                                 abilityType = animType,
-                                customName = skill.name,
-                                damageText = "-$estimatedDmg",
-                                isCrit = skill.powerMultiplier >= 1.5f,
+                                customName = "${skill.icon} ${skill.name}",
+                                damageText = "-$estimatedDmg HP",
+                                isCrit = isCrit,
                                 scope = coroutineScope
                             )
                         }

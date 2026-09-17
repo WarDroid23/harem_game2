@@ -20,12 +20,17 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.haremdark.domain.CombatSound
+import com.example.haremdark.domain.HapticManager
+import com.example.haremdark.domain.SoundEffectManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -49,8 +54,8 @@ enum class CombatAbilityType(
         icon = "🗡️",
         primaryColor = Color(0xFFEF5350),
         secondaryColor = Color(0xFFFFFFFF),
-        shakeIntensityPx = 10f,
-        particleCount = 18,
+        shakeIntensityPx = 12f,
+        particleCount = 24,
         defaultShape = ParticleShape.SLASH
     ),
     HEAVY_STRIKE(
@@ -58,8 +63,8 @@ enum class CombatAbilityType(
         icon = "💥",
         primaryColor = Color(0xFFFF9100),
         secondaryColor = Color(0xFFFFD700),
-        shakeIntensityPx = 22f,
-        particleCount = 36,
+        shakeIntensityPx = 26f,
+        particleCount = 42,
         defaultShape = ParticleShape.SPARK
     ),
     BLEED_STRIKE(
@@ -67,8 +72,8 @@ enum class CombatAbilityType(
         icon = "🩸",
         primaryColor = Color(0xFFD50000),
         secondaryColor = Color(0xFF880E4F),
-        shakeIntensityPx = 16f,
-        particleCount = 32,
+        shakeIntensityPx = 18f,
+        particleCount = 36,
         defaultShape = ParticleShape.SLASH
     ),
     DARK_BURST(
@@ -76,8 +81,8 @@ enum class CombatAbilityType(
         icon = "🔮",
         primaryColor = Color(0xFFAB47BC),
         secondaryColor = Color(0xFF311B92),
-        shakeIntensityPx = 18f,
-        particleCount = 38,
+        shakeIntensityPx = 22f,
+        particleCount = 44,
         defaultShape = ParticleShape.ORB
     ),
     SHADOW_CURSE(
@@ -85,17 +90,17 @@ enum class CombatAbilityType(
         icon = "👁️",
         primaryColor = Color(0xFF7E57C2),
         secondaryColor = Color(0xFF1A237E),
-        shakeIntensityPx = 12f,
-        particleCount = 28,
-        defaultShape = ParticleShape.DIAMOND
+        shakeIntensityPx = 16f,
+        particleCount = 34,
+        defaultShape = ParticleShape.GLYPH
     ),
     SOUL_DRAIN(
         title = "Vysátí duše",
         icon = "🖤",
         primaryColor = Color(0xFF00E676),
         secondaryColor = Color(0xFF9C27B0),
-        shakeIntensityPx = 14f,
-        particleCount = 34,
+        shakeIntensityPx = 18f,
+        particleCount = 40,
         defaultShape = ParticleShape.ORB
     ),
     HAREM_SUPPORT(
@@ -103,27 +108,45 @@ enum class CombatAbilityType(
         icon = "💖",
         primaryColor = Color(0xFFFF4081),
         secondaryColor = Color(0xFFFF80AB),
-        shakeIntensityPx = 8f,
-        particleCount = 30,
+        shakeIntensityPx = 10f,
+        particleCount = 38,
         defaultShape = ParticleShape.HEART
+    ),
+    HAREM_ULTIMATE(
+        title = "Harémové Kombo Dominia",
+        icon = "👑",
+        primaryColor = Color(0xFFFF1744),
+        secondaryColor = Color(0xFFFFD700),
+        shakeIntensityPx = 34f,
+        particleCount = 65,
+        defaultShape = ParticleShape.STAR
     ),
     DEFEND(
         title = "Obranný štít",
         icon = "🛡️",
         primaryColor = Color(0xFF2979FF),
         secondaryColor = Color(0xFF80D8FF),
-        shakeIntensityPx = 12f,
-        particleCount = 24,
+        shakeIntensityPx = 14f,
+        particleCount = 28,
         defaultShape = ParticleShape.DIAMOND
     ),
     CHAR_SPECIAL(
-        title = "Speciální technika",
+        title = "Speciální technika dívky",
         icon = "✨",
         primaryColor = Color(0xFFFFD700),
         secondaryColor = Color(0xFFFF1744),
-        shakeIntensityPx = 24f,
-        particleCount = 45,
+        shakeIntensityPx = 30f,
+        particleCount = 55,
         defaultShape = ParticleShape.STAR
+    ),
+    CRITICAL_SUPERNOVA(
+        title = "KRITICKÝ ZÁSAH!",
+        icon = "⭐",
+        primaryColor = Color(0xFFFFD700),
+        secondaryColor = Color(0xFFFF3D00),
+        shakeIntensityPx = 35f,
+        particleCount = 58,
+        defaultShape = ParticleShape.BEAM
     ),
     ITEM_HEAL(
         title = "Léčivý balzám",
@@ -131,13 +154,13 @@ enum class CombatAbilityType(
         primaryColor = Color(0xFF00E676),
         secondaryColor = Color(0xFFB9F6CA),
         shakeIntensityPx = 6f,
-        particleCount = 22,
+        particleCount = 26,
         defaultShape = ParticleShape.SPARK
     )
 }
 
 enum class ParticleShape {
-    CIRCLE, SPARK, SLASH, HEART, DIAMOND, ORB, STAR
+    CIRCLE, SPARK, SLASH, HEART, DIAMOND, ORB, STAR, RING, BEAM, GLYPH
 }
 
 /**
@@ -184,6 +207,9 @@ class VisualParticle(
         x += vx
         y += vy
         rotation += vRot
+        if (shape == ParticleShape.RING) {
+            size += 2.8f // expanding shockwave ring
+        }
         return true
     }
 }
@@ -195,10 +221,14 @@ class VisualParticle(
 class CombatVisualFxState {
     val shakeOffsetX = Animatable(0f)
     val shakeOffsetY = Animatable(0f)
+    val shakeRotation = Animatable(0f)
+    val cameraScale = Animatable(1f)
     val flashAlpha = Animatable(0f)
     var flashColor by mutableStateOf(Color.Transparent)
 
     var activeBanner by mutableStateOf<Pair<CombatAbilityType, String>?>(null)
+    var isCritBannerActive by mutableStateOf(false)
+
     val particles = mutableStateListOf<VisualParticle>()
     val floatingTexts = mutableStateListOf<FloatingDamageText>()
 
@@ -238,7 +268,7 @@ class CombatVisualFxState {
 
         floatingTexts.add(item)
         scope.launch {
-            delay(850)
+            delay(900)
             floatingTexts.remove(item)
         }
     }
@@ -263,7 +293,10 @@ class CombatVisualFxState {
 
             // 2. Enemy receives hit impact
             hitTargetEnemyIndex = targetEnemyIndex
-            triggerAbility(abilityType, customName, this, onImpact = {
+            val effectiveType = if (isCrit) CombatAbilityType.CRITICAL_SUPERNOVA else abilityType
+            val effectiveName = if (isCrit) (customName ?: "KRITICKÝ ZÁSAH!") else customName
+
+            triggerAbility(effectiveType, effectiveName, this, isCritical = isCrit, onImpact = {
                 onImpact?.invoke()
                 if (damageText != null) {
                     triggerFloatingText(damageText, isCrit = isCrit, isEnemyTarget = true, scope = this)
@@ -295,7 +328,8 @@ class CombatVisualFxState {
             delay(120)
 
             hitTargetPartyIndex = targetPartyIndex
-            triggerAbility(abilityType, customName, this, onImpact = {
+            val effectiveType = if (isCrit) CombatAbilityType.CRITICAL_SUPERNOVA else abilityType
+            triggerAbility(effectiveType, customName, this, isCritical = isCrit, onImpact = {
                 onImpact?.invoke()
                 if (damageText != null) {
                     triggerFloatingText(damageText, isCrit = isCrit, isEnemyTarget = false, scope = this)
@@ -309,40 +343,120 @@ class CombatVisualFxState {
     }
 
     /**
-     * Trigger subtle screen shake and particle explosion for a specific ability.
+     * Dedicated trigger for high-impact critical hit explosion with multi-axis trauma screen shake and particle supernova.
+     */
+    fun triggerCriticalExplosion(
+        damageText: String? = null,
+        scope: CoroutineScope,
+        onImpact: (() -> Unit)? = null
+    ) {
+        triggerAbility(
+            type = CombatAbilityType.CRITICAL_SUPERNOVA,
+            customName = "💥 KRITICKÝ ZÁSAH!",
+            scope = scope,
+            isCritical = true,
+            onImpact = {
+                onImpact?.invoke()
+                if (damageText != null) {
+                    triggerFloatingText(damageText, isCrit = true, isEnemyTarget = true, scope = scope)
+                }
+            }
+        )
+    }
+
+    /**
+     * Trigger screen shake, shockwaves, and particle explosion for a specific ability or critical hit.
      */
     fun triggerAbility(
         type: CombatAbilityType,
         customName: String? = null,
         scope: CoroutineScope,
+        isCritical: Boolean = false,
         onImpact: (() -> Unit)? = null
     ) {
         scope.launch {
             val title = customName ?: type.title
             activeBanner = Pair(type, title)
-            flashColor = type.primaryColor
+            isCritBannerActive = isCritical || type == CombatAbilityType.CRITICAL_SUPERNOVA
+            flashColor = if (isCritical) Color(0xFFFFD700) else type.primaryColor
 
-            // 1. Particle creation around center of canvas
-            val spawnParticles = ArrayList<VisualParticle>(type.particleCount)
-            val baseColor = type.primaryColor
-            val altColor = type.secondaryColor
+            if (isCritical || type == CombatAbilityType.CRITICAL_SUPERNOVA) {
+                HapticManager.vibrateCritical()
+            } else if (type.shakeIntensityPx >= 20f) {
+                HapticManager.vibrateHeavy()
+            } else {
+                HapticManager.vibrateClick()
+            }
 
-            for (i in 0 until type.particleCount) {
+            // 1. Generate rich particle physics set
+            val count = if (isCritical) (type.particleCount * 1.3f).toInt() else type.particleCount
+            val spawnParticles = ArrayList<VisualParticle>(count + 4)
+            val baseColor = if (isCritical) Color(0xFFFFD700) else type.primaryColor
+            val altColor = if (isCritical) Color(0xFFFF3D00) else type.secondaryColor
+
+            // Add expanding shockwave ring for high impact
+            if (isCritical || type.shakeIntensityPx >= 20f) {
+                spawnParticles.add(
+                    VisualParticle(
+                        x = 0f,
+                        y = 0f,
+                        vx = 0f,
+                        vy = 0f,
+                        size = 12f,
+                        maxLife = 500f,
+                        life = 500f,
+                        color = baseColor,
+                        shape = ParticleShape.RING,
+                        drag = 1f,
+                        gravity = 0f
+                    )
+                )
+                spawnParticles.add(
+                    VisualParticle(
+                        x = 0f,
+                        y = 0f,
+                        vx = 0f,
+                        vy = 0f,
+                        size = 18f,
+                        maxLife = 650f,
+                        life = 650f,
+                        color = altColor,
+                        shape = ParticleShape.RING,
+                        drag = 1f,
+                        gravity = 0f
+                    )
+                )
+            }
+
+            for (i in 0 until count) {
                 val angle = Random.nextFloat() * 2f * PI.toFloat()
-                val speed = Random.nextFloat() * 12f + 4f
-                val colorMix = if (Random.nextBoolean()) baseColor else altColor
-                val lifeMs = Random.nextFloat() * 400f + 450f
-                val pSize = Random.nextFloat() * 12f + 8f
+                val speed = (Random.nextFloat() * (if (isCritical) 18f else 12f) + 4f)
+                val colorMix = when (Random.nextInt(3)) {
+                    0 -> baseColor
+                    1 -> altColor
+                    else -> Color.White
+                }
+                val lifeMs = Random.nextFloat() * (if (isCritical) 550f else 400f) + 450f
+                val pSize = Random.nextFloat() * (if (isCritical) 14f else 10f) + 6f
 
-                val shape = when (type.defaultShape) {
-                    ParticleShape.HEART -> if (Random.nextFloat() < 0.6f) ParticleShape.HEART else ParticleShape.SPARK
-                    ParticleShape.SLASH -> if (Random.nextFloat() < 0.5f) ParticleShape.SLASH else ParticleShape.SPARK
+                val shape = when {
+                    isCritical -> if (Random.nextFloat() < 0.4f) ParticleShape.STAR else if (Random.nextFloat() < 0.7f) ParticleShape.BEAM else ParticleShape.SPARK
+                    type.defaultShape == ParticleShape.HEART -> if (Random.nextFloat() < 0.6f) ParticleShape.HEART else ParticleShape.SPARK
+                    type.defaultShape == ParticleShape.SLASH -> if (Random.nextFloat() < 0.5f) ParticleShape.SLASH else ParticleShape.SPARK
+                    type.defaultShape == ParticleShape.GLYPH -> if (Random.nextFloat() < 0.5f) ParticleShape.GLYPH else ParticleShape.ORB
                     else -> type.defaultShape
+                }
+
+                val customGravity = when (type) {
+                    CombatAbilityType.HAREM_SUPPORT -> -0.12f
+                    CombatAbilityType.BLEED_STRIKE -> 0.35f
+                    CombatAbilityType.HEAVY_STRIKE -> 0.30f
+                    else -> 0.18f
                 }
 
                 spawnParticles.add(
                     VisualParticle(
-                        x = 0f, // updated to center inside draw scope
+                        x = 0f,
                         y = 0f,
                         vx = cos(angle) * speed,
                         vy = sin(angle) * speed - (if (type == CombatAbilityType.HAREM_SUPPORT) 4f else 1f),
@@ -352,8 +466,8 @@ class CombatVisualFxState {
                         color = colorMix,
                         shape = shape,
                         rotation = Random.nextFloat() * 360f,
-                        vRot = (Random.nextFloat() - 0.5f) * 14f,
-                        gravity = if (type == CombatAbilityType.HAREM_SUPPORT) -0.1f else 0.22f
+                        vRot = (Random.nextFloat() - 0.5f) * 16f,
+                        gravity = customGravity
                     )
                 )
             }
@@ -361,30 +475,43 @@ class CombatVisualFxState {
             particles.clear()
             particles.addAll(spawnParticles)
 
-            // 2. Immediate Flash
+            // 2. Immediate Flash & Camera Punch
             launch {
-                flashAlpha.snapTo(0.28f)
+                val flashTarget = if (isCritical) 0.42f else 0.28f
+                flashAlpha.snapTo(flashTarget)
+                cameraScale.snapTo(if (isCritical) 1.06f else 1.03f)
+                launch {
+                    cameraScale.animateTo(
+                        targetValue = 1f,
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
+                    )
+                }
                 flashAlpha.animateTo(
                     targetValue = 0f,
-                    animationSpec = tween(durationMillis = 350, easing = LinearEasing)
+                    animationSpec = tween(durationMillis = if (isCritical) 450 else 350, easing = LinearEasing)
                 )
             }
 
-            // 3. Screen shake sequence (impact vibration)
+            // 3. Multi-axis Trauma Screen Shake Sequence with Rotational Punch
             launch {
-                val intensity = type.shakeIntensityPx
+                val intensity = if (isCritical) type.shakeIntensityPx * 1.25f else type.shakeIntensityPx
+                val rotIntensity = if (isCritical) 2.5f else 1.2f
+
                 val shakePattern = listOf(
-                    Pair(intensity * 0.9f, -intensity * 0.7f),
-                    Pair(-intensity * 0.8f, intensity * 0.6f),
-                    Pair(intensity * 0.6f, -intensity * 0.4f),
-                    Pair(-intensity * 0.35f, intensity * 0.25f),
-                    Pair(intensity * 0.15f, -intensity * 0.1f),
-                    Pair(0f, 0f)
+                    Triple(intensity * 1.0f, -intensity * 0.8f, -rotIntensity),
+                    Triple(-intensity * 0.9f, intensity * 0.7f, rotIntensity * 0.9f),
+                    Triple(intensity * 0.7f, -intensity * 0.5f, -rotIntensity * 0.6f),
+                    Triple(-intensity * 0.5f, intensity * 0.35f, rotIntensity * 0.4f),
+                    Triple(intensity * 0.3f, -intensity * 0.2f, -rotIntensity * 0.2f),
+                    Triple(-intensity * 0.15f, intensity * 0.1f, 0f),
+                    Triple(0f, 0f, 0f)
                 )
+
                 for (shake in shakePattern) {
                     shakeOffsetX.snapTo(shake.first)
                     shakeOffsetY.snapTo(shake.second)
-                    delay(30)
+                    shakeRotation.snapTo(shake.third)
+                    delay(26)
                 }
             }
 
@@ -392,9 +519,9 @@ class CombatVisualFxState {
             delay(40)
             onImpact?.invoke()
 
-            // 5. Run particle simulation loop for ~650ms
+            // 5. Run particle simulation loop for ~750ms
             val startTime = System.currentTimeMillis()
-            while (System.currentTimeMillis() - startTime < 700L && particles.isNotEmpty()) {
+            while (System.currentTimeMillis() - startTime < 800L && particles.isNotEmpty()) {
                 val iter = particles.iterator()
                 while (iter.hasNext()) {
                     val p = iter.next()
@@ -409,6 +536,7 @@ class CombatVisualFxState {
             // 6. Dismiss banner
             delay(150)
             activeBanner = null
+            isCritBannerActive = false
         }
     }
 }
@@ -419,7 +547,7 @@ fun rememberCombatVisualFxState(): CombatVisualFxState {
 }
 
 /**
- * Renders particle effects, screen flashes, and active ability banners over the combat view.
+ * Renders particle effects, screen flashes, dynamic shockwaves, and active ability / crit banners over the combat view.
  */
 @Composable
 fun CombatVisualFxOverlay(
@@ -443,14 +571,13 @@ fun CombatVisualFxOverlay(
             )
         }
 
-        // 2. Dynamic Canvas for particles
+        // 2. Dynamic Canvas for particles and shockwaves
         if (fxState.particles.isNotEmpty()) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val centerX = size.width / 2f
                 val centerY = size.height * 0.38f // centered around duel area
 
                 for (p in fxState.particles) {
-                    // Set spawn origin on first frame if not placed yet
                     val px = if (p.x == 0f) centerX else p.x
                     val py = if (p.y == 0f) centerY else p.y
                     p.x = px
@@ -461,51 +588,54 @@ fun CombatVisualFxOverlay(
             }
         }
 
-        // 3. Floating Ability Banner
+        // 3. Floating Ability / Critical Hit Banner
         androidx.compose.animation.AnimatedVisibility(
             visible = fxState.activeBanner != null,
-            enter = fadeIn(animationSpec = tween(120)) + scaleIn(initialScale = 0.75f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)),
-            exit = fadeOut(animationSpec = tween(220)) + scaleOut(targetScale = 0.9f),
+            enter = fadeIn(animationSpec = tween(100)) + scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)),
+            exit = fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.9f),
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 110.dp)
+                .padding(top = 100.dp)
         ) {
             fxState.activeBanner?.let { (type, title) ->
+                val isCrit = fxState.isCritBannerActive
+
                 Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-                    tonalElevation = 10.dp,
-                    shadowElevation = 8.dp,
+                    shape = RoundedCornerShape(22.dp),
+                    color = if (isCrit) Color(0xFF1E0A03).copy(alpha = 0.96f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                    tonalElevation = 12.dp,
+                    shadowElevation = 10.dp,
                     modifier = Modifier.border(
-                        width = 1.5.dp,
+                        width = if (isCrit) 2.dp else 1.5.dp,
                         brush = Brush.horizontalGradient(
-                            colors = listOf(type.primaryColor, type.secondaryColor, type.primaryColor)
+                            colors = if (isCrit) listOf(Color(0xFFFFD700), Color(0xFFFF3D00), Color(0xFFFFD700))
+                            else listOf(type.primaryColor, type.secondaryColor, type.primaryColor)
                         ),
-                        shape = RoundedCornerShape(20.dp)
+                        shape = RoundedCornerShape(22.dp)
                     )
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp),
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            text = type.icon,
-                            fontSize = 20.sp
+                            text = if (isCrit) "⚡💥" else type.icon,
+                            fontSize = if (isCrit) 22.sp else 20.sp
                         )
                         Column {
                             Text(
-                                text = "SPECIÁLNÍ SCHOPNOST",
+                                text = if (isCrit) "🔥 KRITICKÝ ÚDER!" else "SPECIÁLNÍ SCHOPNOST",
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = type.primaryColor,
-                                letterSpacing = 1.sp
+                                color = if (isCrit) Color(0xFFFFD700) else type.primaryColor,
+                                letterSpacing = 1.2.sp
                             )
                             Text(
                                 text = title,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                fontSize = if (isCrit) 15.sp else 14.sp,
+                                fontWeight = FontWeight.Black,
+                                color = if (isCrit) Color(0xFFFFF176) else Color.White
                             )
                         }
                     }
@@ -516,10 +646,10 @@ fun CombatVisualFxOverlay(
         // 4. Floating Damage / Heal Numbers
         fxState.floatingTexts.forEach { item ->
             val elapsed = (System.currentTimeMillis() - item.startTime).coerceAtLeast(0)
-            val lifeRatio = (elapsed / 850f).coerceIn(0f, 1f)
-            val floatOffsetY = -lifeRatio * 50f
+            val lifeRatio = (elapsed / 900f).coerceIn(0f, 1f)
+            val floatOffsetY = -lifeRatio * 55f
             val alpha = (1f - lifeRatio * lifeRatio).coerceIn(0f, 1f)
-            val scale = if (item.isCrit) 1.35f + sin(lifeRatio * PI.toFloat()) * 0.25f else 1.0f
+            val scale = if (item.isCrit) 1.4f + sin(lifeRatio * PI.toFloat()) * 0.3f else 1.0f
 
             Box(
                 modifier = Modifier
@@ -528,10 +658,10 @@ fun CombatVisualFxOverlay(
             ) {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = Color.Black.copy(alpha = 0.8f * alpha),
+                    color = Color.Black.copy(alpha = 0.82f * alpha),
                     border = BorderStroke(
-                        1.dp,
-                        if (item.isCrit) Color(0xFFFFD700).copy(alpha = alpha) else Color.White.copy(alpha = 0.3f * alpha)
+                        width = if (item.isCrit) 1.5.dp else 1.dp,
+                        color = if (item.isCrit) Color(0xFFFFD700).copy(alpha = alpha) else Color.White.copy(alpha = 0.3f * alpha)
                     ),
                     modifier = Modifier
                         .align(Alignment.Center)
@@ -541,7 +671,7 @@ fun CombatVisualFxOverlay(
                         text = if (item.isCrit) "⭐ KRIT! ${item.text}" else item.text,
                         color = item.color.copy(alpha = alpha),
                         fontWeight = FontWeight.Black,
-                        fontSize = if (item.isCrit) 18.sp else 15.sp,
+                        fontSize = if (item.isCrit) 19.sp else 15.sp,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
@@ -551,7 +681,7 @@ fun CombatVisualFxOverlay(
 }
 
 /**
- * Draws single particle based on shape.
+ * Draws single particle based on shape with advanced visual glow and styles.
  */
 private fun DrawScope.drawVisualParticle(p: VisualParticle) {
     val alpha = p.alpha
@@ -572,6 +702,54 @@ private fun DrawScope.drawVisualParticle(p: VisualParticle) {
                 center = Offset(p.x, p.y)
             )
         }
+        ParticleShape.RING -> {
+            drawCircle(
+                color = color,
+                radius = p.size,
+                center = Offset(p.x, p.y),
+                style = Stroke(width = (4f * alpha).coerceAtLeast(1f))
+            )
+        }
+        ParticleShape.BEAM -> {
+            rotate(p.rotation, pivot = Offset(p.x, p.y)) {
+                val len = p.size * 2.4f
+                drawLine(
+                    color = color,
+                    start = Offset(p.x - len, p.y),
+                    end = Offset(p.x + len, p.y),
+                    strokeWidth = (p.size * 0.6f).coerceAtLeast(2f),
+                    cap = StrokeCap.Round
+                )
+                drawCircle(
+                    color = Color.White.copy(alpha = alpha),
+                    radius = p.size * 0.4f,
+                    center = Offset(p.x, p.y)
+                )
+            }
+        }
+        ParticleShape.GLYPH -> {
+            rotate(p.rotation, pivot = Offset(p.x, p.y)) {
+                val s = p.size
+                drawCircle(
+                    color = color,
+                    radius = s,
+                    center = Offset(p.x, p.y),
+                    style = Stroke(width = 1.5f)
+                )
+                drawLine(
+                    color = Color.White.copy(alpha = alpha),
+                    start = Offset(p.x - s * 0.7f, p.y),
+                    end = Offset(p.x + s * 0.7f, p.y),
+                    strokeWidth = 1.5f
+                )
+                drawLine(
+                    color = Color.White.copy(alpha = alpha),
+                    start = Offset(p.x, p.y - s * 0.7f),
+                    end = Offset(p.x, p.y + s * 0.7f),
+                    strokeWidth = 1.5f
+                )
+            }
+        }
         ParticleShape.ORB -> {
             drawCircle(
                 brush = Brush.radialGradient(
@@ -587,9 +765,10 @@ private fun DrawScope.drawVisualParticle(p: VisualParticle) {
             rotate(p.rotation, pivot = Offset(p.x, p.y)) {
                 drawLine(
                     color = color,
-                    start = Offset(p.x - p.size * 1.6f, p.y),
-                    end = Offset(p.x + p.size * 1.6f, p.y),
-                    strokeWidth = (p.size * 0.5f).coerceAtLeast(2f)
+                    start = Offset(p.x - p.size * 1.8f, p.y),
+                    end = Offset(p.x + p.size * 1.8f, p.y),
+                    strokeWidth = (p.size * 0.6f).coerceAtLeast(2.5f),
+                    cap = StrokeCap.Round
                 )
             }
         }
@@ -608,9 +787,9 @@ private fun DrawScope.drawVisualParticle(p: VisualParticle) {
         ParticleShape.STAR -> {
             rotate(p.rotation, pivot = Offset(p.x, p.y)) {
                 val s = p.size
-                drawLine(color = color, start = Offset(p.x - s, p.y), end = Offset(p.x + s, p.y), strokeWidth = 2.5f)
-                drawLine(color = color, start = Offset(p.x, p.y - s), end = Offset(p.x, p.y + s), strokeWidth = 2.5f)
-                drawCircle(color = Color.White.copy(alpha = alpha), radius = s * 0.3f, center = Offset(p.x, p.y))
+                drawLine(color = color, start = Offset(p.x - s, p.y), end = Offset(p.x + s, p.y), strokeWidth = 3f, cap = StrokeCap.Round)
+                drawLine(color = color, start = Offset(p.x, p.y - s), end = Offset(p.x, p.y + s), strokeWidth = 3f, cap = StrokeCap.Round)
+                drawCircle(color = Color.White.copy(alpha = alpha), radius = s * 0.35f, center = Offset(p.x, p.y))
             }
         }
         ParticleShape.HEART -> {

@@ -1198,6 +1198,7 @@ class GameEngine(private val context: Context) {
             )
         }
         addPlayerXp(xpChange)
+        SoundEffectManager.playLocationAmbient(domainId, force = true)
         return Pair(true, msg)
     }
 
@@ -1230,6 +1231,7 @@ class GameEngine(private val context: Context) {
                 gameLog = logs
             )
         }
+        SoundEffectManager.playLocationAmbient(domainId, force = true)
         return Pair(true, msg)
     }
 

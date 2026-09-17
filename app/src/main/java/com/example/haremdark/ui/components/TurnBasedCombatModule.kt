@@ -43,6 +43,8 @@ import com.example.haremdark.models.GameSave
 import com.example.haremdark.domain.SoundEffectManager
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 
 @Composable
 fun TurnBasedCombatModule(
@@ -94,10 +96,27 @@ fun ActiveCombatView(
     ) {
         val shakeX = fxState.shakeOffsetX.value
         val shakeY = fxState.shakeOffsetY.value
+        val shakeRot = fxState.shakeRotation.value
+        val camScale = fxState.cameraScale.value
+
+        // Automatically trigger enhanced screen-shake & particle supernova if a critical hit lands
+        LaunchedEffect(session.logEntries.firstOrNull()?.turn, session.logEntries.firstOrNull()?.message) {
+            val latest = session.logEntries.firstOrNull() ?: return@LaunchedEffect
+            if (latest.message.contains("KRITICKÝ ZÁSAH") || latest.message.contains("KRIT!")) {
+                fxState.triggerCriticalExplosion(
+                    damageText = "-${latest.damageDealt} HP",
+                    scope = coroutineScope
+                )
+            }
+        }
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .scale(camScale)
+                .graphicsLayer {
+                    rotationZ = shakeRot
+                }
                 .offset { IntOffset(shakeX.roundToInt(), shakeY.roundToInt()) },
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
