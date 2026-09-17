@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
+import com.airbnb.lottie.compose.*
 import com.example.haremdark.R
 import com.example.haremdark.data.DomainData
 import com.example.haremdark.data.GameContent
@@ -60,13 +61,15 @@ fun WorldMapScreen(
     val isMuted by SoundEffectManager.isMuted.collectAsState()
 
     // Trigger ambient background soundscape on location change or initial load
-    LaunchedEffect(gameState.currentDomainId) {
-        SoundEffectManager.startAmbientAtmosphereLoop(gameState.currentDomainId)
+    LaunchedEffect(selectedDomainId) {
+        SoundEffectManager.crossfadeAmbientAtmosphere(selectedDomainId)
     }
 
     var showMilestonesModal by remember { mutableStateOf(false) }
     var selectedPoiForModal by remember { mutableStateOf<RegionPointOfInterest?>(null) }
     var showLoreModal by remember { mutableStateOf(false) }
+    var isFogEnabled by remember { mutableStateOf(gameState.fogOfWarEnabled) }
+    var showBookmarksDialog by remember { mutableStateOf(false) }
 
     // Find the current active story milestone that needs completion
     val nextMilestone = StoryMilestoneData.MILESTONES.find { !gameState.completedMilestones.contains(it.id) }
@@ -111,13 +114,95 @@ fun WorldMapScreen(
         label = "eq3"
     )
 
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = PaddingValues(top = 10.dp, bottom = 100.dp)
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(top = 10.dp, bottom = 100.dp)
+        ) {
+
+        item {
+            val totalRegions = DomainData.DOMAINS.size
+            val capturedRegions = gameState.regionDominionLevel.filter { it.value >= 100 }.size
+            val avgDominion = if (totalRegions > 0) gameState.regionDominionLevel.values.sum() / totalRegions else 0
+            
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xFF12081C),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF9C27B0).copy(alpha = 0.6f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(Color(0xFF9C27B0).copy(alpha = 0.2f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("🏰", fontSize = 22.sp)
+                    }
+                    
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "STAV TVÉHO DOMINIA",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFE1BEE7),
+                            letterSpacing = 1.sp
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "$capturedRegions / $totalRegions regionů",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0xFFE91E63).copy(alpha = 0.2f)
+                            ) {
+                                Text(
+                                    text = "$avgDominion% vliv",
+                                    fontSize = 9.sp,
+                                    color = Color(0xFFFF80AB),
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                    
+                    CircularProgressIndicator(
+                        progress = { avgDominion / 100f },
+                        modifier = Modifier.size(32.dp),
+                        color = Color(0xFF9C27B0),
+                        strokeWidth = 3.dp,
+                        trackColor = Color(0xFF9C27B0).copy(alpha = 0.1f)
+                    )
+
+                    IconButton(
+                        onClick = { isFogEnabled = !isFogEnabled },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Text(if (isFogEnabled) "🌫️" else "👁️", fontSize = 18.sp)
+                    }
+
+                    IconButton(
+                        onClick = { showBookmarksDialog = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Text("📍", fontSize = 18.sp)
+                    }
+                }
+            }
+        }
+
         // --- 1. STORY MILESTONE TIMELINE & PROGRESSION HEADER ---
         item {
             Card(
@@ -223,26 +308,31 @@ fun WorldMapScreen(
                         )
 
                         if (!isNextMilestoneCompleted) {
-                            Button(
-                                onClick = {
-                                    val (success, msg) = engine.claimStoryMilestone(nextMilestone.id)
-                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                                },
-                                enabled = canClaimNextMilestone,
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (canClaimNextMilestone) Color(0xFFFFD700) else Color(0xFF424242),
-                                    contentColor = if (canClaimNextMilestone) Color.Black else Color.LightGray
-                                ),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                            ) {
-                                Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = if (canClaimNextMilestone) "Odemknout kapitolu!" else "Podmínky nesplněny",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                            Box(contentAlignment = Alignment.Center) {
+                                if (canClaimNextMilestone) {
+                                    LottieClaimableMilestone(modifier = Modifier.size(80.dp))
+                                }
+                                Button(
+                                    onClick = {
+                                        val (success, msg) = engine.claimStoryMilestone(nextMilestone.id)
+                                        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                    },
+                                    enabled = canClaimNextMilestone,
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (canClaimNextMilestone) Color(0xFFFFD700) else Color(0xFF424242),
+                                        contentColor = if (canClaimNextMilestone) Color.Black else Color.LightGray
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = if (canClaimNextMilestone) "Odemknout kapitolu!" else "Podmínky nesplněny",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         } else {
                             Surface(
@@ -273,7 +363,8 @@ fun WorldMapScreen(
                 onDomainSelect = { id ->
                     selectedDomainId = id
                     SoundEffectManager.playLocationAmbient(id, force = true)
-                }
+                },
+                isFogEnabled = isFogEnabled
             )
         }
 
@@ -511,41 +602,59 @@ fun WorldMapScreen(
                         }
 
                         // Difficulty Pill
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = when (selectedDomain.difficultyStars) {
-                                1 -> Color(0xFF4CAF50).copy(alpha = 0.2f)
-                                2 -> Color(0xFF2196F3).copy(alpha = 0.2f)
-                                3 -> Color(0xFFFF9800).copy(alpha = 0.2f)
-                                4 -> Color(0xFFE91E63).copy(alpha = 0.2f)
-                                else -> Color(0xFF9C27B0).copy(alpha = 0.2f)
-                            },
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                when (selectedDomain.difficultyStars) {
-                                    1 -> Color(0xFF4CAF50)
-                                    2 -> Color(0xFF2196F3)
-                                    3 -> Color(0xFFFF9800)
-                                    4 -> Color(0xFFE91E63)
-                                    else -> Color(0xFF9C27B0)
-                                }
-                            )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Column(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = "★".repeat(selectedDomain.difficultyStars),
-                                    color = Color(0xFFFFD700),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = when (selectedDomain.difficultyStars) {
+                                    1 -> Color(0xFF4CAF50).copy(alpha = 0.2f)
+                                    2 -> Color(0xFF2196F3).copy(alpha = 0.2f)
+                                    3 -> Color(0xFFFF9800).copy(alpha = 0.2f)
+                                    4 -> Color(0xFFE91E63).copy(alpha = 0.2f)
+                                    else -> Color(0xFF9C27B0).copy(alpha = 0.2f)
+                                },
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    when (selectedDomain.difficultyStars) {
+                                        1 -> Color(0xFF4CAF50)
+                                        2 -> Color(0xFF2196F3)
+                                        3 -> Color(0xFFFF9800)
+                                        4 -> Color(0xFFE91E63)
+                                        else -> Color(0xFF9C27B0)
+                                    }
                                 )
-                                Text(
-                                    text = selectedDomain.difficulty,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = "★".repeat(selectedDomain.difficultyStars),
+                                        color = Color(0xFFFFD700),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = selectedDomain.difficulty,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            IconButton(
+                                onClick = { engine.toggleMapBookmark(selectedDomainId) },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                val isBookmarked = gameState.mapBookmarks.any { it.domainId == selectedDomainId }
+                                Icon(
+                                    imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                    contentDescription = "Záložka",
+                                    tint = if (isBookmarked) Color(0xFFFFD700) else Color.Gray,
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
                         }
@@ -1137,6 +1246,98 @@ fun WorldMapScreen(
             }
         }
     }
+
+    // --- DIALOG: BOOKMARKED LOCATIONS ---
+    if (showBookmarksDialog) {
+        Dialog(onDismissRequest = { showBookmarksDialog = false }) {
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color(0xFF140722),
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF9C27B0).copy(alpha = 0.6f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.7f)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "📍 ULOŽENÉ LOKACE",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = Color(0xFFFFD700)
+                        )
+                        IconButton(onClick = { showBookmarksDialog = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Zavřít", tint = Color.White)
+                        }
+                    }
+
+                    if (gameState.mapBookmarks.isEmpty()) {
+                        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "Nemáš žádné uložené lokace.\nKlikni na 🔖 u oblasti pro přidání.",
+                                textAlign = TextAlign.Center,
+                                color = Color.Gray,
+                                fontSize = 12.sp
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            items(gameState.mapBookmarks) { bookmark ->
+                                val domain = DomainData.getDomainById(bookmark.domainId)
+                                Card(
+                                    onClick = {
+                                        selectedDomainId = bookmark.domainId
+                                        showBookmarksDialog = false
+                                        SoundEffectManager.playLocationAmbient(bookmark.domainId, force = true)
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E102A)),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF9C27B0).copy(alpha = 0.3f))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Text("📍", fontSize = 20.sp)
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = bookmark.customName,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                                fontSize = 13.sp
+                                            )
+                                            Text(
+                                                text = domain.region,
+                                                color = Color.Gray,
+                                                fontSize = 10.sp
+                                            )
+                                        }
+                                        IconButton(onClick = { engine.removeMapBookmark(bookmark.id) }) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Smazat", tint = Color.Red.copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 }
 
 @Composable
@@ -1166,16 +1367,29 @@ fun DomainChipCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "★".repeat(domain.difficultyStars),
-                    color = Color(0xFFFFD700),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Surface(
+                    color = if (isUnlocked) Color(0xFF1B5E20).copy(alpha = 0.2f) else Color(0xFFB71C1C).copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        text = "★".repeat(domain.difficultyStars),
+                        color = Color(0xFFFFD700),
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
+                
                 if (!isUnlocked) {
                     Icon(Icons.Default.Lock, contentDescription = "Zamčeno", modifier = Modifier.size(12.dp), tint = MaterialTheme.colorScheme.error)
                 } else if (isCurrent) {
-                    Text("📍", fontSize = 11.sp)
+                    Surface(
+                        color = Color(0xFFFFD700).copy(alpha = 0.15f),
+                        shape = CircleShape,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFD700))
+                    ) {
+                        Text("📍", fontSize = 10.sp, modifier = Modifier.padding(2.dp))
+                    }
                 } else {
                     Text("$explorationPercent%", fontSize = 9.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 }
@@ -1185,15 +1399,26 @@ fun DomainChipCard(
                 text = domain.name,
                 fontWeight = FontWeight.Bold,
                 fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = if (isUnlocked) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
 
-            Text(
-                text = "Kap. ${domain.storyChapter} • ${domain.difficulty}",
-                fontSize = 9.sp,
-                color = MaterialTheme.colorScheme.primary
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("🏞️", fontSize = 10.sp)
+                Text(
+                    text = "${domain.region}",
+                    fontSize = 9.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+            }
+
+            LinearProgressIndicator(
+                progress = { explorationPercent / 100f },
+                modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),
+                color = if (explorationPercent >= 100) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
             )
         }
     }
@@ -1303,4 +1528,16 @@ fun CharacterRewardItem(reward: CharacterReward) {
             )
         }
     }
+}
+
+@Composable
+fun LottieClaimableMilestone(modifier: Modifier = Modifier) {
+    val composition by rememberLottieComposition(
+        LottieCompositionSpec.Url("https://assets5.lottiefiles.com/packages/lf20_at6mdfsq.json")
+    )
+    LottieAnimation(
+        composition = composition,
+        iterations = LottieConstants.IterateForever,
+        modifier = modifier
+    )
 }

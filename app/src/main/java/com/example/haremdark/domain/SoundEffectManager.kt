@@ -157,7 +157,13 @@ object SoundEffectManager {
 
     private var toneGenerator: ToneGenerator? = null
     private var ambientLoopJob: kotlinx.coroutines.Job? = null
+    private var crossfadeJob: kotlinx.coroutines.Job? = null
     private var currentAmbientDomainId: String? = null
+    private var targetAmbientDomainId: String? = null
+    
+    // Volume levels for crossfading (0.0f to 1.0f)
+    private val _primaryAmbientVolume = MutableStateFlow(1.0f)
+    private val _secondaryAmbientVolume = MutableStateFlow(0.0f)
 
     init {
         try {
@@ -170,8 +176,7 @@ object SoundEffectManager {
     fun toggleAmbientLoop() {
         _isAmbientLoopEnabled.value = !_isAmbientLoopEnabled.value
         if (!_isAmbientLoopEnabled.value) {
-            ambientLoopJob?.cancel()
-            ambientLoopJob = null
+            stopAmbientAtmosphere()
         } else {
             currentAmbientDomainId?.let { startAmbientAtmosphereLoop(it) }
         }
@@ -180,23 +185,62 @@ object SoundEffectManager {
     fun setAmbientLoopEnabled(enabled: Boolean) {
         _isAmbientLoopEnabled.value = enabled
         if (!enabled) {
-            ambientLoopJob?.cancel()
-            ambientLoopJob = null
+            stopAmbientAtmosphere()
         } else {
             currentAmbientDomainId?.let { startAmbientAtmosphereLoop(it) }
         }
     }
 
-    fun playLocationAmbient(domainId: String, force: Boolean = false) {
+    /**
+     * Crossfades to a new location ambient soundscape
+     */
+    fun crossfadeAmbientAtmosphere(newDomainId: String) {
+        if (targetAmbientDomainId == newDomainId) return
+        targetAmbientDomainId = newDomainId
+        
+        crossfadeJob?.cancel()
+        crossfadeJob = scope.launch {
+            // Smoothly crossfade volumes over 2 seconds
+            val steps = 20
+            val duration = 2000L
+            val stepDelay = duration / steps
+            
+            val startPrimary = _primaryAmbientVolume.value
+            val startSecondary = _secondaryAmbientVolume.value
+            
+            // Phase 1: Start secondary loop with target sound
+            val secondaryAmbient = LocationAmbientSound.fromDomainId(newDomainId)
+            
+            for (i in 1..steps) {
+                val progress = i.toFloat() / steps
+                _primaryAmbientVolume.value = startPrimary * (1f - progress)
+                _secondaryAmbientVolume.value = progress
+                delay(stepDelay)
+            }
+            
+            // Phase 2: Finalize swap
+            _currentAmbient.value = secondaryAmbient
+            currentAmbientDomainId = newDomainId
+            _primaryAmbientVolume.value = 1.0f
+            _secondaryAmbientVolume.value = 0.0f
+            
+            // Ensure the main loop is running with the new domain
+            startAmbientAtmosphereLoop(newDomainId)
+        }
+    }
+
+    fun playLocationAmbient(domainId: String, force: Boolean = false, volumeMultiplier: Float = 1.0f) {
         val ambient = LocationAmbientSound.fromDomainId(domainId)
-        _currentAmbient.value = ambient
-        currentAmbientDomainId = domainId
+        if (!force) {
+            _currentAmbient.value = ambient
+            currentAmbientDomainId = domainId
+        }
 
         if (_isMuted.value) return
         if (_isAmbientPlaying.value && !force) return
 
         scope.launch {
-            _isAmbientPlaying.value = true
+            if (!force) _isAmbientPlaying.value = true
             try {
                 val samples = when (ambient) {
                     LocationAmbientSound.DARK_FOREST -> synthesizeDarkForestAmbient()
@@ -211,27 +255,40 @@ object SoundEffectManager {
                     LocationAmbientSound.ASTRAL_CITADEL -> synthesizeAstralCitadelAmbient()
                     LocationAmbientSound.NYMPH_VALLEY -> synthesizeNymphValleyAmbient()
                 }
+                
+                // Apply volume multiplier to samples for crossfading
+                if (volumeMultiplier < 0.99f) {
+                    for (i in samples.indices) {
+                        samples[i] = (samples[i] * volumeMultiplier).toInt().toShort()
+                    }
+                }
+                
                 playPcmTrack(samples)
             } catch (e: Exception) {
                 Log.w(TAG, "playLocationAmbient error: ${e.message}")
             } finally {
-                _isAmbientPlaying.value = false
+                if (!force) _isAmbientPlaying.value = false
             }
         }
     }
 
     fun startAmbientAtmosphereLoop(domainId: String) {
+        if (currentAmbientDomainId == domainId && ambientLoopJob?.isActive == true) return
+        
         val ambient = LocationAmbientSound.fromDomainId(domainId)
         _currentAmbient.value = ambient
         currentAmbientDomainId = domainId
+        targetAmbientDomainId = domainId
 
         ambientLoopJob?.cancel()
         if (!_isAmbientLoopEnabled.value || _isMuted.value) return
 
         ambientLoopJob = scope.launch {
             while (isActive && _isAmbientLoopEnabled.value && !_isMuted.value) {
-                playLocationAmbient(domainId, force = true)
-                // Wait between atmospheric sound pulses (e.g. 7-10 seconds)
+                // Use primary volume for the active loop
+                playLocationAmbient(domainId, force = true, volumeMultiplier = _primaryAmbientVolume.value)
+                
+                // Wait between atmospheric sound pulses
                 delay(8000L)
             }
         }
@@ -240,6 +297,8 @@ object SoundEffectManager {
     fun stopAmbientAtmosphere() {
         ambientLoopJob?.cancel()
         ambientLoopJob = null
+        crossfadeJob?.cancel()
+        crossfadeJob = null
     }
 
     fun toggleMute() {

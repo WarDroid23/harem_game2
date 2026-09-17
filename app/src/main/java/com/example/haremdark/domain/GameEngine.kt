@@ -5137,4 +5137,33 @@ class GameEngine(private val context: Context) {
         return result
     }
 
+    fun toggleMapBookmark(domainId: String, customName: String = "") {
+        updateState { state ->
+            val existing = state.mapBookmarks.find { it.domainId == domainId }
+            val newList = state.mapBookmarks.toMutableList()
+            if (existing != null) {
+                newList.remove(existing)
+                addLog("📍 Záložka pro oblast '${DomainData.getDomainById(domainId).name}' byla odstraněna.")
+            } else {
+                val domain = DomainData.getDomainById(domainId)
+                newList.add(
+                    MapBookmark(
+                        id = UUID.randomUUID().toString(),
+                        domainId = domainId,
+                        customName = if (customName.isBlank()) domain.name else customName
+                    )
+                )
+                addLog("📍 Oblast '${domain.name}' byla přidána do záložek.")
+            }
+            state.copy(mapBookmarks = newList)
+        }
+    }
+
+    fun removeMapBookmark(bookmarkId: String) {
+        updateState { state ->
+            val newList = state.mapBookmarks.filter { it.id != bookmarkId }
+            state.copy(mapBookmarks = newList)
+        }
+    }
+
 }

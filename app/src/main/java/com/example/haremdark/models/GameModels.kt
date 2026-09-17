@@ -621,6 +621,14 @@ data class EquipmentLoadout(
 )
 
 @Serializable
+data class MapBookmark(
+    val id: String,
+    val domainId: String,
+    val customName: String,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+@Serializable
 data class GameSave(
     val version: String = "22.1-dark",
     val saveDate: String,
@@ -650,7 +658,9 @@ data class GameSave(
     val resourceHistory: List<DailyResourceStat> = emptyList(),
     val savedLoadouts: List<EquipmentLoadout> = emptyList(),
     val activeLoadoutId: String? = null,
-    val savedPartyFormations: List<PartyFormation> = emptyList()
+    val savedPartyFormations: List<PartyFormation> = emptyList(),
+    val fogOfWarEnabled: Boolean = true,
+    val mapBookmarks: List<MapBookmark> = emptyList()
 )
 
 @Serializable
