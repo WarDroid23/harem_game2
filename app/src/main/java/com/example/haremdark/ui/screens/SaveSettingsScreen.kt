@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.haremdark.domain.GameEngine
+import com.example.haremdark.domain.VoiceManager
 import com.example.haremdark.models.GameSave
 
 @Composable
@@ -36,11 +38,22 @@ fun SaveSettingsScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val summaries = remember { mutableStateMapOf<Int, String>() }
+
+    val isTtsEnabled by VoiceManager.isTtsEnabled.collectAsState()
+    val isSpeaking by VoiceManager.isSpeaking.collectAsState()
+    val speakingText by VoiceManager.speakingText.collectAsState()
+    val speechRate by VoiceManager.speechRate.collectAsState()
+    val pitchModifier by VoiceManager.pitchModifier.collectAsState()
+
+    val isAutoSaveEnabled by engine.isAutoSaveEnabled.collectAsState()
+    val lastAutoSave by engine.lastAutoSaveEvent.collectAsState()
+
     LaunchedEffect(Unit) {
         summaries[99] = summaries[99] ?: "Načítání..."
         summaries[0] = summaries[0] ?: "Načítání..."
         for (i in 1..5) summaries[i] = engine.getSlotSummary(i)
     }
+
     val themes = listOf(
         "Temné dominium" to Color(0xFFB71C1C),
         "Krvavý trůn" to Color(0xFFD32F2F),
@@ -131,9 +144,218 @@ fun SaveSettingsScreen(
             }
         }
 
+        // Text-to-Speech (TTS) Configuration Card
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.VolumeUp,
+                                contentDescription = "Hlas",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Column {
+                                Text(
+                                    "Hlasové předčítání dívek (TTS)",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "Konkubíny promlouvají při interakcích hlasem podle své povahy",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = isTtsEnabled,
+                            onCheckedChange = { VoiceManager.setTtsEnabled(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+                            )
+                        )
+                    }
+
+                    if (isTtsEnabled) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+
+                        // Status of speaking
+                        if (isSpeaking) {
+                            Card(
+                                shape = RoundedCornerShape(8.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "🔊 Mluví: „${speakingText?.take(38) ?: ""}...“",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    TextButton(
+                                        onClick = { VoiceManager.stop() },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("Zastavit", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Speech Rate Slider
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Rychlost řeči", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text("${String.format("%.2f", speechRate)}x", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                            }
+                            Slider(
+                                value = speechRate,
+                                onValueChange = { VoiceManager.setSpeechRate(it) },
+                                valueRange = 0.6f..1.4f,
+                                steps = 7
+                            )
+                        }
+
+                        // Pitch Slider
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Výška hlasu (Pitch)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text("${String.format("%.2f", pitchModifier)}x", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                            }
+                            Slider(
+                                value = pitchModifier,
+                                onValueChange = { VoiceManager.setPitchModifier(it) },
+                                valueRange = 0.7f..1.4f,
+                                steps = 6
+                            )
+                        }
+
+                        Text("Vyzkoušet hlasy archetypů:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            val archetypes = listOf(
+                                Triple("subka", "🌸 Jemná", Color(0xFFF48FB1)),
+                                Triple("slechta", "👑 Vznešená", Color(0xFFFFD54F)),
+                                Triple("bojovnice", "⚔️ Bojovná", Color(0xFFEF5350)),
+                                Triple("intrikanka", "💋 Intrikánka", Color(0xFFBA68C8))
+                            )
+                            archetypes.forEach { (archId, label, color) ->
+                                OutlinedButton(
+                                    onClick = { VoiceManager.previewArchetypeVoice(archId) },
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.6f))
+                                ) {
+                                    Text(label, fontSize = 10.sp, maxLines = 1, color = color)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Auto-Save Configuration Card
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.CloudSync,
+                                contentDescription = "Auto-save",
+                                tint = Color(0xFF66BB6A)
+                            )
+                            Column {
+                                Text(
+                                    "Automatické ukládání (Auto-Save)",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    "Ukládá hru po novém dni, bojích a milnících (Slot 0)",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = isAutoSaveEnabled,
+                            onCheckedChange = { engine.setAutoSaveEnabled(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color(0xFF66BB6A),
+                                checkedTrackColor = Color(0xFF66BB6A).copy(alpha = 0.3f)
+                            )
+                        )
+                    }
+
+                    if (lastAutoSave != null) {
+                        Card(
+                            shape = RoundedCornerShape(8.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color(0xFF66BB6A),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "Poslední uložení: ${lastAutoSave?.summary}",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Save & Load Slots
         item {
-            Text("Ukládání a Načítání hry", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("Správa herních pozic (Sloty)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         }
 
         // Quick Save info
@@ -167,7 +389,7 @@ fun SaveSettingsScreen(
             }
         }
 
-        // Autosave info
+        // Autosave info (Slot 0)
         item {
             Card(
                 shape = RoundedCornerShape(12.dp),
@@ -231,9 +453,9 @@ fun SaveSettingsScreen(
                         OutlinedButton(
                             onClick = {
                                 coroutineScope.launch {
-                                val ok = engine.loadFromSlotSuspend(slot)
-                                Toast.makeText(context, if (ok) "Slot slot načten!" else "Slot je prázdný!", Toast.LENGTH_SHORT).show()
-                            }
+                                    val ok = engine.loadFromSlotSuspend(slot)
+                                    Toast.makeText(context, if (ok) "Slot $slot načten!" else "Slot je prázdný!", Toast.LENGTH_SHORT).show()
+                                }
                             },
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                             shape = RoundedCornerShape(8.dp)

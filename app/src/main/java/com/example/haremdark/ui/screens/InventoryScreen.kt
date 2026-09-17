@@ -48,10 +48,15 @@ import com.example.haremdark.domain.VoiceManager
 import com.example.haremdark.domain.VoiceTriggerType
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.lazy.LazyRow
+import com.example.haremdark.models.InventoryFilterUtils
+import com.example.haremdark.models.ItemAffinityFilter
+import com.example.haremdark.models.ItemQuantityFilter
+import com.example.haremdark.models.ItemTypeCategory
 
 enum class ItemSortOption(val title: String, val icon: String) {
     RARITY_DESC("Vzácnost (Nejvyšší)", "💎"),
     RARITY_ASC("Vzácnost (Nejnižší)", "🔹"),
+    SOURCE("Původ (Průzkum / Boj)", "🧭"),
     AFFINITY_DESC("Náklonnost (Nejvyšší)", "💖"),
     AFFINITY_ASC("Náklonnost (Nejnižší)", "🤍"),
     TYPE("Kategorie / Typ", "🏷️"),
@@ -71,40 +76,7 @@ enum class ItemRarityFilter(val rawValue: String, val displayName: String, val c
     COMMON("Běžný", "🌿 Běžné", Color(0xFF81C784))
 }
 
-enum class ItemAffinityFilter(val displayName: String, val minAffinity: Int, val icon: String) {
-    ALL("Vše", 0, "✨"),
-    ANY_BONUS("S bonusem (>0)", 1, "💖"),
-    HIGH_BONUS("Vysoký bonus (≥20)", 20, "🔥"),
-    LEGENDARY_BONUS("Královský dar (≥40)", 40, "👑")
-}
-
-fun getItemAffinityBonusValue(item: InventoryItem): Int {
-    val catalogGift = GiftInventoryCatalog.ALL_GIFTS.find { it.id == item.id }
-    if (catalogGift != null) {
-        return catalogGift.baseAffinity
-    }
-    val regexAffinity = Regex("""\+(\d+)\s*(?:Náklonnost|Affinity|Pouto)""", RegexOption.IGNORE_CASE)
-    val matchAff = regexAffinity.find(item.effectDescription)
-    if (matchAff != null) {
-        return matchAff.groupValues[1].toIntOrNull() ?: 0
-    }
-    val regexLoyalty = Regex("""\+(\d+)\s*(?:Loajalita|Loyalty|Věrnost)""", RegexOption.IGNORE_CASE)
-    val matchLoy = regexLoyalty.find(item.effectDescription)
-    if (matchLoy != null) {
-        val pts = matchLoy.groupValues[1].toIntOrNull() ?: 0
-        return pts * 2
-    }
-    val cat = item.category.lowercase()
-    if (cat.contains("gift") || cat.contains("dar") || item.id.startsWith("gift_") || item.id == "drahy_obojek") {
-        return when (item.rarity) {
-            "Legendární", "Mýtický" -> 50
-            "Epický" -> 35
-            "Vzácný" -> 22
-            else -> 15
-        }
-    }
-    return 0
-}
+fun getItemAffinityBonusValue(item: InventoryItem): Int = InventoryFilterUtils.getItemAffinityBonusValue(item)
 
 fun getRarityRank(rarity: String): Int = when (rarity.lowercase()) {
     "mýtický", "mythic" -> 5
@@ -142,10 +114,14 @@ fun InventoryScreen(
     val player = gameState.player
 
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Gifts, 1: Combat Consumables, 2: Quest Items, 3: All
+    var selectedLocation by remember { mutableIntStateOf(0) } // 0: All, 1: Bag, 2: Storage
+    var selectedSourceFilter by remember { mutableStateOf("ALL") } // ALL, Průzkum, Boj
     var searchQuery by remember { mutableStateOf("") }
     var selectedSort by remember { mutableStateOf(ItemSortOption.RARITY_DESC) }
     var selectedRarityFilter by remember { mutableStateOf(ItemRarityFilter.ALL) }
     var selectedAffinityFilter by remember { mutableStateOf(ItemAffinityFilter.ALL) }
+    var selectedTypeFilter by remember { mutableStateOf(ItemTypeCategory.ALL) }
+    var selectedQuantityFilter by remember { mutableStateOf(ItemQuantityFilter.ALL) }
     var isFilterPanelExpanded by remember { mutableStateOf(false) }
 
     var selectedItemForGift by remember { mutableStateOf<InventoryItem?>(null) }
@@ -153,23 +129,59 @@ fun InventoryScreen(
     var selectedItemForSell by remember { mutableStateOf<InventoryItem?>(null) }
     var inspectedQuestLore by remember { mutableStateOf<Pair<String, String>?>(null) }
 
-    val activeFilterCount = remember(selectedRarityFilter, selectedAffinityFilter, searchQuery) {
+    val activeFilterCount = remember(selectedRarityFilter, selectedAffinityFilter, selectedTypeFilter, selectedQuantityFilter, searchQuery, selectedLocation, selectedSourceFilter) {
         var count = 0
+        if (selectedLocation != 0) count++
+        if (selectedSourceFilter != "ALL") count++
+        if (selectedTypeFilter != ItemTypeCategory.ALL) count++
+        if (selectedQuantityFilter != ItemQuantityFilter.ALL) count++
         if (selectedRarityFilter != ItemRarityFilter.ALL) count++
         if (selectedAffinityFilter != ItemAffinityFilter.ALL) count++
         if (searchQuery.isNotBlank()) count++
         count
     }
 
+    val allCombinedItems = remember(player.items, player.storedItems) {
+        val bag = player.items.map { it.copy(isStored = false) }
+        val storage = player.storedItems.map { it.copy(isStored = true) }
+        bag + storage
+    }
+
     val filteredItems = remember(
-        player.items,
+        allCombinedItems,
+        selectedLocation,
+        selectedSourceFilter,
         selectedTab,
+        selectedTypeFilter,
+        selectedQuantityFilter,
         searchQuery,
         selectedSort,
         selectedRarityFilter,
         selectedAffinityFilter
     ) {
-        var list = player.items.filter { it.count > 0 }
+        var list = allCombinedItems.filter { it.count > 0 }
+
+        // Location filter (0: All, 1: Bag, 2: Storage)
+        list = when (selectedLocation) {
+            1 -> list.filter { !it.isStored }
+            2 -> list.filter { it.isStored }
+            else -> list
+        }
+
+        // Source filter
+        if (selectedSourceFilter != "ALL") {
+            list = list.filter { it.source.equals(selectedSourceFilter, ignoreCase = true) }
+        }
+
+        // Type filter
+        if (selectedTypeFilter != ItemTypeCategory.ALL) {
+            list = list.filter { InventoryFilterUtils.matchesType(it, selectedTypeFilter) }
+        }
+
+        // Quantity filter
+        if (selectedQuantityFilter != ItemQuantityFilter.ALL) {
+            list = list.filter { InventoryFilterUtils.matchesQuantity(it, selectedQuantityFilter) }
+        }
 
         // Category filter
         list = when (selectedTab) {
@@ -195,6 +207,7 @@ fun InventoryScreen(
             list = list.filter {
                 it.name.lowercase().contains(q) ||
                 it.description.lowercase().contains(q) ||
+                it.source.lowercase().contains(q) ||
                 it.rarity.lowercase().contains(q) ||
                 it.effectDescription.lowercase().contains(q) ||
                 getItemCategoryKey(it).lowercase().contains(q)
@@ -210,6 +223,11 @@ fun InventoryScreen(
             )
             ItemSortOption.RARITY_ASC -> list.sortedWith(
                 compareBy<InventoryItem> { getRarityRank(it.rarity) }
+                    .thenBy { it.name }
+            )
+            ItemSortOption.SOURCE -> list.sortedWith(
+                compareBy<InventoryItem> { it.source }
+                    .thenByDescending { getRarityRank(it.rarity) }
                     .thenBy { it.name }
             )
             ItemSortOption.AFFINITY_DESC -> list.sortedWith(
@@ -235,11 +253,16 @@ fun InventoryScreen(
         }
     }
 
-    val totalItemCount = remember(player.items) { player.items.sumOf { it.count } }
-    val totalInventoryValue = remember(player.items) { player.items.sumOf { it.price * it.count } }
-    val giftItemsCount = remember(player.items) { player.items.filter { getItemCategoryKey(it) == "gift" }.sumOf { it.count } }
-    val combatItemsCount = remember(player.items) { player.items.filter { getItemCategoryKey(it) == "combat" }.sumOf { it.count } }
-    val questItemsCount = remember(player.items) { player.items.filter { getItemCategoryKey(it) == "quest" }.sumOf { it.count } }
+    val totalBagCount = remember(player.items) { player.items.sumOf { it.count } }
+    val totalStorageCount = remember(player.storedItems) { player.storedItems.sumOf { it.count } }
+    val totalItemCount = remember(totalBagCount, totalStorageCount) { totalBagCount + totalStorageCount }
+    val explorationAndCombatCount = remember(player.items) {
+        player.items.filter { it.source == "Průzkum" || it.source == "Boj" || it.category in listOf("artifact", "quest") }.sumOf { it.count }
+    }
+    val totalInventoryValue = remember(allCombinedItems) { allCombinedItems.sumOf { it.price * it.count } }
+    val giftItemsCount = remember(allCombinedItems) { allCombinedItems.filter { getItemCategoryKey(it) == "gift" }.sumOf { it.count } }
+    val combatItemsCount = remember(allCombinedItems) { allCombinedItems.filter { getItemCategoryKey(it) == "combat" }.sumOf { it.count } }
+    val questItemsCount = remember(allCombinedItems) { allCombinedItems.filter { getItemCategoryKey(it) == "quest" }.sumOf { it.count } }
 
     Column(
         modifier = modifier
@@ -355,6 +378,66 @@ fun InventoryScreen(
                 }
             }
         } else {
+
+        // --- STORAGE / BAG LOCATION SELECTOR & QUICK STASH ---
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    SegmentedButton(
+                        selected = selectedLocation == 0,
+                        onClick = { selectedLocation = 0 },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3)
+                    ) {
+                        Text("📦 Vše ($totalItemCount)", fontSize = 11.sp, maxLines = 1)
+                    }
+                    SegmentedButton(
+                        selected = selectedLocation == 1,
+                        onClick = { selectedLocation = 1 },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3)
+                    ) {
+                        Text("🎒 Batoh ($totalBagCount)", fontSize = 11.sp, maxLines = 1)
+                    }
+                    SegmentedButton(
+                        selected = selectedLocation == 2,
+                        onClick = { selectedLocation = 2 },
+                        shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3)
+                    ) {
+                        Text("🏛️ Sklad ($totalStorageCount)", fontSize = 11.sp, maxLines = 1)
+                    }
+                }
+
+                // Quick Stash Button if loot is present in the bag
+                if (explorationAndCombatCount > 0) {
+                    FilledTonalButton(
+                        onClick = {
+                            val (stored, msg) = engine.storeAllExplorationAndCombatLoot()
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Icon(Icons.Default.Inventory2, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "📥 Uložit kořist z průzkumů a bojů do skladu ($explorationAndCombatCount ks)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
 
         // --- CATEGORY SELECTOR TABS ---
         Row(
@@ -558,6 +641,15 @@ fun InventoryScreen(
                     )
                 }
                 item {
+                    val isSourceActive = selectedSort == ItemSortOption.SOURCE
+                    FilterChip(
+                        selected = isSourceActive,
+                        onClick = { selectedSort = ItemSortOption.SOURCE },
+                        label = { Text("🧭 Původ", fontSize = 11.sp) },
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                }
+                item {
                     val isAffinityActive = selectedSort == ItemSortOption.AFFINITY_DESC || selectedSort == ItemSortOption.AFFINITY_ASC
                     FilterChip(
                         selected = isAffinityActive,
@@ -665,6 +757,10 @@ fun InventoryScreen(
                                     onClick = {
                                         selectedRarityFilter = ItemRarityFilter.ALL
                                         selectedAffinityFilter = ItemAffinityFilter.ALL
+                                        selectedTypeFilter = ItemTypeCategory.ALL
+                                        selectedQuantityFilter = ItemQuantityFilter.ALL
+                                        selectedSourceFilter = "ALL"
+                                        selectedLocation = 0
                                         searchQuery = ""
                                     },
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
@@ -672,6 +768,50 @@ fun InventoryScreen(
                                     Icon(Icons.Default.RestartAlt, contentDescription = null, modifier = Modifier.size(14.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text("Vymazat filtry", fontSize = 11.sp)
+                                }
+                            }
+                        }
+
+                        // Filter by Type / Category
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Kategorie a typ předmětů:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFFFD54F))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(ItemTypeCategory.values()) { typeCat ->
+                                    val isSelected = selectedTypeFilter == typeCat
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = { selectedTypeFilter = typeCat },
+                                        label = {
+                                            Text(
+                                                "${typeCat.icon} ${typeCat.displayName}",
+                                                fontSize = 10.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        },
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Filter by Quantity
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Množství na skladě / v batohu:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF80CBC4))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(ItemQuantityFilter.values()) { qtyFilter ->
+                                    val isSelected = selectedQuantityFilter == qtyFilter
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = { selectedQuantityFilter = qtyFilter },
+                                        label = {
+                                            Text(
+                                                "${qtyFilter.icon} ${qtyFilter.displayName}",
+                                                fontSize = 10.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        },
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
                                 }
                             }
                         }
@@ -699,6 +839,31 @@ fun InventoryScreen(
                                         shape = RoundedCornerShape(8.dp)
                                     )
                                 }
+                            }
+                        }
+
+                        // Filter by Origin / Source
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Původ a zdroj kořisti:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF81D4FA))
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                FilterChip(
+                                    selected = selectedSourceFilter == "ALL",
+                                    onClick = { selectedSourceFilter = "ALL" },
+                                    label = { Text("✨ Všechny zdroje", fontSize = 10.sp) },
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                FilterChip(
+                                    selected = selectedSourceFilter == "Průzkum",
+                                    onClick = { selectedSourceFilter = if (selectedSourceFilter == "Průzkum") "ALL" else "Průzkum" },
+                                    label = { Text("🧭 Z průzkumu", fontSize = 10.sp) },
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                FilterChip(
+                                    selected = selectedSourceFilter == "Boj",
+                                    onClick = { selectedSourceFilter = if (selectedSourceFilter == "Boj") "ALL" else "Boj" },
+                                    label = { Text("⚔️ Z bojů", fontSize = 10.sp) },
+                                    shape = RoundedCornerShape(8.dp)
+                                )
                             }
                         }
 
@@ -787,6 +952,10 @@ fun InventoryScreen(
                                     onClick = {
                                         selectedRarityFilter = ItemRarityFilter.ALL
                                         selectedAffinityFilter = ItemAffinityFilter.ALL
+                                        selectedTypeFilter = ItemTypeCategory.ALL
+                                        selectedQuantityFilter = ItemQuantityFilter.ALL
+                                        selectedSourceFilter = "ALL"
+                                        selectedLocation = 0
                                         searchQuery = ""
                                     },
                                     shape = RoundedCornerShape(8.dp)
@@ -814,7 +983,7 @@ fun InventoryScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(bottom = 90.dp)
                 ) {
-                    items(filteredItems, key = { it.id }) { item ->
+                    items(filteredItems, key = { "${it.id}_${it.isStored}" }) { item ->
                         val catType = getItemCategoryKey(item)
                         val affinityVal = getItemAffinityBonusValue(item)
 
@@ -845,7 +1014,18 @@ fun InventoryScreen(
                                 inspectedQuestLore = Pair(item.name, lore)
                             },
                             onDetailsClick = { selectedItemForDetails = item },
-                            onSellClick = { selectedItemForSell = item }
+                            onSellClick = { selectedItemForSell = item },
+                            onStoreClick = {
+                                val (success, msg) = engine.storeItemToStorage(item.id, 1)
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            },
+                            onWithdrawClick = {
+                                val (success, msg) = engine.withdrawItemFromStorage(item.id, 1)
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            },
+                            onToggleFavorite = {
+                                engine.toggleItemFavorite(item.id, item.isStored)
+                            }
                         )
                     }
                 }
@@ -1105,6 +1285,9 @@ fun InventoryItemCard(
     onInspectQuestClick: () -> Unit,
     onDetailsClick: () -> Unit,
     onSellClick: () -> Unit,
+    onStoreClick: (() -> Unit)? = null,
+    onWithdrawClick: (() -> Unit)? = null,
+    onToggleFavorite: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val borderColor = when (categoryType) {
@@ -1198,6 +1381,39 @@ fun InventoryItemCard(
                                 )
                             }
 
+                            // Storage location chip
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = if (item.isStored) Color(0xFF00BCD4).copy(alpha = 0.2f) else Color(0xFF9C27B0).copy(alpha = 0.2f)
+                            ) {
+                                Text(
+                                    text = if (item.isStored) "🏛️ Sklad" else "🎒 Batoh",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (item.isStored) Color(0xFF80DEEA) else Color(0xFFCE93D8),
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
+
+                            // Origin tag if present
+                            if (item.source.isNotBlank()) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color(0xFF37474F).copy(alpha = 0.6f)
+                                ) {
+                                    Text(
+                                        text = when (item.source) {
+                                            "Průzkum" -> "🧭 Průzkum"
+                                            "Boj" -> "⚔️ Boj"
+                                            else -> item.source
+                                        },
+                                        fontSize = 8.sp,
+                                        color = Color(0xFFB0BEC5),
+                                        modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+
                             if (affinityBonus > 0) {
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
@@ -1222,19 +1438,39 @@ fun InventoryItemCard(
                     }
                 }
 
-                // Count Badge
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color.Black.copy(alpha = 0.4f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = "${item.count} ks",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                    )
+                    // Favorite Star Toggle
+                    if (onToggleFavorite != null) {
+                        IconButton(
+                            onClick = onToggleFavorite,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (item.isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
+                                contentDescription = if (item.isFavorite) "Oblíbené" else "Označit jako oblíbené",
+                                tint = if (item.isFavorite) Color(0xFFFFD700) else Color.White.copy(alpha = 0.4f),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    // Count Badge
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color.Black.copy(alpha = 0.4f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+                    ) {
+                        Text(
+                            text = "${item.count} ks",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
                 }
             }
 
@@ -1340,6 +1576,33 @@ fun InventoryItemCard(
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Prozkoumat runy", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
+                    }
+                }
+
+                // Storage transfer button (Store to storage or withdraw to bag)
+                if (item.isStored && onWithdrawClick != null) {
+                    OutlinedButton(
+                        onClick = onWithdrawClick,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF80DEEA)),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = "Vybrat do batohu", modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text("Vybrat", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                } else if (!item.isStored && onStoreClick != null) {
+                    OutlinedButton(
+                        onClick = onStoreClick,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFA5D6A7)),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Icon(Icons.Default.Upload, contentDescription = "Uložit do skladu", modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text("Uložit", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 

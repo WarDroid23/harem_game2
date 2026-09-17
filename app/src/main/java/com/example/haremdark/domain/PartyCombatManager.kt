@@ -696,9 +696,9 @@ object PartyCombatManager {
 
         // 1. Guaranteed potion/gift
         val standardGifts = listOf(
-            InventoryItem("gift_roses", "Kytice černých růží", "Zvyšuje náklonnost a potěší společnici.", 1, 120, "gift", "🌹", "Vzácný", "+15 Náklonnost"),
-            InventoryItem("hojivy_balzam", "Léčivý balzám dominance", "Okamžitě obnoví 50 HP v boji.", 1, 90, "consumable", "🧪", "Běžný", "Obnoví 50 HP"),
-            InventoryItem("hedvabny_korzet", "Hedvábný krajkový korzet", "Luxusní oděv zvyšující poslušnost a touhu.", 1, 200, "gift", "🎀", "Epický", "+25 Náklonnost, +10 Poslušnost")
+            InventoryItem("gift_roses", "Kytice černých růží", "Zvyšuje náklonnost a potěší společnici.", 1, 120, "gift", "🌹", "Vzácný", "+15 Náklonnost", source = "Boj"),
+            InventoryItem("hojivy_balzam", "Léčivý balzám dominance", "Okamžitě obnoví 50 HP v boji.", 1, 90, "consumable", "🧪", "Běžný", "Obnoví 50 HP", source = "Boj"),
+            InventoryItem("hedvabny_korzet", "Hedvábný krajkový korzet", "Luxusní oděv zvyšující poslušnost a touhu.", 1, 200, "gift", "🎀", "Epický", "+25 Náklonnost, +10 Poslušnost", source = "Boj")
         )
         val selectedGift = standardGifts.random()
         droppedItemDetails.add(selectedGift)
@@ -708,10 +708,10 @@ object PartyCombatManager {
         val roll = (0..100).random()
         if (rank == "S+" || rank == "S" || isBossFight || roll < 45) {
             val rareEquipmentPool = listOf(
-                InventoryItem("krvava_cepel_arena", "Krvavá čepel arény", "Legendární meč zocelený v desítkách bitev.", 1, 350, "equipment", "🗡️", "Epický", "+16 Boj, +8% Krit", "weapon", 16, 0, 0),
-                InventoryItem("roba_temnych_hvezd", "Róba temných hvězd", "Zahalená stínovou magií chránící nositelku.", 1, 320, "equipment", "🥋", "Epický", "+12 Obrana, +35 HP", "armor", 0, 12, 35),
-                InventoryItem("prsten_krvaveho_rubinu", "Amulet krvavého rubínu", "Vysává životní sílu nepřátel při každém úderu.", 1, 400, "equipment", "🧿", "Legendární", "+10 Boj, +6 Obrana, +20 HP", "accessory", 10, 6, 20),
-                InventoryItem("kniha_stinovych_kouzel", "Tome temného rituálu", "Starobylá kniha zvyšující dovednosti společnic.", 1, 300, "gift", "📜", "Vzácný", "+35 Náklonnost, +20 ZK všem")
+                InventoryItem("krvava_cepel_arena", "Krvavá čepel arény", "Legendární meč zocelený v desítkách bitev.", 1, 350, "equipment", "🗡️", "Epický", "+16 Boj, +8% Krit", "weapon", 16, 0, 0, source = "Boj"),
+                InventoryItem("roba_temnych_hvezd", "Róba temných hvězd", "Zahalená stínovou magií chránící nositelku.", 1, 320, "equipment", "🥋", "Epický", "+12 Obrana, +35 HP", "armor", 0, 12, 35, source = "Boj"),
+                InventoryItem("prsten_krvaveho_rubinu", "Amulet krvavého rubínu", "Vysává životní sílu nepřátel při každém úderu.", 1, 400, "equipment", "🧿", "Legendární", "+10 Boj, +6 Obrana, +20 HP", "accessory", 10, 6, 20, source = "Boj"),
+                InventoryItem("kniha_stinovych_kouzel", "Tome temného rituálu", "Starobylá kniha zvyšující dovednosti společnic.", 1, 300, "gift", "📜", "Vzácný", "+35 Náklonnost, +20 ZK všem", source = "Boj")
             )
             val drop = rareEquipmentPool.random()
             droppedItemDetails.add(drop)

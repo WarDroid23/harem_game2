@@ -67,7 +67,10 @@ data class InventoryItem(
     val equipSlot: String? = null, // "weapon", "armor", "accessory"
     val combatBonus: Int = 0,
     val defenseBonus: Int = 0,
-    val hpBonus: Int = 0
+    val hpBonus: Int = 0,
+    val source: String = "Obchod", // "Průzkum", "Boj", "Alchymie", "Úkol", "Dar", "Obchod"
+    var isStored: Boolean = false,
+    var isFavorite: Boolean = false
 )
 
 @Serializable
@@ -142,6 +145,8 @@ data class Character(
     var rarity: Int = 1,
     var hp: Int = 100,
     var maxHp: Int = 100,
+    var mana: Int = 50,
+    var maxMana: Int = 50,
     var srdce: Int = 70,
     var poslusnost: Int = 30,
     var vlhkost: Int = 50,
@@ -340,6 +345,8 @@ data class Player(
         InventoryItem("temny_klic", "Klíč ke starým kobkám", "Prastarý železný klíč nalezený v podzemních ruinách chrámu.", 1, 120, "quest", "🗝️", "Epický", "Přístup k tajné kryptě"),
         InventoryItem("kralovska_listina", "Královská výsadní listina", "Listina s puncem královského rodu pro jednání s inkvizicí.", 1, 350, "quest", "⚜️", "Legendární", "+25 Reputace v metropoli")
     ),
+    var storedItems: MutableList<InventoryItem> = mutableListOf(),
+    var activePartyIds: MutableList<String> = mutableListOf(),
     var bankGold: Int = 0,
     var toxicity: Int = 0,
     var maxToxicity: Int = 100,

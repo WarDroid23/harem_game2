@@ -5,19 +5,24 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
-import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -37,6 +42,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        com.example.haremdark.domain.VoiceManager.init(applicationContext)
         val engine = GameEngine(applicationContext)
 
         setContent {
@@ -53,11 +59,27 @@ class MainActivity : ComponentActivity() {
                     activeNarrativeEvent = event
                 }
             }
+
+            val snackbarHostState = remember { SnackbarHostState() }
+            LaunchedEffect(Unit) {
+                var isFirst = true
+                engine.lastAutoSaveEvent.collect { event ->
+                    if (event != null) {
+                        if (isFirst) {
+                            isFirst = false
+                        } else {
+                            snackbarHostState.showSnackbar(
+                                message = "💾 Automaticky uloženo: ${event.reason}",
+                                duration = SnackbarDuration.Short
+                            )
+                        }
+                    }
+                }
+            }
             
             val navController = rememberNavController()
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = navBackStackEntry?.destination?.route ?: "home"
-            val snackbarHostState = remember { SnackbarHostState() }
             val coroutineScope = rememberCoroutineScope()
             
             var showRestDialog by remember { mutableStateOf(false) }
@@ -67,57 +89,387 @@ class MainActivity : ComponentActivity() {
                 ModalNavigationDrawer(
                     drawerState = drawerState,
                     drawerContent = {
-                        ModalDrawerSheet(modifier = Modifier.width(280.dp)) {
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                "Rychlá navigace",
-                                modifier = Modifier.padding(16.dp),
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            HorizontalDivider()
-                            NavigationDrawerItem(
-                                icon = { Icon(Icons.Default.Favorite, contentDescription = null) },
-                                label = { Text("Harém") },
-                                selected = currentRoute == "harem",
-                                onClick = {
-                                    coroutineScope.launch { drawerState.close() }
-                                    navController.navigate("harem") { launchSingleTop = true }
-                                },
-                                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                            )
-                            NavigationDrawerItem(
-                                icon = { Icon(Icons.Default.Inventory, contentDescription = null) },
-                                label = { Text("Inventář") },
-                                selected = currentRoute == "inventory",
-                                onClick = {
-                                    coroutineScope.launch { drawerState.close() }
-                                    navController.navigate("inventory") { launchSingleTop = true }
-                                },
-                                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                            )
-                            NavigationDrawerItem(
-                                icon = { Icon(Icons.Default.EmojiEvents, contentDescription = null) },
-                                label = { Text("Úspěchy") },
-                                selected = currentRoute == "achievements",
-                                onClick = {
-                                    coroutineScope.launch { drawerState.close() }
-                                    navController.navigate("achievements") { launchSingleTop = true }
-                                },
-                                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                            )
-                            NavigationDrawerItem(
-                                icon = { Icon(Icons.Default.SportsMartialArts, contentDescription = null) },
-                                label = { Text("Boj") },
-                                selected = currentRoute == "arena" || currentRoute == "party_combat", // Support combat routes
-                                onClick = {
-                                    coroutineScope.launch { drawerState.close() }
-                                    // Default to arena or Party Combat
-                                    navController.navigate("arena") { launchSingleTop = true }
-                                },
-                                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                            )
+                        ModalDrawerSheet(
+                            modifier = Modifier
+                                .width(310.dp)
+                                .fillMaxHeight()
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(vertical = 12.dp)
+                            ) {
+                                // Drawer Header
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(42.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Bolt,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(26.dp)
+                                        )
+                                    }
+                                    Column {
+                                        Text(
+                                            "Rychlá navigace",
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            "${gameState.player.name} • Den ${gameState.player.day} (Lvl ${gameState.player.level})",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+
+                                // Quick Status Banner
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            "💰 ${gameState.player.gold} zlata",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color(0xFFFFD700)
+                                        )
+                                        Text(
+                                            "⚡ ${gameState.player.sexEnergy}/${gameState.player.maxSexEnergy} SE",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color(0xFFFF80AB)
+                                        )
+                                        Text(
+                                            "🔮 ${gameState.player.mana}/${gameState.player.maxMana} MP",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color(0xFF80D8FF)
+                                        )
+                                    }
+                                }
+
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                )
+
+                                // --- RYCHLÉ AKCE (QUICK ACTIONS) ---
+                                Text(
+                                    "⚡ RYCHLÉ AKCE",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                                )
+
+                                // 1. Další den (Nový den & Odpočinek)
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = Color(0xFF332612).copy(alpha = 0.75f)
+                                    ),
+                                    border = BorderStroke(1.dp, Color(0xFFFFB300).copy(alpha = 0.45f)),
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        showRestDialog = true
+                                    }
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(38.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(Color(0xFFFFB300).copy(alpha = 0.2f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Bedtime,
+                                                contentDescription = "Další den",
+                                                tint = Color(0xFFFFC107),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Text(
+                                                    "Další den",
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 13.sp,
+                                                    color = Color(0xFFFFE082)
+                                                )
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = Color(0xFFFFC107).copy(alpha = 0.2f)
+                                                ) {
+                                                    Text(
+                                                        "Den ${gameState.player.day + 1}",
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFFFFD54F),
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                    )
+                                                }
+                                            }
+                                            Text(
+                                                "Odpočinek, plná energie & zisky z mafie",
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                            )
+                                        }
+                                        Icon(
+                                            Icons.Default.ChevronRight,
+                                            contentDescription = null,
+                                            tint = Color(0xFFFFD54F),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+
+                                // 2. Rychlé uložení (Uložit hru)
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = Color(0xFF132B18).copy(alpha = 0.75f)
+                                    ),
+                                    border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.45f)),
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            drawerState.close()
+                                            engine.quickSaveSuspend()
+                                            snackbarHostState.showSnackbar("💾 Uloženo do DataStore: Den ${gameState.player.day}, ${gameState.characters.size} dívek, výbava")
+                                            Toast.makeText(context, "⚡ DataStore: Rychlé uložení dokončeno!", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(38.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(Color(0xFF4CAF50).copy(alpha = 0.2f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Save,
+                                                contentDescription = "Rychlé uložení",
+                                                tint = Color(0xFF66BB6A),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                "Uložit hru (DataStore)",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp,
+                                                color = Color(0xFFA5D6A7)
+                                            )
+                                            Text(
+                                                "Uložit stav pána, dívek, skladu a výbavy",
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                            )
+                                        }
+                                        Icon(
+                                            Icons.Default.ChevronRight,
+                                            contentDescription = null,
+                                            tint = Color(0xFFA5D6A7),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                )
+
+                                // --- SEKCE 1: HLAVNÍ SPRÁVA ---
+                                Text(
+                                    "🏰 HLAVNÍ SPRÁVA",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+                                )
+
+                                QuickNavDrawerItem(
+                                    icon = Icons.Default.Castle,
+                                    title = "Dominium",
+                                    subtitle = "Hlavní sídlo & rychlý přehled",
+                                    isSelected = currentRoute == "home",
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        navController.navigate("home") { launchSingleTop = true }
+                                    }
+                                )
+                                QuickNavDrawerItem(
+                                    icon = Icons.Default.Favorite,
+                                    title = "Harém",
+                                    subtitle = "Dívky, komnaty & vztahy",
+                                    badgeText = "${gameState.characters.size} dívek",
+                                    isSelected = currentRoute == "harem",
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        navController.navigate("harem") { launchSingleTop = true }
+                                    }
+                                )
+                                QuickNavDrawerItem(
+                                    icon = Icons.Default.Inventory2,
+                                    title = "Inventář & Sklad",
+                                    subtitle = "Batoh, zámecký sklad, dary & kořist",
+                                    isSelected = currentRoute == "inventory",
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        navController.navigate("inventory") { launchSingleTop = true }
+                                    }
+                                )
+                                QuickNavDrawerItem(
+                                    icon = Icons.Default.LocationCity,
+                                    title = "Pevnost & Impérium",
+                                    subtitle = "Mafiánská teritoria & budovy",
+                                    isSelected = currentRoute == "empire",
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        navController.navigate("empire") { launchSingleTop = true }
+                                    }
+                                )
+
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                )
+
+                                // --- SEKCE 2: PRŮZKUM & BOJ ---
+                                Text(
+                                    "⚔️ PRŮZKUM & BOJ",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+                                )
+
+                                QuickNavDrawerItem(
+                                    icon = Icons.Default.Map,
+                                    title = "Mapa světa",
+                                    subtitle = "Provincie, cesty & expedice",
+                                    isSelected = currentRoute == "map",
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        navController.navigate("map") { launchSingleTop = true }
+                                    }
+                                )
+                                QuickNavDrawerItem(
+                                    icon = Icons.Default.Explore,
+                                    title = "Aktivity & Lov",
+                                    subtitle = "Dražby, alchymie, lov dívek & úkoly",
+                                    isSelected = currentRoute == "activities",
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        navController.navigate("activities") { launchSingleTop = true }
+                                    }
+                                )
+                                QuickNavDrawerItem(
+                                    icon = Icons.Default.SportsMartialArts,
+                                    title = "Aréna & Souboje",
+                                    subtitle = "Gladiátorské zápasy & turnaje",
+                                    isSelected = currentRoute == "arena",
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        navController.navigate("arena") { launchSingleTop = true }
+                                    }
+                                )
+
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                )
+
+                                // --- SEKCE 3: POSTAVA & SYSTÉM ---
+                                Text(
+                                    "👤 POSTAVA & SYSTÉM",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+                                )
+
+                                QuickNavDrawerItem(
+                                    icon = Icons.Default.Person,
+                                    title = "Pán Dominia",
+                                    subtitle = "Statistiky, perky & trénink",
+                                    isSelected = currentRoute == "progression",
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        navController.navigate("progression") { launchSingleTop = true }
+                                    }
+                                )
+                                QuickNavDrawerItem(
+                                    icon = Icons.Default.EmojiEvents,
+                                    title = "Úspěchy & Kodex",
+                                    subtitle = "Trofeje, milníky & lore",
+                                    isSelected = currentRoute == "achievements",
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        navController.navigate("achievements") { launchSingleTop = true }
+                                    }
+                                )
+                                QuickNavDrawerItem(
+                                    icon = Icons.Default.Settings,
+                                    title = "Nastavení & Uložení",
+                                    subtitle = "Ukládání / Načítání, vzhled & zvuk",
+                                    isSelected = currentRoute == "settings",
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        navController.navigate("settings") { launchSingleTop = true }
+                                    }
+                                )
+
+                                Spacer(Modifier.height(16.dp))
+                            }
                         }
                     }
                 ) {
@@ -151,16 +503,15 @@ class MainActivity : ComponentActivity() {
                                 NavigationDestination("Dominium", Icons.Default.Castle, "home"),
                                 NavigationDestination("Harém", Icons.Default.Favorite, "harem"),
                                 NavigationDestination("Mapa", Icons.Default.Map, "map"),
-                                NavigationDestination("Aréna", Icons.Default.Warning, "arena"),
                                 NavigationDestination("Pevnost", Icons.Default.LocationCity, "empire"),
                                 NavigationDestination("Aktivity", Icons.Default.Explore, "activities"),
-                                NavigationDestination("Pán", Icons.Default.Person, "progression"),
-                                NavigationDestination("Nastavení", Icons.Default.Settings, "settings")
+                                NavigationDestination("Pán", Icons.Default.Person, "progression")
                             )
 
                             items.forEach { dest ->
+                                val isSelected = currentRoute == dest.route
                                 NavigationBarItem(
-                                    selected = currentRoute == dest.route,
+                                    selected = isSelected,
                                     onClick = {
                                         navController.navigate(dest.route) {
                                             popUpTo(navController.graph.findStartDestination().id) {
@@ -170,47 +521,30 @@ class MainActivity : ComponentActivity() {
                                             restoreState = true
                                         }
                                     },
-                                    icon = { Icon(dest.icon, contentDescription = dest.title) },
-                                    label = { Text(dest.title, fontSize = 8.sp, maxLines = 1) },
+                                    icon = { 
+                                        Icon(
+                                            dest.icon, 
+                                            contentDescription = dest.title,
+                                            modifier = Modifier.size(22.dp)
+                                        ) 
+                                    },
+                                    label = { 
+                                        Text(
+                                            dest.title, 
+                                            fontSize = 10.sp, 
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            maxLines = 1
+                                        ) 
+                                    },
                                     colors = NavigationBarItemDefaults.colors(
                                         selectedIconColor = MaterialTheme.colorScheme.onPrimary,
                                         selectedTextColor = MaterialTheme.colorScheme.primary,
-                                        indicatorColor = MaterialTheme.colorScheme.primary
+                                        indicatorColor = MaterialTheme.colorScheme.primary,
+                                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
                                     )
                                 )
                             }
-
-                            // Quick Save Action directly in the main Navigation Menu
-                            NavigationBarItem(
-                                selected = false,
-                                onClick = {
-                                    coroutineScope.launch {
-                                        engine.quickSaveSuspend()
-                                        snackbarHostState.showSnackbar("💾 Uloženo do DataStore (Pán, ${gameState.characters.size} dívek, výbava)")
-                                        Toast.makeText(context, "⚡ DataStore: Rychlé uložení dokončeno!", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                icon = { 
-                                    Icon(
-                                        Icons.Default.Save, 
-                                        contentDescription = "Rychlé uložení",
-                                        tint = Color(0xFF4CAF50),
-                                        modifier = Modifier.size(22.dp)
-                                    ) 
-                                },
-                                label = { 
-                                    Text(
-                                        "Uložit", 
-                                        fontSize = 8.sp, 
-                                        maxLines = 1,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF4CAF50)
-                                    ) 
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    indicatorColor = Color(0xFF4CAF50).copy(alpha = 0.2f)
-                                )
-                            )
                         }
                     }
                 ) { innerPadding ->
@@ -333,6 +667,11 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        com.example.haremdark.domain.VoiceManager.shutdown()
+    }
 }
 
 data class NavigationDestination(
@@ -340,3 +679,68 @@ data class NavigationDestination(
     val icon: ImageVector,
     val route: String
 )
+
+@Composable
+private fun QuickNavDrawerItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    badgeText: String? = null
+) {
+    NavigationDrawerItem(
+        icon = {
+            Icon(
+                icon,
+                contentDescription = title,
+                modifier = Modifier.size(22.dp),
+                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
+        label = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = title,
+                        fontSize = 13.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                    )
+                    if (badgeText != null) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = badgeText,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                }
+                Text(
+                    text = subtitle,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                )
+            }
+        },
+        selected = isSelected,
+        onClick = onClick,
+        colors = NavigationDrawerItemDefaults.colors(
+            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+            unselectedContainerColor = Color.Transparent
+        ),
+        modifier = modifier.padding(horizontal = 10.dp, vertical = 2.dp)
+    )
+}

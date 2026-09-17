@@ -38,6 +38,13 @@ data class DailyRewardState(
     val itemReward: InventoryItem?
 )
 
+data class AutoSaveEvent(
+    val reason: String,
+    val timestamp: Long = System.currentTimeMillis(),
+    val day: Int,
+    val summary: String = ""
+)
+
 class GameEngine(private val context: Context) {
 
     private val json = Json {
@@ -64,6 +71,15 @@ class GameEngine(private val context: Context) {
     private val _isLightMode = MutableStateFlow(false)
     val isLightMode: StateFlow<Boolean> = _isLightMode.asStateFlow()
 
+    private val _isAutoSaveEnabled = MutableStateFlow(true)
+    val isAutoSaveEnabled: StateFlow<Boolean> = _isAutoSaveEnabled.asStateFlow()
+
+    fun setAutoSaveEnabled(enabled: Boolean) {
+        _isAutoSaveEnabled.value = enabled
+    }
+
+    private val _lastAutoSaveEvent = MutableStateFlow<AutoSaveEvent?>(null)
+    val lastAutoSaveEvent: StateFlow<AutoSaveEvent?> = _lastAutoSaveEvent.asStateFlow()
 
     private val _dailyRewardAvailable = MutableStateFlow<DailyRewardState?>(null)
     val dailyRewardAvailable: StateFlow<DailyRewardState?> = _dailyRewardAvailable.asStateFlow()
@@ -742,7 +758,7 @@ class GameEngine(private val context: Context) {
                 resourceHistory = newHistory
             )
         }
-        autoSave()
+        autoSave("Nový den (Den ${_gameState.value.player.day})")
     }
 
     // --- MISSIONS ---
@@ -983,8 +999,12 @@ class GameEngine(private val context: Context) {
                 com.example.haremdark.domain.VoiceTriggerType.AFFINITY_LEVEL_UP,
                 character
             )
+            autoSave("Posílení vztahu (${character.name})")
         } else {
             SoundEffectManager.playHarem(HaremSound.FLIRT)
+            if (feedback.isNotBlank()) {
+                com.example.haremdark.domain.VoiceManager.speakDialogue(character.name, feedback, character.archetypeId)
+            }
         }
 
         return Pair(true, logText)
@@ -1258,14 +1278,76 @@ class GameEngine(private val context: Context) {
 
         val goldFound = Random.nextInt(20, 50) + domain.difficultyStars * 25
         val bonusDrop = domain.resourceDrops.randomOrNull() ?: "Zlato"
-
         val archetypeData = StaticData.ARCHETYPES[chosenArchetype]
-        val message = "⚔️ Úspěšná výprava v dominiu '${domain.name}'! Nalezena dívka ${newGirl.name} (${archetypeData?.name ?: chosenArchetype})! Získáno: +$goldFound zl. a kořist [$bonusDrop]."
+
+        // Exploration loot item
+        val explorationLootPool = listOf(
+            InventoryItem(
+                id = "relikvie_${domain.id}",
+                name = "Relikvie: ${domain.name}",
+                description = "Prastará magická památka objevená v ruinách dominia '${domain.name}'.",
+                count = 1,
+                price = 120 + domain.difficultyStars * 40,
+                category = "artifact",
+                icon = "🏺",
+                rarity = if (domain.difficultyStars >= 3) "Epický" else "Vzácný",
+                effectDescription = "+${10 + domain.difficultyStars * 5} Vliv a prestiž",
+                source = "Průzkum"
+            ),
+            InventoryItem(
+                id = "lotus_${domain.id}",
+                name = "Květina stínů: ${domain.name}",
+                description = "Vzácná omamná bylina sesbíraná v hloubi panství. Dívky ji milují.",
+                count = Random.nextInt(1, 3),
+                price = 85,
+                category = "gift",
+                icon = "🪷",
+                rarity = "Vzácný",
+                effectDescription = "+20 Náklonnost, +12 Touha",
+                source = "Průzkum"
+            ),
+            InventoryItem(
+                id = "elixir_temne_many",
+                name = "Lektvar astrální many",
+                description = "Elixír z kondenzované esence obnovující manu a mysl.",
+                count = 1,
+                price = 70,
+                category = "combat",
+                icon = "🧪",
+                rarity = "Běžný",
+                effectDescription = "Obnoví 35 Many a 25 HP",
+                source = "Průzkum"
+            ),
+            InventoryItem(
+                id = "svitek_krypt_${domain.id}",
+                name = "Svitek krypt: ${domain.name}",
+                description = "Starobylý svitek popisující skryté chodby a poklady.",
+                count = 1,
+                price = 150,
+                category = "quest",
+                icon = "📜",
+                rarity = "Epický",
+                effectDescription = "Odemčení tajemství dominia",
+                source = "Průzkum"
+            )
+        )
+        val droppedItem = explorationLootPool.random()
+        val message = "⚔️ Úspěšná výprava v dominiu '${domain.name}'! Nalezena dívka ${newGirl.name} (${archetypeData?.name ?: chosenArchetype})! Získáno: +$goldFound zl., kořist [$bonusDrop] a nalezen předmět ${droppedItem.icon} ${droppedItem.name} (${droppedItem.rarity})!"
 
         updateState { state ->
+            val newItems = state.player.items.toMutableList()
+            val existingIdx = newItems.indexOfFirst { it.id == droppedItem.id }
+            if (existingIdx != -1) {
+                val cur = newItems[existingIdx]
+                newItems[existingIdx] = cur.copy(count = cur.count + droppedItem.count)
+            } else {
+                newItems.add(droppedItem)
+            }
+
             val p = state.player.copy(
                 sexEnergy = (state.player.sexEnergy - energyCost).coerceAtLeast(0),
-                gold = state.player.gold + goldFound
+                gold = state.player.gold + goldFound,
+                items = newItems
             )
             val updatedUnlocked = if (!state.unlockedDomains.contains(domainId)) {
                 state.unlockedDomains + domainId
@@ -2674,6 +2756,159 @@ class GameEngine(private val context: Context) {
         return Pair(true, msg)
     }
 
+    fun storeItemToStorage(itemId: String, quantity: Int = 1): Pair<Boolean, String> {
+        val current = _gameState.value
+        val item = current.player.items.firstOrNull { it.id == itemId && it.count >= quantity }
+            ?: return Pair(false, "Nemáš dostatek kusů v batohu.")
+
+        val msg = "🏛️ Uloženo do skladu: ${quantity}x ${item.name}."
+        updateState { state ->
+            val player = state.player
+            val updatedBag = player.items.mapNotNull { itm ->
+                if (itm.id == itemId) {
+                    val remaining = itm.count - quantity
+                    if (remaining > 0) itm.copy(count = remaining) else null
+                } else itm.copy()
+            }.toMutableList()
+
+            val updatedStorage = player.storedItems.toMutableList()
+            val existingInStorage = updatedStorage.indexOfFirst { it.id == itemId }
+            if (existingInStorage != -1) {
+                val cur = updatedStorage[existingInStorage]
+                updatedStorage[existingInStorage] = cur.copy(count = cur.count + quantity, isStored = true)
+            } else {
+                updatedStorage.add(item.copy(count = quantity, isStored = true))
+            }
+
+            val newPlayer = player.copy(
+                items = updatedBag,
+                storedItems = updatedStorage
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newPlayer, gameLog = logs)
+        }
+        return Pair(true, msg)
+    }
+
+    fun withdrawItemFromStorage(itemId: String, quantity: Int = 1): Pair<Boolean, String> {
+        val current = _gameState.value
+        val item = current.player.storedItems.firstOrNull { it.id == itemId && it.count >= quantity }
+            ?: return Pair(false, "Předmět není ve skladu.")
+
+        val msg = "🎒 Vyjmuto ze skladu do batohu: ${quantity}x ${item.name}."
+        updateState { state ->
+            val player = state.player
+            val updatedStorage = player.storedItems.mapNotNull { itm ->
+                if (itm.id == itemId) {
+                    val remaining = itm.count - quantity
+                    if (remaining > 0) itm.copy(count = remaining) else null
+                } else itm.copy()
+            }.toMutableList()
+
+            val updatedBag = player.items.toMutableList()
+            val existingInBag = updatedBag.indexOfFirst { it.id == itemId }
+            if (existingInBag != -1) {
+                val cur = updatedBag[existingInBag]
+                updatedBag[existingInBag] = cur.copy(count = cur.count + quantity, isStored = false)
+            } else {
+                updatedBag.add(item.copy(count = quantity, isStored = false))
+            }
+
+            val newPlayer = player.copy(
+                items = updatedBag,
+                storedItems = updatedStorage
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newPlayer, gameLog = logs)
+        }
+        return Pair(true, msg)
+    }
+
+    fun storeAllExplorationAndCombatLoot(): Pair<Int, String> {
+        val current = _gameState.value
+        val player = current.player
+        val lootToStore = player.items.filter {
+            it.source == "Průzkum" || it.source == "Boj" || it.category in listOf("artifact", "quest")
+        }
+        if (lootToStore.isEmpty()) {
+            return Pair(0, "V batohu není žádná kořist z průzkumu ani bojů k uložení.")
+        }
+
+        var totalStored = 0
+        updateState { state ->
+            val p = state.player
+            val remainingBag = p.items.filterNot { lootToStore.contains(it) }.toMutableList()
+            val updatedStorage = p.storedItems.toMutableList()
+
+            lootToStore.forEach { item ->
+                totalStored += item.count
+                val idx = updatedStorage.indexOfFirst { it.id == item.id }
+                if (idx != -1) {
+                    val cur = updatedStorage[idx]
+                    updatedStorage[idx] = cur.copy(count = cur.count + item.count, isStored = true)
+                } else {
+                    updatedStorage.add(item.copy(isStored = true))
+                }
+            }
+
+            val msg = "🏛️ Uloženo celkem $totalStored ks kořisti z bojů a průzkumu do zámeckého skladu!"
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(
+                player = p.copy(items = remainingBag, storedItems = updatedStorage),
+                gameLog = logs
+            )
+        }
+        return Pair(totalStored, "Úspěšně uloženo $totalStored ks kořisti do skladu.")
+    }
+
+    fun toggleItemFavorite(itemId: String, isStored: Boolean = false): Boolean {
+        var newState = false
+        updateState { state ->
+            val p = state.player
+            if (isStored) {
+                val updatedStorage = p.storedItems.map {
+                    if (it.id == itemId) {
+                        newState = !it.isFavorite
+                        it.copy(isFavorite = newState)
+                    } else it
+                }.toMutableList()
+                state.copy(player = p.copy(storedItems = updatedStorage))
+            } else {
+                val updatedBag = p.items.map {
+                    if (it.id == itemId) {
+                        newState = !it.isFavorite
+                        it.copy(isFavorite = newState)
+                    } else it
+                }.toMutableList()
+                state.copy(player = p.copy(items = updatedBag))
+            }
+        }
+        return newState
+    }
+
+    fun togglePartyMember(characterId: String): Pair<Boolean, String> {
+        val current = _gameState.value
+        val player = current.player
+        val currentParty = player.activePartyIds.toMutableList()
+        val isPresent = currentParty.contains(characterId)
+        val char = current.characters.find { it.id == characterId }
+        val charName = char?.name ?: "Společnice"
+
+        val msg: String
+        if (isPresent) {
+            currentParty.remove(characterId)
+            msg = "$charName byla odebrána z aktivní družiny."
+        } else {
+            if (currentParty.size >= 4) {
+                return Pair(false, "Družina může mít maximálně 4 členky!")
+            }
+            currentParty.add(characterId)
+            msg = "⚔️ $charName byla zařazena do aktivní družiny!"
+        }
+        updateState { it.copy(player = player.copy(activePartyIds = currentParty)) }
+        return Pair(true, msg)
+    }
+
     fun claimQuest(questId: String): Pair<Boolean, String> {
         val current = _gameState.value
         val quest = GameContent.QUESTS.firstOrNull { it.id == questId }
@@ -3214,9 +3449,9 @@ class GameEngine(private val context: Context) {
             var droppedItem: com.example.haremdark.models.InventoryItem? = null
             if (Random.nextInt(100) < 35) { // 35% chance to drop item
                 val possibleDrops = listOf(
-                    com.example.haremdark.models.InventoryItem("hojivy_balzam", "Hojivý balzám", "Okamžitě uzdravuje 45 HP.", 1, 25, "combat", "🧪", "Běžný", "+45 HP", null, 0, 0, 0),
-                    com.example.haremdark.models.InventoryItem("krvavy_mec", "Krvavý meč", "Zvyšuje útok.", 1, 100, "equipment", "🗡️", "Vzácný", "+15 Boj", "weapon", 15, 0, 0),
-                    com.example.haremdark.models.InventoryItem("stribrna_zbroj", "Stříbrná zbroj", "Zvyšuje obranu.", 1, 120, "equipment", "🛡️", "Vzácný", "+10 Obrana", "armor", 0, 10, 0)
+                    com.example.haremdark.models.InventoryItem("hojivy_balzam", "Hojivý balzám", "Okamžitě uzdravuje 45 HP.", 1, 25, "combat", "🧪", "Běžný", "+45 HP", null, 0, 0, 0, source = "Boj"),
+                    com.example.haremdark.models.InventoryItem("krvavy_mec", "Krvavý meč", "Zvyšuje útok.", 1, 100, "equipment", "🗡️", "Vzácný", "+15 Boj", "weapon", 15, 0, 0, source = "Boj"),
+                    com.example.haremdark.models.InventoryItem("stribrna_zbroj", "Stříbrná zbroj", "Zvyšuje obranu.", 1, 120, "equipment", "🛡️", "Vzácný", "+10 Obrana", "armor", 0, 10, 0, source = "Boj")
                 )
                 droppedItem = possibleDrops.random()
                 val items = player.items.toMutableList()
@@ -3404,7 +3639,7 @@ class GameEngine(private val context: Context) {
 
     fun endCombat() {
         _combatState.value = null
-        autoSave()
+        autoSave("Ukončení souboje")
     }
 
     fun startPartyCombat(
@@ -3430,7 +3665,7 @@ class GameEngine(private val context: Context) {
 
     fun closePartyCombat() {
         _partyCombatSession.value = null
-        autoSave()
+        autoSave("Skupinový boj dokončen")
     }
 
     fun awardPartyCombatVictory(
@@ -3535,13 +3770,21 @@ class GameEngine(private val context: Context) {
         return true
     }
 
-    fun autoSave() {
+    fun autoSave(reason: String = "Automatické uložení") {
+        if (!_isAutoSaveEnabled.value) return
         val state = _gameState.value
+        val timeFormatted = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
         val current = state.copy(
             slotNumber = 0,
-            saveDate = "Den ${state.player.day} (Autosave)"
+            saveDate = "Den ${state.player.day} ($reason • $timeFormatted)"
         )
         saveStateAsync("save_slot_autosave", current)
+        _lastAutoSaveEvent.value = AutoSaveEvent(
+            reason = reason,
+            timestamp = System.currentTimeMillis(),
+            day = state.player.day,
+            summary = "Den ${state.player.day} • ${state.characters.size} dívek • $reason"
+        )
     }
 
     fun quickSave(): Pair<Boolean, String> {

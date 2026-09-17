@@ -71,22 +71,26 @@ fun CharacterDetailDialog(
     onUpgradeSkill: (String) -> Unit,
     onEquipItem: (String, String) -> Unit,
     onUnequipItem: (String) -> Unit,
-    engine: GameEngine? = null
+    engine: GameEngine? = null,
+    initialTab: Int = 0
 ) {
-    val loyalty = StaticData.getLoyaltyTier(character.loajalita)
-    val archetype = StaticData.ARCHETYPES[character.archetypeId]
-    val phase = StaticData.DEGRADATION_PHASES[character.fazeZkazenosti]
-    val portraitRes = StaticData.getPortraitForArchetype(character.archetypeId)
+    val context = LocalContext.current
+    var currentActiveCharacter by remember(character.id) { mutableStateOf(character) }
 
-    var selectedSection by remember { mutableIntStateOf(0) }
-    val sectionTabs = listOf("📖 Životopis", "📊 Profil", "🛡️ Výbava", "💖 Náklonnost", "🎁 Dary", "⚡ Akce", "✨ Dovednosti")
+    val loyalty = StaticData.getLoyaltyTier(currentActiveCharacter.loajalita)
+    val archetype = StaticData.ARCHETYPES[currentActiveCharacter.archetypeId]
+    val phase = StaticData.DEGRADATION_PHASES[currentActiveCharacter.fazeZkazenosti]
+    val portraitRes = StaticData.getPortraitForArchetype(currentActiveCharacter.archetypeId)
+
+    var selectedSection by remember { mutableIntStateOf(initialTab) }
+    val sectionTabs = listOf("📖 Životopis", "📊 Profil", "🛡️ Výbava", "💖 Náklonnost", "🎁 Dary", "📦 Sklad & Inventář", "⚡ Akce", "✨ Dovednosti")
     var activeEmote by remember { mutableStateOf<String?>(null) }
     var emoteKey by remember { mutableLongStateOf(0L) }
 
     val offsetY = remember { androidx.compose.animation.core.Animatable(150f) }
     val alphaVal = remember { androidx.compose.animation.core.Animatable(0f) }
 
-    LaunchedEffect(character.id) {
+    LaunchedEffect(currentActiveCharacter.id) {
         launch {
             offsetY.animateTo(
                 targetValue = 0f,
@@ -110,7 +114,7 @@ fun CharacterDetailDialog(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.92f)
+                .fillMaxHeight(0.95f)
                 .graphicsLayer(
                     translationY = offsetY.value,
                     alpha = alphaVal.value
@@ -126,14 +130,14 @@ fun CharacterDetailDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(140.dp)
+                        .height(130.dp)
                 ) {
                     SubcomposeAsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(portraitRes)
                             .crossfade(true)
                             .build(),
-                        contentDescription = character.name,
+                        contentDescription = currentActiveCharacter.name,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
                         loading = {
@@ -199,12 +203,12 @@ fun CharacterDetailDialog(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = character.name,
+                                text = currentActiveCharacter.name,
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
-                            if (character.oblibena) {
+                            if (currentActiveCharacter.oblibena) {
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
                                     color = Color(0xFFFFD700).copy(alpha = 0.85f)
@@ -218,7 +222,7 @@ fun CharacterDetailDialog(
                                     )
                                 }
                             }
-                            if (character.jeManzelkou) {
+                            if (currentActiveCharacter.jeManzelkou) {
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
                                     color = Color(0xFFE040FB).copy(alpha = 0.85f)
@@ -235,13 +239,46 @@ fun CharacterDetailDialog(
                         }
 
                         Text(
-                            text = "${archetype?.name ?: "Otrokyně"} • ${character.age} let • Fáze ${character.fazeZkazenosti}: ${phase?.name ?: "Poddajná"}",
+                            text = "${archetype?.name ?: "Otrokyně"} • ${currentActiveCharacter.age} let • Fáze ${currentActiveCharacter.fazeZkazenosti}: ${phase?.name ?: "Poddajná"}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Medium
                         )
                     }
                 }
+
+                // --- VISUAL PROGRESS BARS FOR ALL PARTY MEMBERS (Health, Mana, Affinity) ---
+                val allCharacters = engine?.gameState?.value?.characters ?: listOf(character)
+                PartyMembersStatusBar(
+                    characters = allCharacters,
+                    player = player,
+                    activeCharacter = currentActiveCharacter,
+                    onSelectCharacter = { selected ->
+                        currentActiveCharacter = selected
+                    },
+                    onTogglePartyMember = { charId ->
+                        engine?.let { eng ->
+                            val (success, msg) = eng.togglePartyMember(charId)
+                            if (msg.isNotBlank()) {
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                )
+
+                // High-Fidelity Detailed Visual Progress Bars for the Active Party Member
+                PartyMemberDetailedProgressBarsCard(
+                    character = currentActiveCharacter,
+                    player = player,
+                    onToggleParty = {
+                        engine?.let { eng ->
+                            val (success, msg) = eng.togglePartyMember(currentActiveCharacter.id)
+                            if (msg.isNotBlank()) {
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                )
 
                 // Section Navigation Tabs
                 ScrollableTabRow(
@@ -270,22 +307,42 @@ fun CharacterDetailDialog(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .padding(14.dp)
+                        .padding(10.dp)
                 ) {
                     when (selectedSection) {
-                        0 -> BioTab(character = character)
-                        1 -> ProfileAndStatsTab(character = character, loyaltyTier = loyalty, archetype = archetype, phase = phase)
-                        2 -> EquipmentTab(character = character, player = player, onEquip = onEquipItem, onUnequip = onUnequipItem, engine = engine)
-                        3 -> AffinityAndDialogueTab(character = character, engine = engine)
+                        0 -> BioTab(character = currentActiveCharacter)
+                        1 -> ProfileAndStatsTab(character = currentActiveCharacter, loyaltyTier = loyalty, archetype = archetype, phase = phase)
+                        2 -> EquipmentTab(character = currentActiveCharacter, player = player, onEquip = onEquipItem, onUnequip = onUnequipItem, engine = engine)
+                        3 -> AffinityAndDialogueTab(character = currentActiveCharacter, engine = engine)
                         4 -> GiftingAndItemsTab(
-                            character = character,
+                            character = currentActiveCharacter,
                             player = player,
                             onGiveDirectGift = onGiveDirectGift,
                             onUseInventoryItem = onUseInventoryItem,
                             engine = engine
                         )
-                        5 -> InteractionsSectionTab(
-                            character = character,
+                        5 -> {
+                            if (engine != null) {
+                                InventoryManagementPanel(
+                                    gameState = engine.gameState.value,
+                                    engine = engine,
+                                    activeCharacter = currentActiveCharacter,
+                                    onUseItemOnCharacter = { item ->
+                                        onUseInventoryItem(item)
+                                    }
+                                )
+                            } else {
+                                GiftingAndItemsTab(
+                                    character = currentActiveCharacter,
+                                    player = player,
+                                    onGiveDirectGift = onGiveDirectGift,
+                                    onUseInventoryItem = onUseInventoryItem,
+                                    engine = engine
+                                )
+                            }
+                        }
+                        6 -> InteractionsSectionTab(
+                            character = currentActiveCharacter,
                             player = player,
                             onExecuteInteraction = onExecuteInteraction,
                             onCourtRomance = onCourtRomance,
@@ -293,8 +350,8 @@ fun CharacterDetailDialog(
                             onRent = onRent,
                             onUpgradeSkill = onUpgradeSkill
                         )
-                        6 -> SkillTreeTab(
-                            character = character,
+                        7 -> SkillTreeTab(
+                            character = currentActiveCharacter,
                             engine = engine,
                             onUpgradeSkill = onUpgradeSkill
                         )
@@ -1056,7 +1113,7 @@ fun AffinityAndDialogueTab(character: Character, engine: GameEngine? = null) {
                             color = Color(tier.colorHex)
                         )
                         IconButton(
-                            onClick = { com.example.haremdark.domain.VoiceManager.speak(activeLine) },
+                            onClick = { com.example.haremdark.domain.VoiceManager.speak(activeLine, character.archetypeId) },
                             modifier = Modifier.size(24.dp)
                         ) {
                             Icon(
@@ -1289,12 +1346,30 @@ fun AffinityAndDialogueTab(character: Character, engine: GameEngine? = null) {
                             fontSize = 12.sp,
                             color = Color(0xFF81C784)
                         )
-                        Text(
-                            text = currentFeedback!!,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = currentFeedback!!,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(
+                                onClick = { com.example.haremdark.domain.VoiceManager.speak(currentFeedback!!, character.archetypeId) },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.VolumeUp,
+                                    contentDescription = "Přehrát hlas dívky",
+                                    tint = Color(0xFF81C784),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.height(4.dp))
                         Button(
                             onClick = { showOutcome = false; currentFeedback = null },
@@ -1445,7 +1520,7 @@ fun AffinityAndDialogueTab(character: Character, engine: GameEngine? = null) {
                                                 modifier = Modifier.weight(1f)
                                             )
                                             IconButton(
-                                                onClick = { com.example.haremdark.domain.VoiceManager.speak(line) },
+                                                onClick = { com.example.haremdark.domain.VoiceManager.speak(line, character.archetypeId) },
                                                 modifier = Modifier.size(20.dp)
                                             ) {
                                                 Icon(
