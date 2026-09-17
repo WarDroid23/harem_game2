@@ -46,6 +46,42 @@ object StaticData {
         "sukuba" to CharacterArchetype("sukuba", "Zajatá sukuba", "Démonická svůdnice poháněná touhou. Nyní slouží tvým stínům.", 1.1f, 0.8f, 0.8f, 0.9f, 1.6f, 1.5f, 1.2f, 1.0f, 1.0f, 1.0f, 0.9f, 1.4f, 0.04f),
         "draci_divka" to CharacterArchetype("draci_divka", "Dračí princezna", "Poslední z dračího klanu. Její hrdost žhne, ale loajalita je neochvějná.", 0.7f, 0.6f, 1.2f, 0.6f, 1.1f, 1.0f, 1.0f, 1.2f, 1.0f, 1.1f, 0.8f, 1.1f, 0.10f)
     )
+    
+    fun getTraitsForArchetype(archetypeId: String): List<String> {
+        return when (archetypeId) {
+            "subka" -> listOf("Submisivní", "Mírumilovná")
+            "odvazna" -> listOf("Hrdá", "Bojovná")
+            "ustrasena" -> listOf("Plachá", "Poslušná")
+            "vzdorna" -> listOf("Rebelka", "Silná vůle")
+            "touha" -> listOf("Smyslná", "Netrpělivá")
+            "zlomena" -> listOf("Apatická", "Závislá")
+            "manipulativni" -> listOf("Chytrá", "Kalkulující")
+            "chladna" -> listOf("Stoická", "Rezervovaná")
+            "hysterialni" -> listOf("Emotivní", "Nepředvídatelná")
+            "slechticna" -> listOf("Vznešená", "Hrdá")
+            "nymfomanka" -> listOf("Nenasytná", "Slabá vůle")
+            "ticha_panenka" -> listOf("Tichá", "Pozorná")
+            "krvava_subka" -> listOf("Masochistka", "Fanatická")
+            "posedla" -> listOf("Posedlá", "Oddaná")
+            "sukuba" -> listOf("Svůdná", "Mystická")
+            "draci_divka" -> listOf("Urozená", "Bojovná")
+            else -> listOf("Neutrální")
+        }
+    }
+
+    fun areTraitsComplementary(trait1: String, trait2: String): Boolean {
+        val complements = mapOf(
+            "Hrdá" to "Submisivní",
+            "Bojovná" to "Plachá",
+            "Silná vůle" to "Apatická",
+            "Chytrá" to "Slabá vůle",
+            "Tichá" to "Emotivní",
+            "Stoická" to "Nepředvídatelná",
+            "Vznešená" to "Závislá",
+            "Rebelka" to "Poslušná"
+        )
+        return complements[trait1] == trait2 || complements[trait2] == trait1
+    }
 
     fun getPortraitForArchetype(archetypeId: String): Int {
         return when (archetypeId) {

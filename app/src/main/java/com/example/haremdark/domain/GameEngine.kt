@@ -45,7 +45,45 @@ data class AutoSaveEvent(
     val summary: String = ""
 )
 
+data class MoodNotification(
+    val characterName: String,
+    val oldMood: String,
+    val newMood: String,
+    val eventSummary: String,
+    val lottieUrl: String,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 class GameEngine(private val context: Context) {
+
+    private val _moodNotifications = kotlinx.coroutines.flow.MutableSharedFlow<MoodNotification>(extraBufferCapacity = 5)
+    val moodNotifications: kotlinx.coroutines.flow.SharedFlow<MoodNotification> = _moodNotifications
+
+    fun triggerMoodNotification(character: Character, oldMood: String, summary: String) {
+        val lottieUrl = when (character.nalada) {
+            "Šťastná", "Veselá", "Nadšená" -> "https://assets9.lottiefiles.com/packages/lf20_6wux1dxk.json" // Happy
+            "Smutná", "Zklamaná", "Depresivní" -> "https://assets10.lottiefiles.com/packages/lf20_y9m9m9.json" // Sad (placeholder)
+            "Naštvaná", "Vzdorná", "Agresivní" -> "https://assets1.lottiefiles.com/packages/lf20_5njp3v.json" // Angry
+            "Vzrušená", "Toužebná" -> "https://assets5.lottiefiles.com/packages/lf20_96bovpxo.json" // Heart
+            "Disciplinovaná", "Soustředěná" -> "https://assets2.lottiefiles.com/packages/lf20_ai9m9m.json" // Check
+            else -> "https://assets3.lottiefiles.com/packages/lf20_6wux1dxk.json"
+        }
+        
+        val isTraining = summary.contains("Rytmického drilu", ignoreCase = true) || summary.contains("Reflexního testu", ignoreCase = true) || summary.contains("Výcvik", ignoreCase = true)
+        SoundEffectManager.playMoodFeedback(character.nalada, if (isTraining) "training" else "interaction")
+
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+            _moodNotifications.emit(
+                MoodNotification(
+                    characterName = character.name,
+                    oldMood = oldMood,
+                    newMood = character.nalada,
+                    eventSummary = summary,
+                    lottieUrl = lottieUrl
+                )
+            )
+        }
+    }
 
     private val json = Json {
         prettyPrint = true
@@ -526,9 +564,106 @@ class GameEngine(private val context: Context) {
             // Process slave rentals
             var rentalIncome = 0
             val moodsList = listOf("veselá", "rozmarná", "neutrální", "znuděná", "rozzlobená")
+            val statusIcons = mapOf(
+                "veselá" to "😊",
+                "rozmarná" to "💅",
+                "neutrální" to "😐",
+                "znuděná" to "😑",
+                "rozzlobená" to "💢"
+            )
+            var notificationTriggered = false
+            var assignmentGold = 0
+            var assignmentSexEnergy = 0
+            var assignmentDarkEnergy = 0
+
+            // 1. Retroactively ensure all characters have traits
+            current.characters.forEach { c ->
+                if (c.traits.isEmpty()) {
+                    val availableTraits = listOf("Arogantní", "Pracovitá", "Líná", "Týmová hráčka", "Samotářka", "Povýšená", "Mírná").shuffled()
+                    c.traits.add(availableTraits[0])
+                    c.traits.add(availableTraits[1])
+                }
+            }
+
+            // 2. Evaluate rivalries
+            val rivalryPenalties = mutableMapOf<String, Int>()
+            val rivalryLogs = mutableListOf<String>()
+            val assignmentGroups = current.characters.filter { it.dailyAssignment != null && !it.naNajmu }.groupBy { it.dailyAssignment }
+            
+            for ((assignment, group) in assignmentGroups) {
+                if (group.size > 1) {
+                    val taskName = when(assignment) { "cooking" -> "vaření"; "alchemy" -> "alchymii"; "library" -> "knihovně"; else -> "úklidu" }
+                    
+                    val arogantni = group.filter { it.traits.contains("Arogantní") || it.traits.contains("Povýšená") }
+                    if (arogantni.size > 1) {
+                        arogantni.forEach { rivalryPenalties[it.id] = (rivalryPenalties[it.id] ?: 0) - 3 }
+                        rivalryLogs.add("⚔️ Dvě dominantní otrokyně se neustále hádaly při $taskName. Obě ztrácí loajalitu.")
+                    }
+
+                    val pracovita = group.filter { it.traits.contains("Pracovitá") }
+                    val lina = group.filter { it.traits.contains("Líná") }
+                    if (pracovita.isNotEmpty() && lina.isNotEmpty()) {
+                        pracovita.forEach { rivalryPenalties[it.id] = (rivalryPenalties[it.id] ?: 0) - 2 }
+                        lina.forEach { rivalryPenalties[it.id] = (rivalryPenalties[it.id] ?: 0) - 1 }
+                        rivalryLogs.add("⚡ Pracovité otrokyně nesnesly líné chování ostatních (při $taskName). Atmosféra houstne.")
+                    }
+
+                    val samotarka = group.filter { it.traits.contains("Samotářka") }
+                    if (samotarka.isNotEmpty()) {
+                        samotarka.forEach { rivalryPenalties[it.id] = (rivalryPenalties[it.id] ?: 0) - 2 }
+                        rivalryLogs.add("🧊 Samotářkám vadila společnost ostatních (při $taskName). Ztrácí loajalitu.")
+                    }
+                }
+            }
+            
+            rivalryLogs.distinct().forEach { addLog(it) }
+
             val updatedCharacters = current.characters.map { c ->
                 val copy = c.copy()
-                copy.nalada = moodsList.random()
+                val oldMood = copy.nalada
+                val newMood = moodsList.random()
+                copy.nalada = newMood
+                copy.statusIcon = statusIcons[newMood] ?: "😐"
+                
+                if (!notificationTriggered && copy.nalada != oldMood) {
+                    triggerMoodNotification(copy, oldMood, "Nová nálada po odpočinku")
+                    notificationTriggered = true
+                }
+                
+                // Process Daily Assignments
+                if (copy.dailyAssignment != null && !copy.naNajmu) {
+                    when (copy.dailyAssignment) {
+                        "cooking" -> {
+                            assignmentSexEnergy += 5
+                            addLog("🍲 ${copy.name} vařila a doplnila tvou sexuální energii.")
+                        }
+                        "alchemy" -> {
+                            assignmentDarkEnergy += 3
+                            addLog("🧪 ${copy.name} sbírala alchymistické ingredience, tvá temná energie roste.")
+                        }
+                        "library" -> {
+                            copy.xp += 10
+                            addLog("📚 ${copy.name} organizovala knihovnu a získala trochu zkušeností.")
+                        }
+                        "cleaning" -> {
+                            assignmentGold += 10
+                            addLog("🧹 ${copy.name} uklízela panství. Našla jsi nějaké zatoulané zlaté.")
+                        }
+                    }
+                }
+
+                // Apply Rivalry Penalty
+                val penalty = rivalryPenalties[copy.id] ?: 0
+                if (penalty < 0) {
+                    copy.loajalita = (copy.loajalita + penalty).coerceAtLeast(0)
+                }
+                
+                // Breakthrough expiry check
+                if (copy.breakthroughActive && newDay >= copy.breakthroughExpiryDay) {
+                    copy.breakthroughActive = false
+                    copy.breakthroughType = null
+                }
+
                 val rel = copy.getRelationship()
                 if (copy.naNajmu) {
                     var dailyIncome = when (copy.klient) {
@@ -614,8 +749,11 @@ class GameEngine(private val context: Context) {
             val newMaxDark = (p.maxDarkEnergy + (if (meditative) maxDarkBonus + 1 else maxDarkBonus)).coerceAtMost(200)
 
                         // Apply Domain Resources
-            val modifiedYield = yield.copy(gold = totalPassiveGold + rentalIncome)
+            val modifiedYield = yield.copy(gold = totalPassiveGold + rentalIncome + assignmentGold)
             resourceManager.applyYield(p, modifiedYield)
+            
+            p.sexEnergy = (p.sexEnergy + assignmentSexEnergy).coerceAtMost(newMaxSex)
+            p.darkEnergy = (p.darkEnergy + assignmentDarkEnergy).coerceAtMost(newMaxDark)
             
             // Record production history
             val newStat = DailyResourceStat(
@@ -837,8 +975,37 @@ class GameEngine(private val context: Context) {
         player.darkEnergy -= interaction.darkCost
         player.gold -= interaction.goldCost
 
+        val oldMood = character.nalada
+
         // Apply interaction
         val message = interaction.applyEffect(character, player)
+
+        // Dynamic Mood and Status Update
+        when (interaction.type) {
+            "intimni" -> {
+                character.nalada = if (character.loajalita > 60) "Oddaná" else "Vzrušená"
+                character.statusIcon = if (character.loajalita > 60) "❤️" else "🫦"
+            }
+            "disciplina", "vycvik", "trest" -> {
+                character.nalada = if (character.strach > 50) "Ustrašená" else "Zkrocená"
+                character.statusIcon = if (character.strach > 50) "😨" else "⛓️"
+            }
+            "rozmluva" -> {
+                character.nalada = "Uvolněná"
+                character.statusIcon = "🍵"
+            }
+            "dar", "odmena" -> {
+                character.nalada = "Šťastná"
+                character.statusIcon = "✨"
+            }
+        }
+
+        if (character.nalada != oldMood) {
+            triggerMoodNotification(character, oldMood, "Po akci: ${interaction.name}")
+        } else {
+            // Play feedback sound even if mood hasn't changed
+            SoundEffectManager.playMoodFeedback(character.nalada, "interaction")
+        }
 
         // Affinity Passives Processing for Intimate Interactions
         if (interaction.type == "intimni") {
@@ -3353,15 +3520,36 @@ class GameEngine(private val context: Context) {
         val haremDefenseBonus = currentGameState.characters.sumOf { com.example.haremdark.data.AffinityData.getAffinityCombatBonuses(it.affinityLevel).defenseBonus / 3 } + deployedAffinityBonus.defenseBonus
         val haremDmgPercent = currentGameState.characters.sumOf { (com.example.haremdark.data.AffinityData.getAffinityCombatBonuses(it.affinityLevel).dmgMultiplierBonus * 0.4).toDouble() }.toFloat() + deployedAffinityBonus.dmgMultiplierBonus
         val totalAffinityMultiplier = 1.0f + haremDmgPercent
+        
+        // Breakthrough Combat Multipliers
+        var breakthroughDmgMultiplier = 1.0f
+        var breakthroughDefMultiplier = 1.0f
+        var breakthroughCritBonus = 0
+        if (deployedChar?.breakthroughActive == true) {
+            when (deployedChar.breakthroughType) {
+                "combat_fury" -> {
+                    breakthroughDmgMultiplier = 1.30f
+                    breakthroughCritBonus = 12
+                }
+                "iron_will" -> {
+                    breakthroughDefMultiplier = 1.40f
+                }
+                "shadow_step" -> {
+                    breakthroughCritBonus = 20
+                    breakthroughDmgMultiplier = 1.10f
+                }
+            }
+        }
+
         val combatHeroName = if (session.deployedCharacterId != null) {
             currentGameState.characters.firstOrNull { it.id == session.deployedCharacterId }?.name ?: "Bojovnice"
         } else "Pán dominia"
 
         when (action) {
             "attack", "slash" -> {
-                val isCrit = Random.nextInt(100) < (15 + combatSkill * 2 + haremCritBonus)
+                val isCrit = Random.nextInt(100) < (15 + combatSkill * 2 + haremCritBonus + breakthroughCritBonus)
                 val critMultiplier = if (isCrit) 1.65f else 1.0f
-                val rawDmg = weaponDamage + combatSkill * 3 + Random.nextInt(-2, 5)
+                val rawDmg = (weaponDamage + combatSkill * 3 + Random.nextInt(-2, 5)) * breakthroughDmgMultiplier
                 val finalDmg = (((rawDmg - (session.boss.defense * 0.35f)) * critMultiplier) * totalAffinityMultiplier).toInt().coerceAtLeast(6)
                 newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
                 val critText = if (isCrit) " 💥 KRITICKÝ ZÁSAH!" else ""
@@ -3388,9 +3576,9 @@ class GameEngine(private val context: Context) {
                 ))
             }
             "heavy_strike" -> {
-                val isCrit = Random.nextInt(100) < (25 + haremCritBonus)
+                val isCrit = Random.nextInt(100) < (25 + haremCritBonus + breakthroughCritBonus)
                 val multiplier = if (isCrit) 2.2f else 1.5f
-                val rawDmg = (weaponDamage * 1.5f) + combatSkill * 4 + Random.nextInt(2, 10)
+                val rawDmg = ((weaponDamage * 1.5f) + combatSkill * 4 + Random.nextInt(2, 10)) * breakthroughDmgMultiplier
                 val finalDmg = (((rawDmg - (session.boss.defense * 0.25f)) * multiplier) * totalAffinityMultiplier).toInt().coerceAtLeast(12)
                 newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
 
@@ -3579,9 +3767,9 @@ class GameEngine(private val context: Context) {
                 val deployedChar = currentGameState.characters.firstOrNull { it.id == session.deployedCharacterId }
                 val charName = deployedChar?.name ?: "Bojovnice z harému"
                 val charCombat = (deployedChar?.skills?.get("combat") ?: 1) + 4
-                val isCrit = Random.nextInt(100) < (35 + haremCritBonus)
+                val isCrit = Random.nextInt(100) < (35 + haremCritBonus + breakthroughCritBonus)
                 val mult = if (isCrit) 2.2f else 1.6f
-                val rawDmg = (weaponDamage * 1.6f) + charCombat * 5 + Random.nextInt(8, 18)
+                val rawDmg = ((weaponDamage * 1.6f) + charCombat * 5 + Random.nextInt(8, 18)) * breakthroughDmgMultiplier
                 val finalDmg = (((rawDmg - (session.boss.defense * 0.2f)) * mult) * totalAffinityMultiplier).toInt().coerceAtLeast(16)
                 newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
                 val stunSuccess = Random.nextInt(100) < 35
@@ -3761,7 +3949,7 @@ class GameEngine(private val context: Context) {
             } else {
                 val isSpecialAttack = (currentTurn % 3 == 0)
                 val baseEnemyAtk = session.boss.attack
-                val defenseReduction = (defenseSkill * 2.5f) + haremDefenseBonus
+                val defenseReduction = ((defenseSkill * 2.5f) + haremDefenseBonus) * breakthroughDefMultiplier
 
                 val rawBossDmg = if (isSpecialAttack) {
                     (baseEnemyAtk * 1.45f).toInt() + Random.nextInt(1, 6)
@@ -4373,6 +4561,8 @@ class GameEngine(private val context: Context) {
             // Stats based on type
             val statBoost = minRarity * 15
             
+            val availableTraits = listOf("Arogantní", "Pracovitá", "Líná", "Týmová hráčka", "Samotářka", "Povýšená", "Mírná").shuffled()
+            
             val newGirl = com.example.haremdark.models.Character(
                 id = "c_${java.util.UUID.randomUUID().toString().take(8)}",
                 name = randomName,
@@ -4390,7 +4580,8 @@ class GameEngine(private val context: Context) {
                 level = minRarity,
                 xp = 0,
                 skillPoints = minRarity - 1,
-                skills = mutableMapOf("combat" to (0..minRarity).random(), "defense" to (0..minRarity).random(), "production" to (0..minRarity).random(), "rental" to (0..minRarity).random())
+                skills = mutableMapOf("combat" to (0..minRarity).random(), "defense" to (0..minRarity).random(), "production" to (0..minRarity).random(), "rental" to (0..minRarity).random()),
+                traits = mutableListOf(availableTraits[0], availableTraits[1])
             )
             
             val newPlayer = p.copy(
@@ -4889,6 +5080,33 @@ class GameEngine(private val context: Context) {
             )
         }
         if (result.first) autoSave()
+        return result
+    }
+
+    fun setDailyAssignment(characterId: String, assignment: String?): Pair<Boolean, String> {
+        var result = Pair(false, "Neznámá chyba.")
+        updateState { current ->
+            val charIndex = current.characters.indexOfFirst { it.id == characterId }
+            if (charIndex == -1) {
+                result = Pair(false, "Dívka nenalezena.")
+                return@updateState current
+            }
+            val char = current.characters[charIndex]
+            val copy = char.copy(dailyAssignment = assignment)
+            val newList = current.characters.toMutableList()
+            newList[charIndex] = copy
+            
+            val taskName = when (assignment) {
+                "cooking" -> "Vaření (Sexuální energie)"
+                "alchemy" -> "Sběr bylin (Temná energie)"
+                "library" -> "Organizace knihovny (Zkušenosti)"
+                "cleaning" -> "Úklid panství (Zlato)"
+                null -> "Žádný"
+                else -> assignment
+            }
+            result = Pair(true, "Denní úkol nastaven: $taskName")
+            current.copy(characters = newList)
+        }
         return result
     }
 

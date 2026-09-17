@@ -31,6 +31,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.haremdark.domain.GameEngine
+import com.example.haremdark.domain.MoodNotification
 import com.example.haremdark.ui.components.GameTopBar
 import com.example.haremdark.ui.screens.*
 import com.example.haremdark.ui.components.DailyAttendanceDialog
@@ -54,6 +55,13 @@ class MainActivity : ComponentActivity() {
             val dailyReward by engine.dailyRewardAvailable.collectAsState()
             val context = LocalContext.current
             
+            var activeMoodNotification by remember { mutableStateOf<MoodNotification?>(null) }
+            LaunchedEffect(Unit) {
+                engine.moodNotifications.collect { notification ->
+                    activeMoodNotification = notification
+                }
+            }
+
             var activeNarrativeEvent by remember { mutableStateOf<com.example.haremdark.data.NarrativeEvent?>(null) }
             LaunchedEffect(Unit) {
                 engine.narrativeEvents.collect { event ->
@@ -597,6 +605,14 @@ class MainActivity : ComponentActivity() {
                             composable("inventory") {
                                 com.example.haremdark.ui.screens.InventoryScreen(gameState = gameState, engine = engine)
                             }
+                        }
+
+                        // Mood Notification Toast Overlay
+                        activeMoodNotification?.let { notification ->
+                            com.example.haremdark.ui.components.MoodNotificationToast(
+                                notification = notification,
+                                onDismiss = { activeMoodNotification = null }
+                            )
                         }
                     }
                 }

@@ -233,6 +233,28 @@ object VoiceManager : TextToSpeech.OnInitListener {
         speak(sampleLine, archetype)
     }
 
+    fun speakPraise(character: Character) {
+        val lines = when (character.archetypeId) {
+            "subka" -> listOf("Děkuji, můj pane! Budu se snažit ještě víc.", "Tvá slova jsou pro mě největší odměnou.", "Jsem tak šťastná, že jsi se mnou spokojený.")
+            "slechta" -> listOf("Tvého uznání si cením, pane.", "Je mou povinností tě nezklamat.", "Zasloužím si tvou chválu.")
+            "bojovnice" -> listOf("Budu bojovat ještě udatněji!", "Tvá chvála posiluje mou paži.", "Pro tebe cokoliv, veliteli!")
+            "intrikanka" -> listOf("Mmm, víš jak mě potěšit...", "Jen tak dál, pane.", "Tvá přízeň je sladká.")
+            else -> listOf("Děkuji ti, můj pane.", "To mě těší.", "Jsem ráda, že jsi spokojen.")
+        }
+        speak(lines.random(), character.archetypeId)
+    }
+
+    fun speakPet(character: Character) {
+        val lines = when (character.archetypeId) {
+            "subka" -> listOf("Ach... tvá ruka je tak hřejivá.", "Cítím se u tebe tak bezpečně, pane.", "Mmm... víc, prosím.")
+            "slechta" -> listOf("To je... nezvyklé, ale příjemné.", "Dovoluji ti to, pane.", "Tvá blízkost mě hřeje.")
+            "bojovnice" -> listOf("Můj pane... tohle mi dodává sílu.", "Ehm... děkuji.", "Cítím se být chráněna.")
+            "intrikanka" -> listOf("Mmm, tvoje doteky jsou tak podmanivé...", "Znáš moje slabá místa, viď?", "To se mi líbí, pane.")
+            else -> listOf("To je příjemné, pane.", "Děkuji za tvou něhu.", "Mmm...")
+        }
+        speak(lines.random(), character.archetypeId)
+    }
+
     fun playTriggerVoice(trigger: VoiceTriggerType, character: Character?, fallbackName: String = "Pán Dominia"): String {
         val isCombat = (trigger == VoiceTriggerType.COMBAT_START || trigger == VoiceTriggerType.COMBAT_SPECIAL)
         playAudioClip(isCombat)

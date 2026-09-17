@@ -16,7 +16,9 @@ import kotlinx.coroutines.launch
 data class HaremFilterCriteria(
     val status: String = "Všechny",
     val role: String = "Všechny",
-    val affinityLevel: String = "Všechny"
+    val affinityLevel: String = "Všechny",
+    val loyaltyLevel: String = "Všechny",
+    val moraleStatus: String = "Všechny"
 )
 
 class HaremViewModel(private val engine: GameEngine) : ViewModel() {
@@ -72,7 +74,23 @@ class HaremViewModel(private val engine: GameEngine) : ViewModel() {
             else -> list
         }
 
-        // 4. Search Query
+        // 4. Loyalty Level Filter
+        list = when (criteria.loyaltyLevel) {
+            "Nízká (0-30)" -> list.filter { it.loajalita <= 30 }
+            "Střední (31-70)" -> list.filter { it.loajalita in 31..70 }
+            "Vysoká (71+)" -> list.filter { it.loajalita >= 71 }
+            else -> list
+        }
+
+        // 5. Morale Status Filter
+        list = when (criteria.moraleStatus) {
+            "Kritická (<20)" -> list.filter { it.morale < 20 }
+            "Nízká (20-40)" -> list.filter { it.morale in 20..40 }
+            "Vysoká (80+)" -> list.filter { it.morale >= 80 }
+            else -> list
+        }
+
+        // 6. Search Query
         if (query.isNotBlank()) {
             list = list.filter { it.name.contains(query, ignoreCase = true) || it.archetypeId.contains(query, ignoreCase = true) }
         }

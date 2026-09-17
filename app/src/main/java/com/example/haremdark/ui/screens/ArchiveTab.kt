@@ -39,22 +39,46 @@ import com.example.haremdark.models.GameSave
 @Composable
 fun HaremArchiveTab(gameState: GameSave, modifier: Modifier = Modifier) {
     var selectedCharacter by remember { mutableStateOf<Character?>(null) }
+    var currentSubTab by remember { mutableStateOf("Archiv") }
     
     val recruitedGirls = gameState.characters
     
-    if (recruitedGirls.isEmpty()) {
-        Box(modifier = modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-            Text("Zatím nemáš v harému žádné dívky k archivaci.", color = Color.Gray)
-        }
-        return
-    }
-
     Column(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 4.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        TabRow(
+            selectedTabIndex = if (currentSubTab == "Archiv") 0 else 1,
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(top = 8.dp)
+        ) {
+            Tab(
+                selected = currentSubTab == "Archiv",
+                onClick = { currentSubTab = "Archiv" },
+                text = { Text("Spisy Otrokyň", fontWeight = FontWeight.Bold) }
+            )
+            Tab(
+                selected = currentSubTab == "Kodex",
+                onClick = { currentSubTab = "Kodex" },
+                text = { Text("Kodex Dominia", fontWeight = FontWeight.Bold) }
+            )
+        }
+
+        if (currentSubTab == "Kodex") {
+            com.example.haremdark.ui.components.CodexTab()
+            return@Column
+        }
+
+        if (recruitedGirls.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+                Text("Zatím nemáš v harému žádné dívky k archivaci.", color = Color.Gray)
+            }
+            return@Column
+        }
+
         // Hero Banner
         Card(
             shape = RoundedCornerShape(16.dp),

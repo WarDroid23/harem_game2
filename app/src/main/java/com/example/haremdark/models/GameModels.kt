@@ -145,6 +145,14 @@ data class DomainLocation(
 )
 
 @Serializable
+data class KeyMemory(
+    val id: String,
+    val title: String,
+    val description: String,
+    val illustrationUrl: String? = null
+)
+
+@Serializable
 data class Character(
     val id: String,
     var name: String,
@@ -162,6 +170,7 @@ data class Character(
     var loajalita: Int = 30,
     var strength: Int = 15,
     var nalada: String = "neutrální",
+    var statusIcon: String = "😐",
     var morale: Int = 50,
     var plodnost: Int = 50,
     var duvera: Int = 30,
@@ -207,11 +216,38 @@ data class Character(
     var relationshipHistory: MutableList<RelationshipRecord> = mutableListOf(),
     var unlockedPassives: MutableList<String> = mutableListOf(),
     var unlockedCombatSkills: MutableList<String> = mutableListOf(),
-    var interactionLogs: MutableList<InteractionLogEntry> = mutableListOf()
+    var interactionLogs: MutableList<InteractionLogEntry> = mutableListOf(),
+    var moraleHistory: MutableList<MoraleRecord> = mutableListOf(),
+    var trainingPresets: MutableList<TrainingPreset> = mutableListOf(),
+    var breakthroughActive: Boolean = false,
+    var breakthroughType: String? = null,
+    var breakthroughExpiryDay: Int = 0,
+    var keyMemories: MutableList<KeyMemory> = mutableListOf(),
+    var traits: MutableList<String> = mutableListOf(),
+    var milestoneRewardsUnlocked: MutableSet<Int> = mutableSetOf(),
+    var totalTrainingSessions: Int = 0,
+    var completedPresets: MutableSet<String> = mutableSetOf(),
+    var dailyAssignment: String? = null
 ) {
     var loyalty: Int
         get() = loajalita
-        set(value) { loajalita = value.coerceIn(0, 100) }
+        set(value) {
+            val oldLoyalty = loajalita
+            loajalita = value.coerceIn(0, 100)
+            checkMilestones(oldLoyalty, loajalita)
+        }
+
+    private fun checkMilestones(old: Int, new: Int) {
+        val thresholds = listOf(25, 50, 75)
+        thresholds.forEach { threshold ->
+            if (old < threshold && new >= threshold) {
+                if (!milestoneRewardsUnlocked.contains(threshold)) {
+                    milestoneRewardsUnlocked.add(threshold)
+                    // Logic for unlocking rewards will be handled in GameEngine or UI via a callback
+                }
+            }
+        }
+    }
 
     fun getLoyaltyStatus(): String = when {
         loajalita >= 80 -> "Oddaná fanatička"
@@ -250,6 +286,89 @@ data class InteractionLogEntry(
     val statChanges: String = "",
     val rank: String? = null
 )
+
+@Serializable
+data class MoraleRecord(
+    val day: Int,
+    val morale: Int,
+    val source: String = "Denní výcvik"
+)
+
+fun Character.getSafeMoraleTrend(currentDay: Int = 1): List<MoraleRecord> {
+    if (moraleHistory.isNotEmpty()) {
+        val last7 = moraleHistory.sortedBy { it.day }.takeLast(7)
+        if (last7.size >= 2) return last7
+    }
+    val base = morale
+    val startDay = (currentDay - 6).coerceAtLeast(1)
+    return listOf(
+        MoraleRecord(startDay, (base - 18).coerceIn(15, 100), "Příchod do komnat"),
+        MoraleRecord(startDay + 1, (base - 14).coerceIn(15, 100), "Základní výcvik"),
+        MoraleRecord(startDay + 2, (base - 10).coerceIn(15, 100), "Kázeňský dril"),
+        MoraleRecord(startDay + 3, (base - 5).coerceIn(15, 100), "Lázeň & Odměna"),
+        MoraleRecord(startDay + 4, (base - 8).coerceIn(15, 100), "Pochvala pána"),
+        MoraleRecord(startDay + 5, (base - 2).coerceIn(15, 100), "Rytmický výcvik"),
+        MoraleRecord(currentDay.coerceAtLeast(startDay + 6), base, "Aktuální stav morálky")
+    )
+}
+
+@Serializable
+data class TrainingPresetAction(
+    val id: String, // "rhythm", "reflex", "praise", "bath", "whip"
+    val name: String,
+    val energyCost: Int = 10,
+    val loyaltyGain: Int = 8,
+    val moraleGain: Int = 6,
+    val icon: String = "🎯"
+)
+
+@Serializable
+data class TrainingPreset(
+    val id: String,
+    val title: String,
+    val description: String,
+    val icon: String,
+    val actions: List<TrainingPresetAction>,
+    var partnerId: String? = null
+)
+
+fun getDefaultTrainingPresets(): List<TrainingPreset> {
+    return listOf(
+        TrainingPreset(
+            id = "preset_discipline",
+            title = "⚡ Blesková Kázeň",
+            description = "Intenzivní dril zaměřený na rychlou poslušnost a reflexy.",
+            icon = "⚡",
+            actions = listOf(
+                TrainingPresetAction("reflex", "Reflexní test poslušnosti", 10, 12, 8, "⚡"),
+                TrainingPresetAction("rhythm", "Rytmický dril rozkazů", 12, 10, 6, "🎵"),
+                TrainingPresetAction("reflex", "Rychlá prověrka poslušnosti", 10, 12, 8, "⚡")
+            )
+        ),
+        TrainingPreset(
+            id = "preset_care",
+            title = "🌸 Péče & Povzbuzení",
+            description = "Harmonické spojení pochvaly a péče pro obnovu morálky a loajality.",
+            icon = "🌸",
+            actions = listOf(
+                TrainingPresetAction("praise", "Veřejná pochvala", 8, 8, 12, "✨"),
+                TrainingPresetAction("bath", "Společná lázeň s oleji", 15, 14, 18, "🛁"),
+                TrainingPresetAction("rhythm", "Rytmický rozhovor", 10, 10, 10, "🎵")
+            )
+        ),
+        TrainingPreset(
+            id = "preset_master_drill",
+            title = "🔥 Kompletní Dril Dominy",
+            description = "Vyvážený dril kombinující pokárání, reflexní zkoušku i závěrečnou odměnu.",
+            icon = "🔥",
+            actions = listOf(
+                TrainingPresetAction("whip", "Spoutání a pokárání", 12, 10, -5, "⛓️"),
+                TrainingPresetAction("reflex", "Reflexní zkouška okamžiku", 10, 14, 8, "⚡"),
+                TrainingPresetAction("bath", "Očistná lázeň s odměnou", 15, 12, 15, "🛁")
+            )
+        )
+    )
+}
 
 fun Character.getSafeInteractionLogs(currentDay: Int = 1): List<InteractionLogEntry> {
     if (interactionLogs.isNotEmpty()) {

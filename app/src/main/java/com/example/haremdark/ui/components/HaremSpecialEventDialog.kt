@@ -43,6 +43,7 @@ import com.example.haremdark.data.DialogueChoice
 import com.example.haremdark.data.StaticData
 import com.example.haremdark.data.TimeLimitedHaremEvent
 import com.example.haremdark.domain.SoundEffectManager
+import com.example.haremdark.domain.VoiceManager
 import com.example.haremdark.models.Character
 
 @Composable
@@ -66,6 +67,7 @@ fun HaremSpecialEventDialog(
     LaunchedEffect(event.id) {
         SoundEffectManager.playEventTrigger()
         shakeTrigger++
+        VoiceManager.speak(event.dialogueSequence.characterMonologue, character.archetypeId)
     }
 
     LaunchedEffect(Unit) {
@@ -323,6 +325,7 @@ fun HaremSpecialEventDialog(
                                         SoundEffectManager.playAffinityGain()
                                         selectedChoice = choice
                                         shakeTrigger++
+                                        VoiceManager.speak(choice.reactionText, character.archetypeId)
                                     },
                                 shape = RoundedCornerShape(14.dp),
                                 colors = CardDefaults.cardColors(

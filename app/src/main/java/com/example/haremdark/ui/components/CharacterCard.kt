@@ -4,6 +4,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -128,6 +130,7 @@ fun CharacterCard(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
+                            Text(character.statusIcon, fontSize = 14.sp)
                             if (hasActiveEvent) {
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
@@ -457,13 +460,16 @@ fun CharacterCard(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CharacterGridCard(
     character: Character,
     onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
     onFavoriteClick: () -> Unit,
     onPinClick: () -> Unit = {},
     hasActiveEvent: Boolean = false,
+    isSelected: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val loyaltyTier = StaticData.getLoyaltyTier(character.loajalita)
@@ -475,7 +481,15 @@ fun CharacterGridCard(
             .fillMaxWidth()
             .height(245.dp)
             .clip(RoundedCornerShape(16.dp))
-            .clickable { onClick() },
+            .border(
+                width = if (isSelected) 3.dp else 0.dp,
+                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = RoundedCornerShape(16.dp)
+            )
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -717,14 +731,25 @@ fun CharacterGridCard(
                     verticalAlignment = Alignment.Bottom
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = character.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = character.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Surface(
+                                shape = CircleShape,
+                                color = Color.Black.copy(alpha = 0.5f),
+                                modifier = Modifier.size(22.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(character.statusIcon, fontSize = 14.sp)
+                                }
+                            }
+                        }
                         Text(
                             text = "${archetype?.name ?: "Dívka"} • ${character.age} let",
                             style = MaterialTheme.typography.bodySmall,

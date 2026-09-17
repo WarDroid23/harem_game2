@@ -42,11 +42,117 @@ import com.example.haremdark.viewmodels.HaremViewModel
 import com.example.haremdark.models.Character
 import com.example.haremdark.models.GameSave
 import com.example.haremdark.ui.components.CharacterCard
+import com.example.haremdark.domain.VoiceManager
 import com.example.haremdark.ui.components.CharacterDetailDialog
 import com.example.haremdark.ui.components.CharacterGridCard
 import com.example.haremdark.ui.components.InteractionDialog
+import com.example.haremdark.ui.components.MilestoneTrackerBanner
 import com.example.haremdark.ui.components.TimeLimitedEventBanner
 import com.example.haremdark.ui.components.HaremSpecialEventDialog
+import com.example.haremdark.ui.components.RelationshipHeatmapTab
+import com.patrykandpatrick.vico.compose.axis.horizontal.rememberBottomAxis
+import com.patrykandpatrick.vico.compose.axis.vertical.rememberStartAxis
+import com.patrykandpatrick.vico.compose.chart.Chart
+import com.patrykandpatrick.vico.compose.chart.column.columnChart
+import com.patrykandpatrick.vico.core.entry.entryModelOf
+import com.patrykandpatrick.vico.core.component.text.TextComponent
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+
+@Composable
+fun SlaveComparisonDialog(char1: com.example.haremdark.models.Character, char2: com.example.haremdark.models.Character, onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.85f),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("📊 Porovnání otrokyň", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Zavřít")
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(char1.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFFFFD700))
+                        Text(char1.archetypeId, fontSize = 11.sp, color = Color.Gray)
+                    }
+                    Text("vs", modifier = Modifier.align(Alignment.CenterVertically), fontWeight = FontWeight.Black)
+                    Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(char2.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFFE91E63))
+                        Text(char2.archetypeId, fontSize = 11.sp, color = Color.Gray)
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(20.dp))
+                
+                val stats = listOf("Loajalita", "Morálka", "Poslušnost", "Boj", "Obrana")
+                
+                val char1Entries = listOf(
+                    com.patrykandpatrick.vico.core.entry.FloatEntry(0f, char1.loajalita.toFloat()),
+                    com.patrykandpatrick.vico.core.entry.FloatEntry(1f, char1.morale.toFloat()),
+                    com.patrykandpatrick.vico.core.entry.FloatEntry(2f, char1.poslusnost.toFloat()),
+                    com.patrykandpatrick.vico.core.entry.FloatEntry(3f, (char1.skills["combat"] ?: 0).toFloat() * 10),
+                    com.patrykandpatrick.vico.core.entry.FloatEntry(4f, (char1.skills["defense"] ?: 0).toFloat() * 10)
+                )
+                val char2Entries = listOf(
+                    com.patrykandpatrick.vico.core.entry.FloatEntry(0f, char2.loajalita.toFloat()),
+                    com.patrykandpatrick.vico.core.entry.FloatEntry(1f, char2.morale.toFloat()),
+                    com.patrykandpatrick.vico.core.entry.FloatEntry(2f, char2.poslusnost.toFloat()),
+                    com.patrykandpatrick.vico.core.entry.FloatEntry(3f, (char2.skills["combat"] ?: 0).toFloat() * 10),
+                    com.patrykandpatrick.vico.core.entry.FloatEntry(4f, (char2.skills["defense"] ?: 0).toFloat() * 10)
+                )
+                
+                val model = entryModelOf(char1Entries, char2Entries)
+                
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    Chart(
+                        chart = columnChart(),
+                        model = model,
+                        startAxis = rememberStartAxis(
+                            label = TextComponent.Builder().apply { color = 0xFFFFFFFF.toInt() }.build(),
+                            title = "Hodnota",
+                            titleComponent = TextComponent.Builder().apply { color = 0xFFAAAAAA.toInt() }.build()
+                        ),
+                        bottomAxis = rememberBottomAxis(
+                            label = TextComponent.Builder().apply { color = 0xFFFFFFFF.toInt() }.build(),
+                            valueFormatter = { value, _ -> stats.getOrNull(value.toInt()) ?: "" }
+                        ),
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("💡 Informace k porovnání", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text("• Boj a Obrana jsou škálovány x10 pro lepší vizualizaci.", fontSize = 10.sp, color = Color.Gray)
+                        Text("• Vyšší sloupce značí lepší připravenost k úkolům.", fontSize = 10.sp, color = Color.Gray)
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                    Text("Zavřít porovnání")
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun HaremScreen(
@@ -84,9 +190,12 @@ fun HaremScreen(
         }
     }
 
-    val haremTabs = listOf("🔲 Mřížka", "🛏️ Komnaty", "👑 Hierarchie", "👶 Dynastie", "👗 Garderóba", "📚 Archiv", "🖼️ Galerie")
+    val haremTabs = listOf("🔲 Mřížka", "🛏️ Komnaty", "👑 Hierarchie", "👶 Dynastie", "👗 Garderóba", "📚 Archiv", "🖼️ Galerie", "📈 Heatmap")
     
     var filterSheetExpanded by remember { mutableStateOf(false) }
+    
+    val selectedIds = remember { mutableStateListOf<String>() }
+    var isComparisonOpen by remember { mutableStateOf(false) }
 
     // legacy variables to prevent unresolved references during transition
     val selectedFilter = 0
@@ -128,6 +237,11 @@ fun HaremScreen(
                 .padding(horizontal = 14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            
+            if (gameState.characters.isNotEmpty()) {
+                MilestoneTrackerBanner(characters = gameState.characters)
+            }
+
             // Harem Top Sub-Tabs
             ScrollableTabRow(
                 selectedTabIndex = selectedHaremTab,
@@ -332,6 +446,8 @@ fun HaremScreen(
                                 if (filterCriteria.status != "Všechny") add("Status: ${filterCriteria.status}")
                                 if (filterCriteria.role != "Všechny") add("Role: ${filterCriteria.role}")
                                 if (filterCriteria.affinityLevel != "Všechny") add("Vztah: ${filterCriteria.affinityLevel}")
+                                if (filterCriteria.loyaltyLevel != "Všechny") add("Loajalita: ${filterCriteria.loyaltyLevel}")
+                                if (filterCriteria.moraleStatus != "Všechny") add("Morálka: ${filterCriteria.moraleStatus}")
                                 add("Řazení: $selectedSort")
                             }
                             activeFilters.forEach { f ->
@@ -347,64 +463,73 @@ fun HaremScreen(
 
                         // Grid of Characters
                         if (filteredList.isEmpty()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(vertical = 40.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                            // ... empty state ...
+                        } else {
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                LazyVerticalGrid(
+                                    columns = GridCells.Fixed(2),
+                                    modifier = Modifier.fillMaxSize(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    contentPadding = PaddingValues(top = 2.dp, bottom = 90.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.SentimentDissatisfied,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                                        modifier = Modifier.size(48.dp)
-                                    )
-                                    Text(
-                                        text = "Žádná dívka neodpovídá zvolenému filtru.",
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                        fontSize = 13.sp
-                                    )
-                                    Button(
-                                        onClick = onNavigateToHunt,
-                                        shape = RoundedCornerShape(8.dp)
-                                    ) {
-                                        Text("Jít na lov nových otrokyň", fontSize = 12.sp)
+                                    items(filteredList, key = { it.id }) { character ->
+                                        val hasEvent = activeEvent?.characterId == character.id
+                                        val isSelected = selectedIds.contains(character.id)
+                                        CharacterGridCard(
+                                            character = character,
+                                            hasActiveEvent = hasEvent,
+                                            isSelected = isSelected,
+                                            onClick = {
+                                                if (selectedIds.isNotEmpty()) {
+                                                    if (isSelected) selectedIds.remove(character.id)
+                                                    else if (selectedIds.size < 2) selectedIds.add(character.id)
+                                                } else {
+                                                    if (hasEvent) {
+                                                        haremViewModel.openActiveEventDialogue()
+                                                    } else {
+                                                        haremViewModel.openProfile(character)
+                                                    }
+                                                }
+                                            },
+                                            onLongClick = {
+                                                if (!isSelected && selectedIds.size < 2) {
+                                                    selectedIds.add(character.id)
+                                                } else if (isSelected) {
+                                                    selectedIds.remove(character.id)
+                                                }
+                                            },
+                                            onPinClick = {
+                                                val (success, res) = engine.togglePin(character.id)
+                                                Toast.makeText(context, res, Toast.LENGTH_SHORT).show()
+                                            },
+                                            onFavoriteClick = {
+                                                val res = engine.setFavorite(character.id)
+                                                Toast.makeText(context, res, Toast.LENGTH_SHORT).show()
+                                            }
+                                        )
                                     }
                                 }
-                            }
-                        } else {
-                            LazyVerticalGrid(
-                                columns = GridCells.Fixed(2),
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp),
-                                contentPadding = PaddingValues(top = 2.dp, bottom = 90.dp)
-                            ) {
-                                items(filteredList, key = { it.id }) { character ->
-                                    val hasEvent = activeEvent?.characterId == character.id
-                                    CharacterGridCard(
-                                        character = character,
-                                        hasActiveEvent = hasEvent,
-                                        onClick = {
-                                            if (hasEvent) {
-                                                haremViewModel.openActiveEventDialogue()
-                                            } else {
-                                                haremViewModel.openProfile(character)
+
+                                if (selectedIds.isNotEmpty()) {
+                                    Surface(
+                                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp),
+                                        shape = RoundedCornerShape(24.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        tonalElevation = 8.dp
+                                    ) {
+                                        Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            Text("${selectedIds.size} vybráno", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                            if (selectedIds.size == 2) {
+                                                Button(onClick = { isComparisonOpen = true }, shape = RoundedCornerShape(16.dp)) {
+                                                    Text("Porovnat", fontSize = 12.sp)
+                                                }
                                             }
-                                        },
-                                        onPinClick = {
-                                            val (success, res) = engine.togglePin(character.id)
-                                            Toast.makeText(context, res, Toast.LENGTH_SHORT).show()
-                                        },
-                                        onFavoriteClick = {
-                                            val res = engine.setFavorite(character.id)
-                                            Toast.makeText(context, res, Toast.LENGTH_SHORT).show()
+                                            IconButton(onClick = { selectedIds.clear() }) {
+                                                Icon(Icons.Default.Close, contentDescription = "Zrušit")
+                                            }
                                         }
-                                    )
+                                    }
                                 }
                             }
                         }
@@ -596,6 +721,9 @@ fun HaremScreen(
                     // --- TAB 6: EMBEDDED GALLERY ---
                     HaremGalleryTab(gameState = gameState)
                 }
+                7 -> {
+                    RelationshipHeatmapTab(characters = gameState.characters)
+                }
             }
             }
             }
@@ -633,31 +761,44 @@ fun HaremScreen(
             onGiveDirectGift = { gift ->
                 val (success, msg) = engine.giveDirectGift(gift.id, currentConcubine.id)
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                VoiceManager.speak(msg, currentConcubine.archetypeId)
             },
             onUseInventoryItem = { item ->
                 val (success, msg) = engine.useItemOnConcubine(item.id, currentConcubine.id)
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                VoiceManager.speak(msg, currentConcubine.archetypeId)
             },
             onExecuteInteraction = { interaction ->
                 val (success, msg) = engine.executeInteraction(currentConcubine.id, interaction)
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                if (interaction.id == "drobna") {
+                    VoiceManager.speakPet(currentConcubine)
+                } else if (interaction.id == "pochvala") {
+                    VoiceManager.speakPraise(currentConcubine)
+                } else {
+                    VoiceManager.speak(msg, currentConcubine.archetypeId)
+                }
             },
             onCourtRomance = {
                 val (success, msg) = engine.courtRomance(currentConcubine.id)
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                VoiceManager.speak(msg, currentConcubine.archetypeId)
             },
             onMarry = {
                 val (success, msg) = engine.marryConcubine(currentConcubine.id)
                 Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                VoiceManager.speak(msg, currentConcubine.archetypeId)
             },
             onRent = { client, days ->
                 val (success, msg) = engine.rentSlave(currentConcubine.id, client, days)
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                VoiceManager.speak(msg, currentConcubine.archetypeId)
                 if (success) haremViewModel.openProfile(null)
             },
             onUpgradeSkill = { skill ->
                 val (success, msg) = engine.upgradeCharacterSkill(currentConcubine.id, skill)
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                VoiceManager.speak(msg, currentConcubine.archetypeId)
             },
             onEquipItem = { itemId, slotId ->
                 engine.equipItemToCharacter(currentConcubine.id, itemId, slotId)
@@ -688,6 +829,14 @@ fun HaremScreen(
             }
         }
     }
+    if (isComparisonOpen && selectedIds.size == 2) {
+        val char1 = gameState.characters.firstOrNull { it.id == selectedIds[0] }
+        val char2 = gameState.characters.firstOrNull { it.id == selectedIds[1] }
+        if (char1 != null && char2 != null) {
+            SlaveComparisonDialog(char1, char2, onDismiss = { isComparisonOpen = false })
+        }
+    }
+
     if (filterSheetExpanded) {
         AlertDialog(
             onDismissRequest = { filterSheetExpanded = false },
@@ -703,6 +852,8 @@ fun HaremScreen(
                     val statusOptions = listOf("Všechny", "Oblíbená", "Ve vztahu", "Na nájmu", "Březí")
                     val roleOptions = listOf("Všechny", "Služky", "Válečnice", "Mágyně", "Intrikánky")
                     val affinityOptions = listOf("Všechny", "Úroveň 1-2", "Úroveň 3-4", "Úroveň 5+")
+                    val loyaltyOptions = listOf("Všechny", "Nízká (0-30)", "Střední (31-70)", "Vysoká (71+)")
+                    val moraleOptions = listOf("Všechny", "Kritická (<20)", "Nízká (20-40)", "Vysoká (80+)")
                     val sortOptionsList = listOf("Náklonnost", "Rarita / Úroveň", "Role (Archetyp)", "Bojová síla", "Nedávno")
 
                     // Status
@@ -746,6 +897,38 @@ fun HaremScreen(
                                     FilterChip(
                                         selected = filterCriteria.affinityLevel == op,
                                         onClick = { haremViewModel.setFilterCriteria(filterCriteria.copy(affinityLevel = op)) },
+                                        label = { Text(op, fontSize = 11.sp) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Loyalty Level
+                    Column {
+                        Text("Úroveň Loajality:", fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
+                        loyaltyOptions.chunked(2).forEach { rowOps ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                rowOps.forEach { op ->
+                                    FilterChip(
+                                        selected = filterCriteria.loyaltyLevel == op,
+                                        onClick = { haremViewModel.setFilterCriteria(filterCriteria.copy(loyaltyLevel = op)) },
+                                        label = { Text(op, fontSize = 11.sp) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Morale Status
+                    Column {
+                        Text("Morální Stav:", fontWeight = FontWeight.Bold, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
+                        moraleOptions.chunked(2).forEach { rowOps ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                rowOps.forEach { op ->
+                                    FilterChip(
+                                        selected = filterCriteria.moraleStatus == op,
+                                        onClick = { haremViewModel.setFilterCriteria(filterCriteria.copy(moraleStatus = op)) },
                                         label = { Text(op, fontSize = 11.sp) }
                                     )
                                 }

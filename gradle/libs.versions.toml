@@ -14,8 +14,10 @@ kotlinxSerialization = "1.7.3"
 coil = "2.7.0"
 datastore = "1.1.2"
 materialIconsExtended = "1.7.6"
+lottie = "6.6.0"
 
 [libraries]
+lottie-compose = { group = "com.airbnb.android", name = "lottie-compose", version.ref = "lottie" }
 vico-compose = { group = "com.patrykandpatrick.vico", name = "compose", version.ref = "vico" }
 vico-compose-m3 = { group = "com.patrykandpatrick.vico", name = "compose-m3", version.ref = "vico" }
 vico-core = { group = "com.patrykandpatrick.vico", name = "core", version.ref = "vico" }

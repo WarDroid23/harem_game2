@@ -266,6 +266,45 @@ object SoundEffectManager {
         playHarem(HaremSound.SEDUCE)
     }
 
+    fun playMoodFeedback(mood: String, contextType: String = "interaction") {
+        if (_isMuted.value) return
+        scope.launch {
+            try {
+                val isTraining = contextType == "training"
+                val toneFreq = if (isTraining) {
+                    when (mood) {
+                        "Disciplinovaná", "Soustředěná", "Pozorná" -> 880.0 // Higher pitch for training success
+                        "Zmatená", "Váhavá" -> 440.0 // Low pitch for training fail
+                        else -> 660.0
+                    }
+                } else {
+                    // Praise or interaction
+                    when (mood) {
+                        "Šťastná", "Veselá", "Nadšená", "Extatická", "Oddaná", "Uvolněná", "Potěšená" -> 1046.5 // High chime for happiness
+                        "Zklamaná", "Smutná", "Depresivní", "Ponížená" -> 349.23 // Lower, sadder pitch
+                        "Vzrušená", "Toužebná", "Poddajná" -> 987.77 // Sweeter pitch
+                        "Naštvaná", "Vzdorná", "Agresivní", "Rozzlobená" -> 220.0 // Harsh low
+                        else -> 523.25
+                    }
+                }
+                
+                val durationSec = if (isTraining) 0.5 else 1.0
+                val count = (SAMPLE_RATE * durationSec).toInt()
+                val buffer = ShortArray(count)
+                for (i in 0 until count) {
+                    val t = i.toDouble() / SAMPLE_RATE
+                    val env = kotlin.math.exp(-5.0 * t)
+                    val freq = toneFreq + (if (isTraining) 0.0 else kotlin.math.sin(2.0 * kotlin.math.PI * 5.0 * t) * 10.0) // Vibrato for non-training
+                    val total = (kotlin.math.sin(2.0 * kotlin.math.PI * freq * t) * 0.7 + kotlin.math.sin(4.0 * kotlin.math.PI * freq * t) * 0.3) * env * Short.MAX_VALUE * 0.5
+                    buffer[i] = total.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+                }
+                playPcmTrack(buffer)
+            } catch (e: Exception) {
+                fallbackTone(ToneGenerator.TONE_PROP_BEEP, 150)
+            }
+        }
+    }
+
     fun playHarem(sound: HaremSound) {
         if (_isMuted.value) return
         scope.launch {

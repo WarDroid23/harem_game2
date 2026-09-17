@@ -34,11 +34,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.window.Dialog
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import kotlin.random.Random
 import com.example.haremdark.data.AffinityData
+import com.airbnb.lottie.compose.*
 import com.example.haremdark.data.CharacterSkillCatalog
 import com.example.haremdark.data.CharacterSkillNode
 import com.example.haremdark.data.SkillNodeType
@@ -50,12 +55,27 @@ import com.example.haremdark.models.Character
 import com.example.haremdark.models.InventoryItem
 import com.example.haremdark.models.InteractionLogEntry
 import com.example.haremdark.models.getSafeInteractionLogs
+import com.example.haremdark.models.getSafeMoraleTrend
+import com.example.haremdark.models.getDefaultTrainingPresets
+import com.example.haremdark.models.TrainingPreset
+import com.example.haremdark.models.TrainingPresetAction
+import com.example.haremdark.models.MoraleRecord
+import com.patrykandpatrick.vico.compose.axis.horizontal.rememberBottomAxis
+import com.patrykandpatrick.vico.compose.axis.vertical.rememberStartAxis
+import com.patrykandpatrick.vico.compose.chart.Chart
+import com.patrykandpatrick.vico.compose.chart.line.lineChart
+import com.patrykandpatrick.vico.core.entry.FloatEntry
+import com.patrykandpatrick.vico.core.entry.entryModelOf
+import com.example.haremdark.models.KeyMemory
 import com.example.haremdark.models.Player
 import com.example.haremdark.domain.GameEngine
 import com.example.haremdark.domain.VoiceManager
 import com.example.haremdark.domain.VoiceTriggerType
 import com.example.haremdark.models.EquipmentLoadout
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.BorderStroke
 import android.widget.Toast
 
@@ -85,12 +105,16 @@ fun CharacterDetailDialog(
     val portraitRes = StaticData.getPortraitForArchetype(currentActiveCharacter.archetypeId)
 
     var selectedSection by remember { mutableIntStateOf(initialTab) }
-    val sectionTabs = listOf("📖 Životopis", "📊 Profil", "🛡️ Výbava", "💖 Náklonnost", "🎁 Dary", "📦 Sklad & Inventář", "⚡ Akce", "✨ Dovednosti", "🎯 Výcvik", "📜 Historie")
+    val sectionTabs = listOf("📖 Životopis", "📊 Profil", "🛡️ Výbava", "💖 Náklonnost", "🎁 Dary", "📦 Sklad & Inventář", "⚡ Akce", "✨ Dovednosti", "🎯 Výcvik", "📋 Úkoly", "🕰️ Klíčové Momenty", "🖼️ Galerie", "🏆 Milníky", "📜 Historie")
     var activeEmote by remember { mutableStateOf<String?>(null) }
     var emoteKey by remember { mutableLongStateOf(0L) }
 
     val offsetY = remember { androidx.compose.animation.core.Animatable(150f) }
     val alphaVal = remember { androidx.compose.animation.core.Animatable(0f) }
+
+    LaunchedEffect(character) {
+        currentActiveCharacter = character
+    }
 
     LaunchedEffect(currentActiveCharacter.id) {
         launch {
@@ -210,6 +234,46 @@ fun CharacterDetailDialog(
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color.Black.copy(alpha = 0.5f),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(currentActiveCharacter.statusIcon, fontSize = 14.sp)
+                                    Text(
+                                        text = currentActiveCharacter.nalada,
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                            if (currentActiveCharacter.breakthroughActive) {
+                                val breakthroughLabel = when(currentActiveCharacter.breakthroughType) {
+                                    "combat_fury" -> "🔥 Zuřivost"
+                                    "iron_will" -> "🛡️ Vůle"
+                                    "shadow_step" -> "💨 Úhyb"
+                                    else -> "✨ Průlom"
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0xFFFFD700).copy(alpha = 0.2f),
+                                    border = BorderStroke(1.dp, Color(0xFFFFD700))
+                                ) {
+                                    Text(
+                                        breakthroughLabel,
+                                        color = Color(0xFFFFD700),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
                             if (currentActiveCharacter.oblibena) {
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
@@ -366,7 +430,16 @@ fun CharacterDetailDialog(
                             character = currentActiveCharacter,
                             engine = engine
                         )
-                        9 -> SlaveInteractionLogTab(
+                        9 -> DailyAssignmentsTab(
+                            character = currentActiveCharacter,
+                            engine = engine
+                        )
+                        10 -> KeyMomentsTab(
+                            character = currentActiveCharacter
+                        )
+                        11 -> MemoryGalleryTab(character = currentActiveCharacter)
+                        12 -> MilestonesTab(character = currentActiveCharacter)
+                        13 -> SlaveInteractionLogTab(
                             character = currentActiveCharacter,
                             engine = engine
                         )
@@ -658,7 +731,23 @@ fun BioTab(character: Character) {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(bio.traits) { trait ->
+                    val displayTraits = if (character.traits.isNotEmpty()) {
+                        character.traits.map { 
+                            when(it) {
+                                "Arogantní" -> "Arogantní 💎"
+                                "Povýšená" -> "Povýšená 👑"
+                                "Pracovitá" -> "Pracovitá ⚡"
+                                "Líná" -> "Líná 💤"
+                                "Týmová hráčka" -> "Týmová hráčka 🤝"
+                                "Samotářka" -> "Samotářka 🧊"
+                                "Mírná" -> "Mírná 🌸"
+                                else -> "$it 🎭"
+                            }
+                        }
+                    } else {
+                        bio.traits
+                    }
+                    items(displayTraits) { trait ->
                         SuggestionChip(
                             onClick = {},
                             label = { Text(trait, fontSize = 11.sp) }
@@ -2084,8 +2173,8 @@ fun SkillTreeTab(
     engine: GameEngine? = null,
     onUpgradeSkill: (String) -> Unit
 ) {
-    var selectedBranch by remember { mutableStateOf("Boj") }
-    val branches = listOf("Bojové Schopnosti", "Pasivní Statistiky", "Podpora")
+    var selectedBranch by remember { mutableStateOf("Bojové Schopnosti") }
+    val branches = listOf("Bojové Schopnosti", "Pasivní Statistiky", "Odkaz Výcviku", "Minulost")
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Header with level, xp, and available points
@@ -2250,18 +2339,114 @@ fun SkillTreeTab(
                         )
                     )
                 }
-                else -> {
-                    SkillTreeLayout(
-                        character = character,
-                        onUpgradeSkill = onUpgradeSkill,
-                        skills = listOf(
-                            SkillNodeData("production", "Produkce", "⚒️", "+2% Produkce surovin", 0),
-                            SkillNodeData("rental", "Nájmy", "💰", "+15 Zlata z nájmů", 0),
-                            SkillNodeData("charm", "Šarm", "✨", "+10% Zisk náklonnosti", 1, req = "rental", reqLvl = 2),
-                            SkillNodeData("efficiency", "Efektivita", "⚙️", "Sníží únavu z práce", 1, req = "production", reqLvl = 2),
-                            SkillNodeData("loyalty_boost", "Oddanost", "💖", "Zabraňuje ztrátě důvěry", 2, req = "charm", reqLvl = 3)
+                "Odkaz Výcviku" -> {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "Trvalé bonusy zděděné z úspěšných výcvikových programů:",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.primary
                         )
-                    )
+                        
+                        val presetBuffs = listOf(
+                            Triple("preset_discipline", "Železná Kázeň", "Každý den neklesá poslušnost a morálka se lépe udržuje."),
+                            Triple("preset_care", "Vroucí Srdce", "Dvojnásobný zisk náklonnosti z dárků a něžných interakcí."),
+                            Triple("preset_combat", "Zocelená v boji", "+5 k maximálnímu zdraví a poškození v boji."),
+                            Triple("preset_obedience", "Slepá Oddanost", "Výrazně urychluje získávání důvěry a snižuje strach."),
+                            Triple("preset_stamina", "Nekonečná Výdrž", "Zvyšuje maximální manu a snižuje únavu při náročných úkolech.")
+                        )
+                        
+                        presetBuffs.forEach { (presetId, title, desc) ->
+                            val isUnlocked = character.completedPresets.contains(presetId)
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isUnlocked) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                border = if (isUnlocked) BorderStroke(1.dp, Color(0xFFFFD700)) else BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isUnlocked) Color(0xFFFFD700) else Color.DarkGray),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(if (isUnlocked) "⭐" else "🔒", fontSize = 16.sp)
+                                    }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = title,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp,
+                                            color = if (isUnlocked) MaterialTheme.colorScheme.onPrimaryContainer else Color.Gray
+                                        )
+                                        Text(
+                                            text = desc,
+                                            fontSize = 11.sp,
+                                            color = if (isUnlocked) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f) else Color.Gray.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                "Minulost" -> {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "📜 Klíčové vzpomínky & Střepy minulosti:",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        
+                        if (character.keyMemories.isEmpty()) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("🔒", fontSize = 32.sp)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("Zatím jsi neobjevil žádné hlubší vzpomínky.", fontSize = 12.sp, color = Color.Gray, textAlign = TextAlign.Center)
+                                    Text("Prováděj výcvik s vysokou morálkou (70+) pro šanci na odhalení střípků její minulosti.", fontSize = 10.sp, color = Color.Gray.copy(alpha = 0.7f), textAlign = TextAlign.Center)
+                                }
+                            }
+                        } else {
+                            character.keyMemories.forEachIndexed { idx, memory ->
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { VoiceManager.speak(memory.description, character.archetypeId) },
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.2f))
+                                ) {
+                                    Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        Text("${idx + 1}.", fontWeight = FontWeight.Black, fontSize = 16.sp, color = Color(0xFFFFD700).copy(alpha = 0.5f))
+                                        Column {
+                                            Text(memory.title, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                                            Text(memory.description, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface, lineHeight = 16.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -3006,7 +3191,35 @@ fun TrainingMiniGameComponent(
     var loyaltyGain by remember { mutableIntStateOf(0) }
     var moraleGain by remember { mutableIntStateOf(0) }
 
+    LaunchedEffect(gameCompleted) {
+        if (gameCompleted) {
+            val resultText = "Výsledek výcviku: Hodnocení $rankResult. Získán násobič loajality."
+            VoiceManager.speak(resultText, character.archetypeId)
+        }
+    }
+
     var activeBeat by remember { mutableIntStateOf(1) }
+    var showBreakthroughEffect by remember { mutableStateOf(false) }
+    var breakthroughName by remember { mutableStateOf("") }
+
+    var showSuccessAnim by remember { mutableStateOf(false) }
+    var showFailureAnim by remember { mutableStateOf(false) }
+
+    val successComposition by rememberLottieComposition(LottieCompositionSpec.Url("https://assets10.lottiefiles.com/packages/lf20_7w86at9a.json"))
+    val failureComposition by rememberLottieComposition(LottieCompositionSpec.Url("https://assets10.lottiefiles.com/packages/lf20_ghp96qlm.json"))
+
+    LaunchedEffect(showSuccessAnim) {
+        if (showSuccessAnim) {
+            kotlinx.coroutines.delay(800)
+            showSuccessAnim = false
+        }
+    }
+    LaunchedEffect(showFailureAnim) {
+        if (showFailureAnim) {
+            kotlinx.coroutines.delay(800)
+            showFailureAnim = false
+        }
+    }
 
     var reflexPrompt by remember { mutableStateOf("") }
     var reflexStartTime by remember { mutableLongStateOf(0L) }
@@ -3035,16 +3248,24 @@ fun TrainingMiniGameComponent(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     FilterChip(
                         selected = gameMode == 0,
                         onClick = { if (!isPlaying) gameMode = 0 },
-                        label = { Text("🎵 Rytmický výcvik", fontSize = 11.sp) }
+                        label = { Text("🎵 Rytmický dril", fontSize = 10.sp) }
                     )
                     FilterChip(
                         selected = gameMode == 1,
                         onClick = { if (!isPlaying) gameMode = 1 },
-                        label = { Text("⚡ Reflexní test", fontSize = 11.sp) }
+                        label = { Text("⚡ Reflexní test", fontSize = 10.sp) }
+                    )
+                    FilterChip(
+                        selected = gameMode == 2,
+                        onClick = { if (!isPlaying) gameMode = 2 },
+                        label = { Text("⚙️ Presety", fontSize = 10.sp) }
                     )
                 }
             }
@@ -3093,8 +3314,10 @@ fun TrainingMiniGameComponent(
                                         if (isTarget) {
                                             hits++
                                             score += 15
+                                            showSuccessAnim = true
                                         } else {
                                             score = (score - 5).coerceAtLeast(0)
+                                            showFailureAnim = true
                                         }
                                         if (totalAttempts >= 8) {
                                             isPlaying = false
@@ -3110,9 +3333,56 @@ fun TrainingMiniGameComponent(
                                             loyaltyGain = (12 * mult).toInt()
                                             moraleGain = (10 * mult).toInt()
 
+                                            val oldMood = character.nalada
+
+                                            // Update mood based on rank
+                                            when {
+                                                pct >= 85f -> { character.nalada = "Extatická"; character.statusIcon = "🥰" }
+                                                pct >= 65f -> { character.nalada = "Nadšená"; character.statusIcon = "😊" }
+                                                pct >= 45f -> { character.nalada = "Poddajná"; character.statusIcon = "😌" }
+                                                else -> { character.nalada = "Ponížená"; character.statusIcon = "😫" }
+                                            }
+
+                                            if (character.nalada != oldMood) {
+                                                engine?.triggerMoodNotification(character, oldMood, "Výsledek rytmického drilu: Hodnocení $rankResult")
+                                            } else {
+                                                com.example.haremdark.domain.SoundEffectManager.playMoodFeedback(character.nalada, "training")
+                                            }
+
                                             character.loajalita = (character.loajalita + loyaltyGain).coerceIn(0, 100)
                                             character.morale = (character.morale + moraleGain).coerceIn(0, 100)
                                             character.poslusnost = (character.poslusnost + (8 * mult).toInt()).coerceIn(0, 100)
+                                            character.totalTrainingSessions++
+
+                                            // Key Memory Discovery
+                                            if (mult >= 2.0f && character.morale >= 70 && Random.nextFloat() < 0.25f) {
+                                                val memoryPool = listOf(
+                                                    KeyMemory("garden", "Rodná zahrada", "Vybavila si jasný obraz slunečného odpoledne v zahradách své rodné vesnice, než přišli lovci lidí.", "/app/src/main/res/drawable/memory_village_garden_1789676249433.jpg"),
+                                                    KeyMemory("mother", "Ukolébavka", "Vzpomněla si na tvář své matky a na ukolébavku, kterou jí zpívala v dobách, kdy svět byl ještě bezpečný.", "/app/src/main/res/drawable/memory_mother_face_1789676260967.jpg"),
+                                                    KeyMemory("sword", "Výcvik s otcem", "Během tréninku se jí vybavila technika meče, kterou ji učil její otec, dříve než byl odveden do války.", "/app/src/main/res/drawable/memory_sword_training_1789676273285.jpg"),
+                                                    KeyMemory("lake", "Tajné jezero", "Vzpomněla si na své oblíbené místo u jezera, kde se schovávala, když chtěla být o samotě se svými sny.", "/app/src/main/res/drawable/memory_hidden_lake_1789676284135.jpg")
+                                                )
+                                                val newMemory = memoryPool.random()
+                                                if (!character.keyMemories.any { it.id == newMemory.id }) {
+                                                    character.keyMemories.add(newMemory)
+                                                    VoiceManager.speak("Objevila jsem střípek své minulosti... " + newMemory.description, character.archetypeId)
+                                                }
+                                            }
+
+                                            // Breakthrough check
+                                            if (character.morale >= 70 && Random.nextFloat() < (if (character.morale >= 90) 0.4f else 0.15f)) {
+                                                val types = listOf(
+                                                    "combat_fury" to "Bojová Zuřivost (Aura)",
+                                                    "iron_will" to "Železná Vůle (Obrana)",
+                                                    "shadow_step" to "Stínový Krok (Úhyb)"
+                                                )
+                                                val (id, name) = types.random()
+                                                character.breakthroughActive = true
+                                                character.breakthroughType = id
+                                                character.breakthroughExpiryDay = (engine?.gameState?.value?.player?.day ?: 1) + 3
+                                                breakthroughName = name
+                                                showBreakthroughEffect = true
+                                            }
 
                                             character.interactionLogs.add(
                                                 com.example.haremdark.models.InteractionLogEntry(
@@ -3139,9 +3409,26 @@ fun TrainingMiniGameComponent(
                             }
                         }
                     }
+
+                    Box(modifier = Modifier.height(100.dp), contentAlignment = Alignment.Center) {
+                        if (showSuccessAnim) {
+                            LottieAnimation(
+                                composition = successComposition,
+                                iterations = 1,
+                                modifier = Modifier.size(120.dp)
+                            )
+                        }
+                        if (showFailureAnim) {
+                            LottieAnimation(
+                                composition = failureComposition,
+                                iterations = 1,
+                                modifier = Modifier.size(120.dp)
+                            )
+                        }
+                    }
                 }
             }
-        } else {
+        } else if (gameMode == 1) {
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF2C1E1E)),
                 shape = RoundedCornerShape(14.dp),
@@ -3206,9 +3493,60 @@ fun TrainingMiniGameComponent(
                                     loyaltyGain = (15 * mult).toInt()
                                     moraleGain = (12 * mult).toInt()
 
+                                    val oldMood = character.nalada
+
+                                    // Update mood based on rank
+                                    when {
+                                        reactionMs < 550L -> { character.nalada = "Soustředěná"; character.statusIcon = "⚡" }
+                                        reactionMs < 900L -> { character.nalada = "Pozorná"; character.statusIcon = "👁️" }
+                                        reactionMs < 1400L -> { character.nalada = "Váhavá"; character.statusIcon = "🤔" }
+                                        else -> { character.nalada = "Zmatená"; character.statusIcon = "😵" }
+                                    }
+
+                                    if (character.nalada != oldMood) {
+                                        engine?.triggerMoodNotification(character, oldMood, "Výsledek reflexního testu: Hodnocení $rankResult")
+                                    } else {
+                                        com.example.haremdark.domain.SoundEffectManager.playMoodFeedback(character.nalada, "training")
+                                    }
+
                                     character.loajalita = (character.loajalita + loyaltyGain).coerceIn(0, 100)
                                     character.morale = (character.morale + moraleGain).coerceIn(0, 100)
                                     character.poslusnost = (character.poslusnost + (10 * mult).toInt()).coerceIn(0, 100)
+
+                                    if (mult >= 2.0f) {
+                                        showSuccessAnim = true
+                                        // Key Memory Discovery
+                                        if (character.morale >= 70 && Random.nextFloat() < 0.25f) {
+                                             val memoryPool = listOf(
+                                                 KeyMemory("garden", "Rodná zahrada", "Vybavila si jasný obraz slunečného odpoledne v zahradách své rodné vesnice, než přišli lovci lidí.", "/app/src/main/res/drawable/memory_village_garden_1789676249433.jpg"),
+                                                 KeyMemory("mother", "Ukolébavka", "Vzpomněla si na tvář své matky a na ukolébavku, kterou jí zpívala v dobách, kdy svět byl ještě bezpečný.", "/app/src/main/res/drawable/memory_mother_face_1789676260967.jpg"),
+                                                 KeyMemory("sword", "Výcvik s otcem", "Během tréninku se jí vybavila technika meče, kterou ji učil její otec, dříve než byl odveden do války.", "/app/src/main/res/drawable/memory_sword_training_1789676273285.jpg"),
+                                                 KeyMemory("lake", "Tajné jezero", "Vzpomněla si na své oblíbené místo u jezera, kde se schovávala, když chtěla být o samotě se svými sny.", "/app/src/main/res/drawable/memory_hidden_lake_1789676284135.jpg")
+                                             )
+                                             val newMemory = memoryPool.random()
+                                             if (!character.keyMemories.any { it.id == newMemory.id }) {
+                                                 character.keyMemories.add(newMemory)
+                                                 VoiceManager.speak("Záblesk minulosti... " + newMemory.description, character.archetypeId)
+                                             }
+                                        }
+                                    } else if (mult <= 0.5f) {
+                                        showFailureAnim = true
+                                    }
+
+                                    // Breakthrough check
+                                    if (character.morale >= 70 && Random.nextFloat() < (if (character.morale >= 90) 0.45f else 0.2f)) {
+                                        val types = listOf(
+                                            "combat_fury" to "Bojová Zuřivost (Aura)",
+                                            "iron_will" to "Železná Vůle (Obrana)",
+                                            "shadow_step" to "Stínový Krok (Úhyb)"
+                                        )
+                                        val (id, name) = types.random()
+                                        character.breakthroughActive = true
+                                        character.breakthroughType = id
+                                        character.breakthroughExpiryDay = (engine?.gameState?.value?.player?.day ?: 1) + 3
+                                        breakthroughName = name
+                                        showBreakthroughEffect = true
+                                    }
 
                                     character.interactionLogs.add(
                                         com.example.haremdark.models.InteractionLogEntry(
@@ -3226,6 +3564,23 @@ fun TrainingMiniGameComponent(
                                 shape = RoundedCornerShape(12.dp)
                             ) {
                                 Text("🔥 POSLECHNOUT HNED!", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Box(modifier = Modifier.height(80.dp), contentAlignment = Alignment.Center) {
+                            if (showSuccessAnim) {
+                                LottieAnimation(
+                                    composition = successComposition,
+                                    iterations = 1,
+                                    modifier = Modifier.size(100.dp)
+                                )
+                            }
+                            if (showFailureAnim) {
+                                LottieAnimation(
+                                    composition = failureComposition,
+                                    iterations = 1,
+                                    modifier = Modifier.size(100.dp)
+                                )
                             }
                         }
                     }
@@ -3263,6 +3618,15 @@ fun TrainingMiniGameComponent(
                     }
                 }
             }
+        } else if (gameMode == 2) {
+            TrainingPresetsSection(character = character, engine = engine)
+        }
+
+        if (showBreakthroughEffect) {
+            BreakthroughOverlay(
+                breakthroughName = breakthroughName,
+                onFinished = { showBreakthroughEffect = false }
+            )
         }
     }
 }
@@ -3272,8 +3636,9 @@ fun SlaveInteractionLogTab(
     character: Character,
     engine: GameEngine?
 ) {
-    val logs = remember(character.interactionLogs.size, engine?.gameState?.value?.player?.day) {
-        character.getSafeInteractionLogs(engine?.gameState?.value?.player?.day ?: 1)
+    val currentDay = engine?.gameState?.value?.player?.day ?: 1
+    val logs = remember(character.interactionLogs.size, currentDay) {
+        character.getSafeInteractionLogs(currentDay)
     }
 
     Column(
@@ -3282,6 +3647,7 @@ fun SlaveInteractionLogTab(
             .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        MoraleSparklineChart(character = character, currentDay = currentDay)
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)),
             shape = RoundedCornerShape(12.dp),
@@ -3325,14 +3691,14 @@ fun SlaveInteractionLogTab(
             modifier = Modifier.fillMaxSize()
         ) {
             items(items = logs) { entry ->
-                InteractionLogCard(entry)
+                InteractionLogCard(entry, character.archetypeId)
             }
         }
     }
 }
 
 @Composable
-fun InteractionLogCard(entry: com.example.haremdark.models.InteractionLogEntry) {
+fun InteractionLogCard(entry: com.example.haremdark.models.InteractionLogEntry, archetypeId: String? = null) {
     val (typeIcon, typeColor) = when (entry.type) {
         "výcvik" -> "🎯" to Color(0xFF4CAF50)
         "rozhovor" -> "💬" to Color(0xFF2196F3)
@@ -3346,7 +3712,9 @@ fun InteractionLogCard(entry: com.example.haremdark.models.InteractionLogEntry) 
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)),
         border = BorderStroke(1.dp, typeColor.copy(alpha = 0.35f)),
         shape = RoundedCornerShape(10.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { VoiceManager.speak(entry.description, archetypeId) }
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
@@ -3386,6 +3754,745 @@ fun InteractionLogCard(entry: com.example.haremdark.models.InteractionLogEntry) 
             if (entry.statChanges.isNotEmpty()) {
                 Text(entry.statChanges, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = typeColor)
             }
+        }
+    }
+}
+
+@Composable
+fun MoraleSparklineChart(
+    character: Character,
+    currentDay: Int = 1,
+    modifier: Modifier = Modifier
+) {
+    val moraleRecords = remember(character.morale, character.moraleHistory.size, currentDay) {
+        character.getSafeMoraleTrend(currentDay)
+    }
+
+    val chartEntries = remember(moraleRecords) {
+        moraleRecords.mapIndexed { index, record ->
+            FloatEntry(x = (index + 1).toFloat(), y = record.morale.toFloat())
+        }
+    }
+
+    val firstVal = moraleRecords.firstOrNull()?.morale ?: 50
+    val lastVal = moraleRecords.lastOrNull()?.morale ?: character.morale
+    val diff = lastVal - firstVal
+    val diffText = if (diff >= 0) "+$diff%" else "$diff%"
+    val diffColor = if (diff >= 0) Color(0xFF81C784) else Color(0xFFFF8A80)
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1F1424)),
+        border = BorderStroke(1.dp, Color(0xFFAB47BC).copy(alpha = 0.4f)),
+        shape = RoundedCornerShape(12.dp),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("📈", fontSize = 16.sp)
+                    Column {
+                        Text(
+                            "Sparkline Morálky (Posledních 7 dní)",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = Color.White
+                        )
+                        Text(
+                            "Sledování vývoje morálky a stability slave po výcviku",
+                            fontSize = 10.sp,
+                            color = Color.White.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = diffColor.copy(alpha = 0.2f),
+                    border = BorderStroke(1.dp, diffColor.copy(alpha = 0.6f))
+                ) {
+                    Text(
+                        diffText,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = diffColor,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(110.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF120A16))
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
+            ) {
+                Chart(
+                    chart = lineChart(),
+                    model = entryModelOf(chartEntries),
+                    startAxis = rememberStartAxis(),
+                    bottomAxis = rememberBottomAxis(),
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "Minulý týden: ${firstVal}%",
+                    fontSize = 10.sp,
+                    color = Color.Gray
+                )
+                Text(
+                    "Aktuální: ${lastVal}% (${if (lastVal < 35) "⚠️ Riziko vzpoury" else "Stabilní"})",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (lastVal < 35) Color(0xFFFF5252) else Color(0xFF81C784)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun MemoryGalleryTab(character: Character) {
+    var selectedMemory by remember { mutableStateOf<KeyMemory?>(null) }
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Text(
+            "🖼️ Galerie Klíčových Vzpomínek",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        if (character.keyMemories.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    "Žádné vzpomínky nebyly dosud odemčeny.\nTrénuj dívku s vysokou morálkou pro šanci na záblesk minulosti.",
+                    textAlign = TextAlign.Center,
+                    color = Color.Gray,
+                    fontSize = 12.sp
+                )
+            }
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(character.keyMemories) { memory ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .clickable { selectedMemory = memory },
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.3f))
+                    ) {
+                        Box {
+                            // Memory Illustration
+                            AsyncImage(
+                                model = memory.illustrationUrl ?: portraitResFor(character.archetypeId), // Fallback to portrait
+                                contentDescription = memory.title,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                            
+                            // Overlay gradient for title
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
+                                            startY = 100f
+                                        )
+                                    )
+                            )
+                            
+                            Text(
+                                memory.title,
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(8.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (selectedMemory != null) {
+        Dialog(onDismissRequest = { selectedMemory = null }) {
+            val memory = selectedMemory!!
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth(0.95f)
+                    .fillMaxHeight(0.85f),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF121212))
+            ) {
+                Column {
+                    Box(modifier = Modifier.weight(0.6f).fillMaxWidth()) {
+                        AsyncImage(
+                            model = memory.illustrationUrl ?: portraitResFor(character.archetypeId),
+                            contentDescription = memory.title,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                        IconButton(
+                            onClick = { selectedMemory = null },
+                            modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Zavřít", tint = Color.White)
+                        }
+                    }
+                    Column(
+                        modifier = Modifier
+                            .weight(0.4f)
+                            .padding(20.dp)
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            memory.title,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFFD700)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            memory.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 22.sp
+                        )
+                        Spacer(modifier = Modifier.height(20.dp))
+                        Button(
+                            onClick = { VoiceManager.speak(memory.description, character.archetypeId) },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Přehrát vzpomínku")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Helper to get portrait if memory image is missing
+@Composable
+fun portraitResFor(archetypeId: String): Int {
+    return StaticData.getPortraitForArchetype(archetypeId)
+}
+
+@Composable
+fun MilestonesTab(character: Character) {
+    val thresholds = listOf(
+        25 to "Začátek oddanosti: +5 Síla",
+        50 to "Věrné srdce: +10 Max HP",
+        75 to "Absolutní fanatismus: +15% poškození (Pasiv: Fanatik)"
+    )
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text("🏆 Milníky oddanosti", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        
+        thresholds.forEach { (threshold, reward) ->
+            val isUnlocked = character.milestoneRewardsUnlocked.contains(threshold)
+            val progress = (character.loajalita.toFloat() / threshold.toFloat()).coerceAtMost(1f)
+            
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isUnlocked) Color(0xFF1B3320) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ),
+                border = BorderStroke(1.dp, if (isUnlocked) Color(0xFF4CAF50) else Color.Gray.copy(alpha = 0.3f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.size(40.dp).background(if (isUnlocked) Color(0xFF4CAF50) else Color.Gray, CircleShape)
+                    ) {
+                        Text(if (isUnlocked) "✓" else "$threshold%", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                    
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(reward, fontWeight = FontWeight.Bold, color = if (isUnlocked) Color.White else MaterialTheme.colorScheme.onSurface)
+                        if (!isUnlocked) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = Color.Gray.copy(alpha = 0.2f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TrainingPresetsSection(
+    character: Character,
+    engine: GameEngine?
+) {
+    var customPresets by remember(character.id, character.trainingPresets.size) {
+        mutableStateOf(character.trainingPresets)
+    }
+    val allPresets = remember(customPresets) {
+        getDefaultTrainingPresets() + customPresets
+    }
+
+    var executionResult by remember { mutableStateOf<String?>(null) }
+    var showCreateDialog by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF231B2E)),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(1.dp, Color(0xFFAB47BC).copy(alpha = 0.4f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "⚙️ Automatizované výcvikové presety",
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFE1BEE7),
+                        fontSize = 13.sp
+                    )
+                    Text(
+                        "Uložte si posloupnosti výcvikových kroků pro rychlé a opakované spouštění.",
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.75f)
+                    )
+                }
+                Button(
+                    onClick = { showCreateDialog = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E24AA)),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("➕ Nový Preset", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        if (executionResult != null) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1B3320)),
+                border = BorderStroke(1.dp, Color(0xFF4CAF50)),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        executionResult ?: "",
+                        fontSize = 11.sp,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = { executionResult = null }, modifier = Modifier.size(24.dp)) {
+                        Text("✕", color = Color.Gray, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+
+        allPresets.forEach { preset ->
+            val totalEnergy = preset.actions.sumOf { it.energyCost }
+            val totalLoyalty = preset.actions.sumOf { it.loyaltyGain }
+            val totalMorale = preset.actions.sumOf { it.moraleGain }
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF2C1E2E)),
+                border = BorderStroke(1.dp, Color(0xFF8E24AA).copy(alpha = 0.35f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    var selectedPartnerId by remember { mutableStateOf<String?>(null) }
+                    val characters = engine?.gameState?.value?.characters ?: emptyList()
+                    val availablePartners = characters.filter { it.id != character.id && it.naNajmu == false }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(preset.icon, fontSize = 20.sp)
+                            Column {
+                                Text(preset.title, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 13.sp)
+                                Text(preset.description, fontSize = 10.sp, color = Color.White.copy(alpha = 0.7f))
+                            }
+                        }
+
+                        if (availablePartners.isNotEmpty()) {
+                            val partner = availablePartners.find { it.id == selectedPartnerId }
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFF4A148C).copy(alpha = 0.6f),
+                                border = BorderStroke(1.dp, Color(0xFFCE93D8).copy(alpha = 0.4f)),
+                                modifier = Modifier.clickable {
+                                    val currentIndex = if (selectedPartnerId == null) -1 else availablePartners.indexOfFirst { it.id == selectedPartnerId }
+                                    selectedPartnerId = if (currentIndex == availablePartners.size - 1) null else availablePartners[currentIndex + 1].id
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text("🤝", fontSize = 12.sp)
+                                    Text(partner?.name ?: "Bez partnerky", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+
+                    // Action sequence flow
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        preset.actions.forEachIndexed { idx, act ->
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFF3E2723).copy(alpha = 0.8f),
+                                border = BorderStroke(1.dp, Color(0xFFFFB74D).copy(alpha = 0.5f))
+                            ) {
+                                Text(
+                                    "${act.icon} ${act.name}",
+                                    fontSize = 9.sp,
+                                    color = Color(0xFFFFE0B2),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                )
+                            }
+                            if (idx < preset.actions.size - 1) {
+                                Text("➔", fontSize = 10.sp, color = Color.Gray)
+                            }
+                        }
+                    }
+
+                    // Stat projected totals & execute button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val partner = availablePartners.find { it.id == selectedPartnerId }
+                        var bonusText = ""
+                        var bonusLoyalty = 0
+                        var bonusMorale = 0
+                        
+                        if (partner != null) {
+                            val traits1 = StaticData.getTraitsForArchetype(character.archetypeId)
+                            val traits2 = StaticData.getTraitsForArchetype(partner.archetypeId)
+                            if (traits1.isNotEmpty() && traits2.isNotEmpty() && StaticData.areTraitsComplementary(traits1[0], traits2[0])) {
+                                bonusLoyalty = (totalLoyalty * 0.25f).toInt()
+                                bonusMorale = (totalMorale * 0.15f).toInt()
+                                bonusText = " (+25% Komplementární bonus!)"
+                            } else {
+                                bonusLoyalty = (totalLoyalty * 0.1f).toInt()
+                                bonusText = " (+10% Týmový bonus)"
+                            }
+                        }
+
+                        Text(
+                            "Spotřeba: ⚡$totalEnergy energy  |  Zisk: +${totalLoyalty + bonusLoyalty} L, +${totalMorale + bonusMorale} M$bonusText",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (bonusLoyalty > 0) Color(0xFF81C784) else Color(0xFFCE93D8)
+                        )
+
+                        Button(
+                            onClick = {
+                                val player = engine?.gameState?.value?.player
+                                val finalLoyaltyGain = totalLoyalty + bonusLoyalty
+                                val finalMoraleGain = totalMorale + bonusMorale
+
+                                if (player != null && player.sexEnergy < totalEnergy) {
+                                    executionResult = "⚠️ Nedostatek sexuální energie! Potřebuješ $totalEnergy energy (máš ${player.sexEnergy})."
+                                } else {
+                                    if (player != null) {
+                                        player.sexEnergy = (player.sexEnergy - totalEnergy).coerceAtLeast(0)
+                                    }
+                                    character.loajalita = (character.loajalita + finalLoyaltyGain).coerceIn(0, 100)
+                                    character.morale = (character.morale + finalMoraleGain).coerceIn(0, 100)
+                                    character.poslusnost = (character.poslusnost + (finalLoyaltyGain * 0.8f).toInt()).coerceIn(0, 100)
+                                    character.totalTrainingSessions++
+                                    character.completedPresets.add(preset.id)
+
+                                    val oldMood = character.nalada
+
+                                    // Update mood for presets (assume success/focus)
+                                    character.nalada = "Disciplinovaná"
+                                    character.statusIcon = "🫡"
+
+                                    if (character.nalada != oldMood) {
+                                        engine?.triggerMoodNotification(character, oldMood, "Výcvikový preset: ${preset.title}")
+                                    } else {
+                                        com.example.haremdark.domain.SoundEffectManager.playMoodFeedback(character.nalada, "training")
+                                    }
+
+                                    val currentDay = engine?.gameState?.value?.player?.day ?: 1
+                                    val partnerText = if (partner != null) " (S partnerkou ${partner.name})" else ""
+                                    character.interactionLogs.add(
+                                        com.example.haremdark.models.InteractionLogEntry(
+                                            day = currentDay,
+                                            type = "výcvik",
+                                            title = "Automatický preset: ${preset.title}$partnerText",
+                                            description = "Provedena sekvence (${preset.actions.size} kroků): ${preset.actions.joinToString { it.name }}. Partnerka: ${partner?.name ?: "Žádná"}.",
+                                            statChanges = "+$finalLoyaltyGain Loajalita, +$finalMoraleGain Morálka",
+                                            rank = if (bonusLoyalty > 0) "S+" else "S"
+                                        )
+                                    )
+
+                                    character.moraleHistory.add(
+                                        com.example.haremdark.models.MoraleRecord(
+                                            day = currentDay,
+                                            morale = character.morale,
+                                            source = preset.title
+                                        )
+                                    )
+
+                                    executionResult = "✅ Preset „${preset.title}“ úspěšně dokončen! (+$finalLoyaltyGain Loajalita, +$finalMoraleGain Morálka)$partnerText"
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A1B9A)),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                        ) {
+                            Text("⚡ Spustit preset", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        if (showCreateDialog) {
+            CreateTrainingPresetDialog(
+                onDismiss = { showCreateDialog = false },
+                onSave = { newPreset ->
+                    character.trainingPresets.add(newPreset)
+                    customPresets = character.trainingPresets.toMutableList()
+                    showCreateDialog = false
+                    executionResult = "✨ Nový automatický preset „${newPreset.title}“ byl vytvořen a uložen!"
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun CreateTrainingPresetDialog(
+    onDismiss: () -> Unit,
+    onSave: (TrainingPreset) -> Unit
+) {
+    var title by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var selectedActions by remember { mutableStateOf(listOf<TrainingPresetAction>()) }
+
+    val availableActions = remember {
+        listOf(
+            TrainingPresetAction("reflex", "Reflexní test poslušnosti", 10, 12, 8, "⚡"),
+            TrainingPresetAction("rhythm", "Rytmický dril rozkazů", 12, 10, 6, "🎵"),
+            TrainingPresetAction("praise", "Pochvala & uznání pána", 8, 8, 12, "✨"),
+            TrainingPresetAction("bath", "Očistná lázeň s oleji", 15, 14, 18, "uba"),
+            TrainingPresetAction("whip", "Přísný kázeňský dril", 12, 10, -5, "⛓️")
+        )
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("➕ Vytvořit výcvikový preset", fontWeight = FontWeight.Bold, color = Color.White) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Název presetu") },
+                    placeholder = { Text("Např. Ranní dril poslušnosti") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Popis presetu") },
+                    placeholder = { Text("Např. Rychlá kombinace reflexů a lázně") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Text("Vybrané úkony (${selectedActions.size}/4):", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.LightGray)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (selectedActions.isEmpty()) {
+                        Text("Zatím nebyly vybrány žádné úkony.", fontSize = 10.sp, color = Color.Gray)
+                    } else {
+                        selectedActions.forEachIndexed { idx, act ->
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFF4A148C),
+                                modifier = Modifier.clickable {
+                                    selectedActions = selectedActions.toMutableList().apply { removeAt(idx) }
+                                }
+                            ) {
+                                Text("${act.icon} ${act.name} ✕", fontSize = 9.sp, color = Color.White, modifier = Modifier.padding(6.dp))
+                            }
+                        }
+                    }
+                }
+
+                Text("Přidat úkon do sekvence:", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.LightGray)
+
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    availableActions.forEach { act ->
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF261C2C),
+                            border = BorderStroke(1.dp, Color(0xFF7B1FA2).copy(alpha = 0.4f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = selectedActions.size < 4) {
+                                    selectedActions = selectedActions + act
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("${act.icon} ${act.name}", fontSize = 11.sp, color = Color.White)
+                                Text("⚡${act.energyCost} energy  |  +${act.loyaltyGain} L, +${act.moraleGain} M", fontSize = 10.sp, color = Color(0xFFE1BEE7))
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (title.isNotBlank() && selectedActions.isNotEmpty()) {
+                        val newPreset = TrainingPreset(
+                            id = "custom_${System.currentTimeMillis()}",
+                            title = title,
+                            description = if (description.isBlank()) "Vlastní automatický preset" else description,
+                            icon = "⚙️",
+                            actions = selectedActions
+                        )
+                        onSave(newPreset)
+                    }
+                },
+                enabled = title.isNotBlank() && selectedActions.isNotEmpty(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E24AA))
+            ) {
+                Text("Uložit preset", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Zrušit", color = Color.Gray)
+            }
+        },
+        containerColor = Color(0xFF1E1424)
+    )
+}
+
+@Composable
+fun BreakthroughOverlay(
+    breakthroughName: String,
+    onFinished: () -> Unit
+) {
+    var visible by remember { mutableStateOf(true) }
+    val scale by animateFloatAsState(
+        targetValue = if (visible) 1.2f else 0f,
+        animationSpec = tween(1000, easing = FastOutSlowInEasing),
+        label = "scale"
+    )
+
+    LaunchedEffect(Unit) {
+        delay(2500)
+        visible = false
+        delay(500)
+        onFinished()
+    }
+
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .graphicsLayer(scaleX = scale, scaleY = scale)
+                .background(Color.Black.copy(alpha = 0.85f), RoundedCornerShape(16.dp))
+                .border(2.dp, Color(0xFFFFD700), RoundedCornerShape(16.dp))
+                .padding(24.dp)
+        ) {
+            Text("✨ PRŮLOM (BREAKTHROUGH) ✨", color = Color(0xFFFFD700), fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(breakthroughName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 24.sp, textAlign = TextAlign.Center)
+            Spacer(modifier = Modifier.height(12.dp))
+            Text("Bojové schopnosti slave dočasně zvýšeny!", color = Color.LightGray, fontSize = 12.sp, textAlign = TextAlign.Center)
         }
     }
 }
