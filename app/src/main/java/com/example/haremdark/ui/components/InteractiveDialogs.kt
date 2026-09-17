@@ -688,6 +688,8 @@ fun BioTab(character: Character) {
         }
 
         // Unique Lore Card
+        var selectedGlossaryTerm by remember { mutableStateOf<GlossaryTerm?>(null) }
+
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
             shape = RoundedCornerShape(14.dp)
@@ -702,13 +704,32 @@ fun BioTab(character: Character) {
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
-                Text(
+                
+                InteractiveCodexContent(
                     text = bio.lore,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    lineHeight = 20.sp
+                    onTermClick = { term ->
+                        selectedGlossaryTerm = GLOSSARY_TERMS.find { it.term.equals(term, ignoreCase = true) }
+                    },
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
+        }
+
+        // Glossary Popup
+        if (selectedGlossaryTerm != null) {
+            AlertDialog(
+                onDismissRequest = { selectedGlossaryTerm = null },
+                icon = { Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                title = { Text(selectedGlossaryTerm!!.term, fontWeight = FontWeight.Bold) },
+                text = { Text(selectedGlossaryTerm!!.definition, fontSize = 14.sp, lineHeight = 20.sp) },
+                confirmButton = {
+                    TextButton(onClick = { selectedGlossaryTerm = null }) {
+                        Text("Zavřít")
+                    }
+                },
+                shape = RoundedCornerShape(16.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            )
         }
 
         // Personality Traits Card

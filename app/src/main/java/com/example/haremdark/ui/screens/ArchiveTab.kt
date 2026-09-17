@@ -68,7 +68,7 @@ fun HaremArchiveTab(gameState: GameSave, modifier: Modifier = Modifier) {
         }
 
         if (currentSubTab == "Kodex") {
-            com.example.haremdark.ui.components.CodexTab()
+            com.example.haremdark.ui.components.CodexTab(gameState = gameState)
             return@Column
         }
 
