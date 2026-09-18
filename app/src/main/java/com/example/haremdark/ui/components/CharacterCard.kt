@@ -42,6 +42,7 @@ fun CharacterCard(
     onDetailClick: () -> Unit,
     onFavoriteClick: () -> Unit,
     onPinClick: () -> Unit = {},
+    onGrantFavorClick: () -> Unit = {},
     hasActiveEvent: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -468,10 +469,34 @@ fun CharacterCard(
                 }
             }
 
-            // Actions Row: Detail & Interact Buttons
+            // Favor Boost Active Badge if applicable
+            if (character.favorBoostActive) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFFAB47BC).copy(alpha = 0.15f),
+                    border = BorderStroke(1.dp, Color(0xFFAB47BC).copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text("✨", fontSize = 12.sp)
+                        Text(
+                            text = "Královská přízeň aktivní (zbývá ${character.favorBoostDaysRemaining} dny) - Zrychlený růst vztahu",
+                            color = Color(0xFFAB47BC),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            // Actions Row: Detail, Grant Favor & Interact Buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 OutlinedButton(
                     onClick = onDetailClick,
@@ -482,10 +507,23 @@ fun CharacterCard(
                     Icon(
                         imageVector = Icons.Default.Info,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(15.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Podrobnosti", fontSize = 12.sp)
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text("Podrobnosti", fontSize = 11.sp)
+                }
+
+                OutlinedButton(
+                    onClick = onGrantFavorClick,
+                    modifier = Modifier.weight(1.1f),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color(0xFFFFD700)
+                    ),
+                    border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.6f)),
+                    contentPadding = PaddingValues(vertical = 8.dp)
+                ) {
+                    Text("✨ Přízeň (75💰)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
 
                 Button(
@@ -500,10 +538,10 @@ fun CharacterCard(
                     Icon(
                         imageVector = Icons.Default.FavoriteBorder,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(15.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Interakce", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text("Interakce", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

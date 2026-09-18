@@ -61,42 +61,74 @@ import androidx.compose.ui.window.DialogProperties
 
 @Composable
 fun SlaveComparisonDialog(char1: com.example.haremdark.models.Character, char2: com.example.haremdark.models.Character, onDismiss: () -> Unit) {
+    val tier1 = com.example.haremdark.data.AffinityData.getTierForPoints(char1.affinityPoints)
+    val tier2 = com.example.haremdark.data.AffinityData.getTierForPoints(char2.affinityPoints)
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(0.95f).fillMaxHeight(0.85f),
+            modifier = Modifier.fillMaxWidth(0.96f).fillMaxHeight(0.90f),
             shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
         ) {
-            Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("📊 Porovnání otrokyň", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("📊 Porovnání vztahů & perků", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Default.Close, contentDescription = "Zavřít")
                     }
                 }
                 
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(char1.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFFFFD700))
-                        Text(char1.archetypeId, fontSize = 11.sp, color = Color.Gray)
+                // Characters Header Side-by-Side
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = Color(tier1.colorHex).copy(alpha = 0.15f)),
+                        border = BorderStroke(1.dp, Color(tier1.colorHex).copy(alpha = 0.5f))
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(tier1.icon, fontSize = 24.sp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(char1.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(tier1.colorHex))
+                            Text("Stupeň ${tier1.level}: ${tier1.title}", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+                            Text("Náklonnost: ${char1.affinityPoints} pts", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                            if (char1.favorBoostActive) {
+                                Text("✨ Královská přízeň aktivní", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFFAB47BC))
+                            }
+                        }
                     }
-                    Text("vs", modifier = Modifier.align(Alignment.CenterVertically), fontWeight = FontWeight.Black)
-                    Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(char2.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFFE91E63))
-                        Text(char2.archetypeId, fontSize = 11.sp, color = Color.Gray)
+
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = Color(tier2.colorHex).copy(alpha = 0.15f)),
+                        border = BorderStroke(1.dp, Color(tier2.colorHex).copy(alpha = 0.5f))
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(tier2.icon, fontSize = 24.sp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(char2.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(tier2.colorHex))
+                            Text("Stupeň ${tier2.level}: ${tier2.title}", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+                            Text("Náklonnost: ${char2.affinityPoints} pts", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                            if (char2.favorBoostActive) {
+                                Text("✨ Královská přízeň aktivní", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFFAB47BC))
+                            }
+                        }
                     }
                 }
-                
-                Spacer(modifier = Modifier.height(20.dp))
+
+                // Vico Column Chart for Core Stats
+                Text("📈 Porovnání statů (Loajalita, Morálka, Poslušnost, Boj, Obrana):", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 
                 val stats = listOf("Loajalita", "Morálka", "Poslušnost", "Boj", "Obrana")
-                
                 val char1Entries = listOf(
                     com.patrykandpatrick.vico.core.entry.FloatEntry(0f, char1.loajalita.toFloat()),
                     com.patrykandpatrick.vico.core.entry.FloatEntry(1f, char1.morale.toFloat()),
@@ -114,7 +146,7 @@ fun SlaveComparisonDialog(char1: com.example.haremdark.models.Character, char2: 
                 
                 val model = entryModelOf(char1Entries, char2Entries)
                 
-                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                Box(modifier = Modifier.height(180.dp).fillMaxWidth()) {
                     Chart(
                         chart = columnChart(),
                         model = model,
@@ -130,21 +162,51 @@ fun SlaveComparisonDialog(char1: com.example.haremdark.models.Character, char2: 
                         modifier = Modifier.fillMaxSize()
                     )
                 }
+
+                // Unlocked Perks & Combat Bonuses Side-by-Side
+                Text("✨ Porovnání perků a bojových bonusů:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                ) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("💡 Informace k porovnání", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        Text("• Boj a Obrana jsou škálovány x10 pro lepší vizualizaci.", fontSize = 10.sp, color = Color.Gray)
-                        Text("• Vyšší sloupce značí lepší připravenost k úkolům.", fontSize = 10.sp, color = Color.Gray)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Char 1 Perks
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(char1.name, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(tier1.colorHex))
+                            Text("Bojový bonus:", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF90CAF9))
+                            Text(tier1.combatBonusDescription, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface)
+                            
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text("Odemčené perky:", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            val perks1 = com.example.haremdark.data.AffinityData.TIERS.filter { it.level <= tier1.level }.flatMap { it.unlockedPerks }
+                            perks1.forEach { perk ->
+                                Text("• $perk", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+                            }
+                        }
+                    }
+
+                    // Char 2 Perks
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(char2.name, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(tier2.colorHex))
+                            Text("Bojový bonus:", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF90CAF9))
+                            Text(tier2.combatBonusDescription, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface)
+                            
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text("Odemčené perky:", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            val perks2 = com.example.haremdark.data.AffinityData.TIERS.filter { it.level <= tier2.level }.flatMap { it.unlockedPerks }
+                            perks2.forEach { perk ->
+                                Text("• $perk", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+                            }
+                        }
                     }
                 }
                 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 
                 Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
                     Text("Zavřít porovnání")
@@ -200,7 +262,7 @@ fun HaremScreen(
     // legacy variables to prevent unresolved references during transition
     val selectedFilter = 0
     val filters = listOf("Všechny")
-    val sortOptions = listOf("Náklonnost", "Rarita / Úroveň", "Nedávno", "Role (Archetyp)", "Bojová síla")
+    val sortOptions = listOf("Úroveň vztahu", "Jméno", "Nedávná interakce", "Náklonnost", "Rarita / Úroveň", "Role (Archetyp)", "Bojová síla")
     var sortExpanded by remember { mutableStateOf(false) }
     val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
     val bgRes = when (hour) {
@@ -238,8 +300,27 @@ fun HaremScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             
+            var showGlobalMilestonesDialog by remember { mutableStateOf(false) }
+
             if (gameState.characters.isNotEmpty()) {
                 MilestoneTrackerBanner(characters = gameState.characters)
+                Button(
+                    onClick = { showGlobalMilestonesDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700).copy(alpha = 0.85f)),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("👑 Síň slávy globálních milníků & avatarů", fontWeight = FontWeight.Bold, color = Color.Black, fontSize = 12.sp)
+                }
+            }
+
+            if (showGlobalMilestonesDialog) {
+                com.example.haremdark.ui.components.GlobalAffinityMilestonesDialog(
+                    player = gameState.player,
+                    characters = gameState.characters,
+                    engine = engine,
+                    onDismiss = { showGlobalMilestonesDialog = false }
+                )
             }
 
             // Harem Top Sub-Tabs
@@ -864,7 +945,7 @@ fun HaremScreen(
                     val affinityOptions = listOf("Všechny", "Úroveň 1-2", "Úroveň 3-4", "Úroveň 5+")
                     val loyaltyOptions = listOf("Všechny", "Nízká (0-30)", "Střední (31-70)", "Vysoká (71+)")
                     val moraleOptions = listOf("Všechny", "Kritická (<20)", "Nízká (20-40)", "Vysoká (80+)")
-                    val sortOptionsList = listOf("Náklonnost", "Rarita / Úroveň", "Role (Archetyp)", "Bojová síla", "Nedávno")
+                    val sortOptionsList = listOf("Úroveň vztahu", "Jméno", "Nedávná interakce", "Náklonnost", "Rarita / Úroveň", "Role (Archetyp)", "Bojová síla")
 
                     // Status
                     Column {

@@ -39,8 +39,14 @@ import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import kotlin.math.*
 import kotlin.random.Random
 import com.example.haremdark.data.AffinityData
 import com.airbnb.lottie.compose.*
@@ -1068,6 +1074,125 @@ data class CharacterBio(
 )
 
 @Composable
+fun CharacterRadarChart(character: Character, modifier: Modifier = Modifier) {
+    val tier = AffinityData.getTierForPoints(character.affinityPoints)
+    val color = Color(tier.colorHex)
+
+    val stats = listOf(
+        Pair("Loajalita", (character.loajalita / 100f).coerceIn(0f, 1f)),
+        Pair("Morálka", (character.morale / 100f).coerceIn(0f, 1f)),
+        Pair("Poslušnost", (character.poslusnost / 100f).coerceIn(0f, 1f)),
+        Pair("Síla", (character.strength / 100f).coerceIn(0f, 1f)),
+        Pair("Submise", (character.submisivita / 100f).coerceIn(0f, 1f)),
+        Pair("Důvěra", (character.duvera / 100f).coerceIn(0f, 1f))
+    )
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.5f))
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("🕸️ Radarový graf schopností & pouta", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = color)
+                Text("Stupeň ${tier.level} (${tier.stageName})", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(200.dp)
+                    .padding(8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                val onSurfaceColor = MaterialTheme.colorScheme.onSurface
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val center = Offset(size.width / 2f, size.height / 2f)
+                    val radius = size.minDimension / 2f * 0.75f
+                    val count = stats.size
+
+                    for (i in 1..4) {
+                        val ringRadius = radius * (i / 4f)
+                        val path = Path()
+                        for (j in 0 until count) {
+                            val angle = (Math.PI * 2 / count) * j - (Math.PI / 2)
+                            val x = center.x + (ringRadius * cos(angle)).toFloat()
+                            val y = center.y + (ringRadius * sin(angle)).toFloat()
+                            if (j == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                        }
+                        path.close()
+                        drawPath(
+                            path = path,
+                            color = onSurfaceColor.copy(alpha = 0.15f),
+                            style = Stroke(width = 1.dp.toPx())
+                        )
+                    }
+
+                    for (j in 0 until count) {
+                        val angle = (Math.PI * 2 / count) * j - (Math.PI / 2)
+                        val x = center.x + (radius * cos(angle)).toFloat()
+                        val y = center.y + (radius * sin(angle)).toFloat()
+                        drawLine(
+                            color = onSurfaceColor.copy(alpha = 0.2f),
+                            start = center,
+                            end = Offset(x, y),
+                            strokeWidth = 1.dp.toPx()
+                        )
+                    }
+
+                    val statPath = Path()
+                    val points = mutableListOf<Offset>()
+                    stats.forEachIndexed { j, (_, value) ->
+                        val angle = (Math.PI * 2 / count) * j - (Math.PI / 2)
+                        val scaledRadius = radius * value.coerceIn(0.15f, 1f)
+                        val x = center.x + (scaledRadius * cos(angle)).toFloat()
+                        val y = center.y + (scaledRadius * sin(angle)).toFloat()
+                        points.add(Offset(x, y))
+                        if (j == 0) statPath.moveTo(x, y) else statPath.lineTo(x, y)
+                    }
+                    statPath.close()
+
+                    drawPath(
+                        path = statPath,
+                        color = color.copy(alpha = 0.4f)
+                    )
+                    drawPath(
+                        path = statPath,
+                        color = color,
+                        style = Stroke(width = 2.5f.dp.toPx())
+                    )
+
+                    points.forEach { pt ->
+                        drawCircle(color = Color.White, radius = 3.5.dp.toPx(), center = pt)
+                        drawCircle(color = color, radius = 2.dp.toPx(), center = pt)
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                stats.forEach { (label, value) ->
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(label, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                        Text("${(value * 100).toInt()}%", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = color)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun ProfileAndStatsTab(
     character: Character,
     loyaltyTier: com.example.haremdark.models.LoyaltyTier,
@@ -1172,6 +1297,9 @@ fun ProfileAndStatsTab(
                 Text("⚔️ Pasivní boj: ${affinityTier.combatBonusDescription}", fontSize = 10.sp, color = Color(0xFFFF80AB), fontWeight = FontWeight.SemiBold)
             }
         }
+
+        // Radar Chart of Character Stats & Affinity Tier Growth
+        CharacterRadarChart(character = character)
 
         // Detailed Progress Stats
         Text("Základní vitální ukazatele:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
@@ -1367,44 +1495,264 @@ fun AffinityAndDialogueTab(
             shape = RoundedCornerShape(14.dp),
             border = androidx.compose.foundation.BorderStroke(1.dp, Color(tier.colorHex).copy(alpha = 0.4f))
         ) {
-            Row(
+            Column(
                 modifier = Modifier.padding(14.dp),
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("💬", fontSize = 20.sp)
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Aktuální myšlenky k pánovi:",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp,
-                            color = Color(tier.colorHex)
-                        )
-                        IconButton(
-                            onClick = { com.example.haremdark.domain.VoiceManager.speak(activeLine, character.archetypeId) },
-                            modifier = Modifier.size(24.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("💬", fontSize = 20.sp)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.VolumeUp,
-                                contentDescription = "Přehrát hlas",
-                                tint = Color(tier.colorHex),
-                                modifier = Modifier.size(16.dp)
+                            Text(
+                                text = "Aktuální myšlenky k pánovi:",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = Color(tier.colorHex)
+                            )
+                            IconButton(
+                                onClick = { com.example.haremdark.domain.VoiceManager.speak(activeLine, character.archetypeId) },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.VolumeUp,
+                                    contentDescription = "Přehrát hlas",
+                                    tint = Color(tier.colorHex),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "„$activeLine“",
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+
+                // --- 1. MICROPHONE GREET FEATURE ---
+                var isListening by remember(character.id) { mutableStateOf(false) }
+                var micGreetingResponse by remember(character.id) { mutableStateOf<String?>(null) }
+                val coroutineScope = rememberCoroutineScope()
+
+                Divider(color = Color(tier.colorHex).copy(alpha = 0.2f), thickness = 1.dp)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
+                        onClick = {
+                            isListening = true
+                            coroutineScope.launch {
+                                kotlinx.coroutines.delay(1200L)
+                                isListening = false
+                                val dialogues = AffinityData.getDialoguesForTier(character.archetypeId, tier.level)
+                                val chosen = if (dialogues.isNotEmpty()) dialogues.random() else activeLine
+                                micGreetingResponse = chosen
+                                com.example.haremdark.domain.VoiceManager.speak(chosen, character.archetypeId)
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(tier.colorHex).copy(alpha = 0.85f)
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isListening) Icons.Default.Mic else Icons.Default.MicNone,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isListening) "Poslouchám hlas..." else "🎤 Pozdravit hlasem (Mikrofon)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+
+                if (micGreetingResponse != null) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(tier.colorHex).copy(alpha = 0.2f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = "🎙️ Reakce ${character.name} na tvůj hlas:",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(tier.colorHex)
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "„$micGreetingResponse“",
+                                fontSize = 12.sp,
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "„$activeLine“",
-                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        lineHeight = 18.sp
-                    )
+                }
+            }
+        }
+
+        // --- 2. PERK SYSTEM & PASSIVE BONUSES OVERVIEW ---
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            shape = RoundedCornerShape(14.dp),
+            border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.4f))
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("✨", fontSize = 20.sp)
+                    Column {
+                        Text(
+                            text = "Odemčené perky & pasivní bonusy",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = Color(0xFFFFD700)
+                        )
+                        Text(
+                            text = "Bonusy aktivní na základě dosažených stupňů vztahu",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+
+                Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+
+                // Active Combat Stat Boosts Summary
+                if (tier.hpBonus > 0 || tier.attackBonusPercent > 0 || tier.defenseBonus > 0 || tier.hpRegenBonus > 0) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF1E88E5).copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, Color(0xFF1E88E5).copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = "🛡️ Aktivní bojové staty z pouta:",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF90CAF9)
+                            )
+                            Text(
+                                text = tier.combatBonusDescription,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+
+                // List unlocked perks up to current tier
+                val unlockedTiers = AffinityData.TIERS.filter { it.level <= tier.level }
+                unlockedTiers.forEach { t ->
+                    t.unlockedPerks.forEach { perk ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text("✅", fontSize = 11.sp)
+                            Text(
+                                text = "[Lv.${t.level}] $perk",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- 3. RANDOM NARRATIVE ENCOUNTER GENERATOR ---
+        var generatedEventSummary by remember(character.id) { mutableStateOf<String?>(null) }
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            shape = RoundedCornerShape(14.dp),
+            border = BorderStroke(1.dp, Color(0xFFBA68C8).copy(alpha = 0.5f))
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("🎲", fontSize = 20.sp)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Generátor náhodných setkání",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = Color(0xFFBA68C8)
+                        )
+                        Text(
+                            text = "Spusť náhodnou konverzaci či scénu odpovídající vztahovému stupni (${tier.stageName})",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        val event = com.example.haremdark.data.HaremEventData.generateEventForCharacter(character)
+                        generatedEventSummary = event.title + "\n„" + event.teaserText + "“"
+                        engine?.addLog("🎲 Vygenerována náhodná událost (${event.eventType.title}) pro ${character.name} (Stupeň ${tier.level})")
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBA68C8)),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("✨ Vygenerovat náhodnou událost setkání", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+
+                if (generatedEventSummary != null) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFFBA68C8).copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, Color(0xFFBA68C8).copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = "📜 Výsledek generátoru setkání:",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFE1BEE7)
+                            )
+                            Text(
+                                text = generatedEventSummary!!,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -4741,6 +5089,143 @@ fun BreakthroughOverlay(
             Text(breakthroughName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 24.sp, textAlign = TextAlign.Center)
             Spacer(modifier = Modifier.height(12.dp))
             Text("Bojové schopnosti slave dočasně zvýšeny!", color = Color.LightGray, fontSize = 12.sp, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+@Composable
+fun GlobalAffinityMilestonesDialog(player: com.example.haremdark.models.Player, characters: List<Character>, engine: com.example.haremdark.domain.GameEngine?, onDismiss: () -> Unit) {
+    val totalGlobalAffinity = characters.sumOf { it.affinityPoints }
+    var actionMessage by remember { mutableStateOf<String?>(null) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.96f).fillMaxHeight(0.90f),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 8.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("👑", fontSize = 24.sp)
+                        Column {
+                            Text("Síň slávy globálních milníků", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Text("Celková náklonnost harému: $totalGlobalAffinity pts", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                        }
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Zavřít")
+                    }
+                }
+
+                if (actionMessage != null) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFFFFD700).copy(alpha = 0.2f),
+                        border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = actionMessage!!,
+                            modifier = Modifier.padding(10.dp),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFFD700)
+                        )
+                    }
+                }
+
+                Text("Odemkni exkluzivní avatary a tituly dosažením celkové afinity napříč všemi dívkami:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
+
+                com.example.haremdark.data.GlobalAffinityMilestoneData.MILESTONES.forEach { milestone ->
+                    val isUnlocked = player.unlockedGlobalMilestones.contains(milestone.id)
+                    val canClaim = totalGlobalAffinity >= milestone.requiredGlobalAffinity && !isUnlocked
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isUnlocked) Color(milestone.colorHex).copy(alpha = 0.15f)
+                            else MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                        border = BorderStroke(1.dp, Color(milestone.colorHex).copy(alpha = if (isUnlocked) 0.8f else 0.3f))
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(milestone.icon, fontSize = 22.sp)
+                                    Column {
+                                        Text(milestone.title, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(milestone.colorHex))
+                                        Text("Požadavek: ${milestone.requiredGlobalAffinity} affinity pts", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                                    }
+                                }
+                                
+                                if (isUnlocked) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = Color(0xFF4CAF50).copy(alpha = 0.2f)
+                                    ) {
+                                        Text("✅ Vyzvednuto", modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
+                                    }
+                                } else if (canClaim) {
+                                    Button(
+                                        onClick = {
+                                            val (success, msg) = engine?.claimGlobalAffinityMilestone(milestone.id) ?: Pair(false, "Chyba engine")
+                                            if (success) {
+                                                com.example.haremdark.domain.SoundEffectManager.playLevelUp()
+                                            }
+                                            actionMessage = msg
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(milestone.colorHex)),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("🎁 Vyzvednout odměnu", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                                    }
+                                } else {
+                                    Text("🔒 ${milestone.requiredGlobalAffinity - totalGlobalAffinity} pts zbývá", fontSize = 10.sp, color = Color.Gray)
+                                }
+                            }
+
+                            Text(milestone.description, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text("🎁 Odměny milníku:", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(milestone.colorHex))
+                                    Text("• Exkluzivní titul: „${milestone.rewardTitleTag}“", fontSize = 10.sp)
+                                    Text("• Avatar rám: ${milestone.rewardAvatarFrame}", fontSize = 10.sp)
+                                    Text("• Zlaťáky: +${milestone.rewardGold} zl. | Temná energie: +${milestone.rewardDarkEnergy} TE", fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                    Text("Zavřít síň slávy")
+                }
+            }
         }
     }
 }

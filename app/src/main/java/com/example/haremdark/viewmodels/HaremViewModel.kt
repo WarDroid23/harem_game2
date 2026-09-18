@@ -97,11 +97,14 @@ class HaremViewModel(private val engine: GameEngine) : ViewModel() {
         
         // 5. Sort
         when (sort) {
+            "Úroveň vztahu" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.affinityLevel }.thenByDescending { it.affinityPoints })
+            "Jméno" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenBy { it.name })
+            "Nedávná interakce" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.lastInteractionDay })
             "Náklonnost" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.affinityPoints })
             "Rarita / Úroveň" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.rarity }.thenByDescending { it.affinityLevel })
-            "Nedávno" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.lastInteractionDay })
             "Role (Archetyp)" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenBy { it.archetypeId })
             "Bojová síla" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.hp + it.maxHp })
+            else -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.affinityPoints })
         }
         list
     }.stateIn(

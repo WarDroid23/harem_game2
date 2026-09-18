@@ -232,7 +232,9 @@ data class Character(
     var dailyAssignment: String? = null,
     var completedBondStories: MutableSet<String> = mutableSetOf(),
     var unlockedVoiceLines: MutableSet<String> = mutableSetOf(),
-    var unlockedEmotions: MutableSet<String> = mutableSetOf("BLUSH", "CHEER", "LOVE", "SHY", "SPARKLE")
+    var unlockedEmotions: MutableSet<String> = mutableSetOf("BLUSH", "CHEER", "LOVE", "SHY", "SPARKLE"),
+    var favorBoostActive: Boolean = false,
+    var favorBoostDaysRemaining: Int = 0
 ) {
     var loyalty: Int
         get() = loajalita
@@ -531,6 +533,10 @@ data class Player(
     var inquisitionInfluence: Int = 15,
     var equippedWeaponIndex: Int = 0,
     var activeTitle: String? = null,
+    var unlockedGlobalMilestones: MutableSet<String> = mutableSetOf(),
+    var unlockedAvatarFrames: MutableSet<String> = mutableSetOf("Bronzový rám rozkoše"),
+    var unlockedTitleTags: MutableSet<String> = mutableSetOf("Neznámý vládce"),
+    var selectedAvatarFrame: String = "Bronzový rám rozkoše",
     var unlockedAchievements: MutableList<String> = mutableListOf(),
     var weapons: MutableList<Weapon> = mutableListOf(
         Weapon("Dýka ze stříbra", "kratka", 15, 100),

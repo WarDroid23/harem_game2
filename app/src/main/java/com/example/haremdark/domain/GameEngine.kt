@@ -3,6 +3,7 @@ package com.example.haremdark.domain
 import android.content.Context
 import com.example.haremdark.data.AffinityData
 import com.example.haremdark.data.DomainData
+import com.example.haremdark.data.GlobalAffinityMilestoneData
 import com.example.haremdark.data.DrugData
 import com.example.haremdark.data.DrugDefinition
 import com.example.haremdark.data.GameContent
@@ -1200,6 +1201,52 @@ class GameEngine(private val context: Context) {
         return Pair(true, logText)
     }
 
+    fun grantFavor(characterId: String): Pair<Boolean, String> {
+        val current = _gameState.value
+        val player = current.player
+        val cost = 75
+        if (player.gold < cost) {
+            return Pair(false, "Nedostatek zlata. Udělení přízně stojí $cost 💰.")
+        }
+        val character = current.characters.firstOrNull { it.id == characterId }
+            ?: return Pair(false, "Dívka nebyla nalezena.")
+
+        if (character.favorBoostActive) {
+            return Pair(false, "${character.name} již má aktivní královskou přízeň (${character.favorBoostDaysRemaining} dny zbývají).")
+        }
+
+        player.gold -= cost
+        character.favorBoostActive = true
+        character.favorBoostDaysRemaining = 3
+
+        val prevAffinityLevel = character.affinityLevel
+        character.affinityPoints += 15
+        val newAffinityLevel = com.example.haremdark.data.AffinityData.getLevelForPoints(character.affinityPoints)
+        character.affinityLevel = newAffinityLevel
+        if (newAffinityLevel > prevAffinityLevel) {
+            character.affinityHistory.add(AffinityPointRecord(player.day, character.affinityPoints, "Královská přízeň (+15 pts & Lv Up!)"))
+        } else {
+            character.affinityHistory.add(AffinityPointRecord(player.day, character.affinityPoints, "Královská přízeň (+15 pts)"))
+        }
+
+        character.interactionLogs.add(
+            InteractionLogEntry(
+                day = player.day,
+                type = "odměna",
+                title = "Udělena královská přízeň ✨",
+                description = "Pán obdařil ${character.name} zvláštní přízní. Růst vztahu a náklonnosti je zrychlen.",
+                statChanges = "-$cost 💰, +15 Affinity"
+            )
+        )
+
+        addLog("✨ Udělena královská přízeň pro ${character.name} (-$cost 💰, +15 Náklonnost, Boost na 3 dny)!")
+        updateState { it.copy() }
+        SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
+        autoSave("Královská přízeň (${character.name})")
+
+        return Pair(true, "Královská přízeň úspěšně udělena pro ${character.name}!")
+    }
+
     fun setFavorite(characterId: String): String {
         var msg = ""
         updateState { current ->
@@ -1647,6 +1694,40 @@ class GameEngine(private val context: Context) {
         }
         addPlayerXp(milestone.rewardXp)
         addHaremExp(50)
+        return Pair(true, mainMsg)
+    }
+
+    fun claimGlobalAffinityMilestone(milestoneId: String): Pair<Boolean, String> {
+        val current = _gameState.value
+        val milestone = GlobalAffinityMilestoneData.MILESTONES.find { it.id == milestoneId }
+            ?: return Pair(false, "Neznámý milník afinity!")
+
+        if (current.player.unlockedGlobalMilestones.contains(milestoneId)) {
+            return Pair(false, "Odměna za milník '${milestone.title}' již byla vyzvednuta.")
+        }
+
+        val totalGlobalAffinity = current.characters.sumOf { it.affinityPoints }
+        if (totalGlobalAffinity < milestone.requiredGlobalAffinity) {
+            return Pair(false, "Nedostatečná celková náklonnost! (Máš $totalGlobalAffinity / ${milestone.requiredGlobalAffinity})")
+        }
+
+        val mainMsg = "👑 DOKONČEN MILNÍK AFINITY: ${milestone.title}! Získán titul '${milestone.rewardTitleTag}', rám '${milestone.rewardAvatarFrame}', +${milestone.rewardGold} zl., +${milestone.rewardDarkEnergy} TE."
+
+        updateState { state ->
+            val p = state.player.copy(
+                gold = state.player.gold + milestone.rewardGold,
+                darkEnergy = (state.player.darkEnergy + milestone.rewardDarkEnergy).coerceAtMost(state.player.maxDarkEnergy),
+                unlockedGlobalMilestones = (state.player.unlockedGlobalMilestones + milestoneId).toSet().toMutableSet(),
+                unlockedAvatarFrames = (state.player.unlockedAvatarFrames + milestone.rewardAvatarFrame).toSet().toMutableSet(),
+                unlockedTitleTags = (state.player.unlockedTitleTags + milestone.rewardTitleTag).toSet().toMutableSet(),
+                activeTitle = milestone.rewardTitleTag
+            )
+            val logs = (listOf(mainMsg) + state.gameLog).take(30)
+            state.copy(
+                player = p,
+                gameLog = logs
+            )
+        }
         return Pair(true, mainMsg)
     }
 
