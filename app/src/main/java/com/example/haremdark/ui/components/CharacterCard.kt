@@ -1,5 +1,6 @@
 package com.example.haremdark.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -415,6 +416,55 @@ fun CharacterCard(
                             fontWeight = FontWeight.Medium
                         )
                     }
+                }
+            }
+
+            // Daily Interaction Allowance Status
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (character.canTalkToday) Color(0xFFFF80AB).copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, if (character.canTalkToday) Color(0xFFFF80AB).copy(alpha = 0.4f) else Color.Gray.copy(alpha = 0.3f))
+                    ) {
+                        Text(
+                            text = "💬 ${character.dailyTalksRemaining}/${character.maxDailyTalks} rozhovorů",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (character.canTalkToday) Color(0xFFFF80AB) else Color.Gray,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (character.canGiftToday) Color(0xFFFFD700).copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, if (character.canGiftToday) Color(0xFFFFD700).copy(alpha = 0.4f) else Color.Gray.copy(alpha = 0.3f))
+                    ) {
+                        Text(
+                            text = "🎁 ${character.dailyGiftsRemaining}/${character.maxDailyGifts} darů",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (character.canGiftToday) Color(0xFFFFD700) else Color.Gray,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+
+                if (!character.canTalkToday && !character.canGiftToday) {
+                    Text(
+                        text = "😴 Dnes vyčerpáno",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
                 }
             }
 

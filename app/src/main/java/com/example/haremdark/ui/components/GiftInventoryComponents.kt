@@ -154,6 +154,87 @@ fun CollectibleGiftInventoryTab(
             }
         }
 
+        // DAILY GIFT QUOTA STATUS BAR
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = if (character.canGiftToday) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f),
+            border = BorderStroke(1.dp, if (character.canGiftToday) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(if (character.canGiftToday) "🎁" else "🔒", fontSize = 16.sp)
+                    Column {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "Denní kvóta darů pro ${character.name}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            if (character.oblibena || character.jeManzelkou || character.affinityLevel >= 4) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color(0xFFFFD700).copy(alpha = 0.2f)
+                                ) {
+                                    Text(
+                                        text = "+Bonus",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFFFD700),
+                                        modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                        }
+                        Text(
+                            text = if (character.canGiftToday) {
+                                "Zbývá ${character.dailyGiftsRemaining} z ${character.maxDailyGifts} darů pro dnešek"
+                            } else {
+                                "Dnešní limit (${character.maxDailyGifts}/${character.maxDailyGifts}) vyčerpán • Odpočiň si pro nový den"
+                            },
+                            fontSize = 10.sp,
+                            color = if (character.canGiftToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+
+                // Visual quota dots
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    repeat(character.maxDailyGifts) { idx ->
+                        val isUsed = idx < character.dailyGiftsCount
+                        Box(
+                            modifier = Modifier
+                                .size(9.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isUsed) Color.Gray.copy(alpha = 0.35f)
+                                    else Color(0xFFFF4081)
+                                )
+                                .border(
+                                    1.dp,
+                                    if (isUsed) Color.Gray.copy(alpha = 0.5f) else Color(0xFFFF4081),
+                                    CircleShape
+                                )
+                        )
+                    }
+                }
+            }
+        }
+
         // CELEBRATION / RESULT BANNER (when a gift was just given)
         AnimatedVisibility(
             visible = uiState.lastGiftResult != null,
@@ -680,11 +761,12 @@ fun GiftInspectionBottomPanel(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    listOf(1, 5, 10).forEach { qtyChoice ->
-                        val canSelect = if (isOwned) slot.quantity >= qtyChoice else player.gold >= (slot.item.goldCost * qtyChoice)
+                    listOf(1, 3, 5).forEach { qtyChoice ->
+                        val canSelect = (if (isOwned) slot.quantity >= qtyChoice else player.gold >= (slot.item.goldCost * qtyChoice)) && (character.dailyGiftsRemaining >= qtyChoice)
                         SuggestionChip(
                             onClick = { onQuantityChange(qtyChoice) },
                             label = { Text("${qtyChoice}x", fontSize = 10.sp) },
+                            enabled = character.canGiftToday,
                             border = if (quantity == qtyChoice) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
                             colors = SuggestionChipDefaults.suggestionChipColors(
                                 containerColor = if (quantity == qtyChoice) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
@@ -692,22 +774,53 @@ fun GiftInspectionBottomPanel(
                         )
                     }
 
-                    if (isOwned && slot.quantity > 1) {
+                    if (isOwned && slot.quantity > 1 && character.dailyGiftsRemaining > 1) {
+                        val maxAvailable = slot.quantity.coerceAtMost(character.dailyGiftsRemaining)
                         SuggestionChip(
-                            onClick = { onQuantityChange(slot.quantity) },
-                            label = { Text("MAX (${slot.quantity}x)", fontSize = 10.sp) },
+                            onClick = { onQuantityChange(maxAvailable) },
+                            label = { Text("MAX (${maxAvailable}x)", fontSize = 10.sp) },
+                            enabled = character.canGiftToday,
                             colors = SuggestionChipDefaults.suggestionChipColors(
-                                containerColor = if (quantity == slot.quantity) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+                                containerColor = if (quantity == maxAvailable) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
                             )
                         )
                     }
                 }
             }
 
-            // ACTION BUTTONS
-            if (isOwned) {
+            // ACTION BUTTONS WITH COOLDOWN / LIMIT SUPPORT
+            if (!character.canGiftToday) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("🔒", fontSize = 18.sp)
+                        Column {
+                            Text(
+                                text = "Dnešní limit darů vyčerpán (${character.maxDailyGifts}/${character.maxDailyGifts})",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Text(
+                                text = "${character.name} si již dnes dary plně vychutnala. Další dary můžeš předat v novém dni po odpočinku.",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+                }
+            } else if (isOwned) {
+                val effectiveQty = quantity.coerceAtMost(slot.quantity).coerceAtMost(character.dailyGiftsRemaining).coerceAtLeast(1)
                 Button(
-                    onClick = { onGiftConfirmed(quantity.coerceAtMost(slot.quantity)) },
+                    onClick = { onGiftConfirmed(effectiveQty) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(
@@ -715,28 +828,29 @@ fun GiftInspectionBottomPanel(
                     )
                 ) {
                     Text(
-                        text = "🎁 Darovat $quantity× ${slot.item.name} (+${totalAffinity} 💖)",
+                        text = "🎁 Darovat $effectiveQty× ${slot.item.name} (+${totalAffinity} 💖) [Zbývá ${character.dailyGiftsRemaining}]",
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp
                     )
                 }
             } else {
-                val canAffordDirect = player.gold >= (slot.item.goldCost * quantity)
+                val effectiveQty = quantity.coerceAtMost(character.dailyGiftsRemaining).coerceAtLeast(1)
+                val canAffordDirect = player.gold >= (slot.item.goldCost * effectiveQty)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     OutlinedButton(
-                        onClick = { onQuickBuy(quantity) },
+                        onClick = { onQuickBuy(effectiveQty) },
                         enabled = canAffordDirect,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text("🛍️ Koupit ${quantity}x (${slot.item.goldCost * quantity} 🪙)", fontSize = 11.sp)
+                        Text("🛍️ Koupit ${effectiveQty}x (${slot.item.goldCost * effectiveQty} 🪙)", fontSize = 11.sp)
                     }
 
                     Button(
-                        onClick = { onGiftConfirmed(quantity) },
+                        onClick = { onGiftConfirmed(effectiveQty) },
                         enabled = canAffordDirect,
                         modifier = Modifier.weight(1.2f),
                         shape = RoundedCornerShape(10.dp),

@@ -198,6 +198,8 @@ data class Character(
     var affinityPoints: Int = 15,
     var affinityLevel: Int = 1,
     var lastInteractionDay: Int = 0,
+    var dailyTalksCount: Int = 0,
+    var dailyGiftsCount: Int = 0,
     var osudId: String = "",
     var osudKrok: Int = 0,
     var naNajmu: Boolean = false,
@@ -227,7 +229,8 @@ data class Character(
     var milestoneRewardsUnlocked: MutableSet<Int> = mutableSetOf(),
     var totalTrainingSessions: Int = 0,
     var completedPresets: MutableSet<String> = mutableSetOf(),
-    var dailyAssignment: String? = null
+    var dailyAssignment: String? = null,
+    var completedBondStories: MutableSet<String> = mutableSetOf()
 ) {
     var loyalty: Int
         get() = loajalita
@@ -256,6 +259,36 @@ data class Character(
         loajalita >= 20 -> "Ostražitá"
         else -> "Vzpurná a zrádná"
     }
+
+    val maxDailyTalks: Int
+        get() {
+            var max = 2
+            if (oblibena) max += 1
+            if (partnerka || jeManzelkou) max += 1
+            if (affinityLevel >= 5) max += 1
+            return max
+        }
+
+    val maxDailyGifts: Int
+        get() {
+            var max = 3
+            if (oblibena) max += 1
+            if (partnerka || jeManzelkou) max += 1
+            if (affinityLevel >= 4) max += 1
+            return max
+        }
+
+    val dailyTalksRemaining: Int
+        get() = (maxDailyTalks - dailyTalksCount).coerceAtLeast(0)
+
+    val dailyGiftsRemaining: Int
+        get() = (maxDailyGifts - dailyGiftsCount).coerceAtLeast(0)
+
+    val canTalkToday: Boolean
+        get() = dailyTalksRemaining > 0
+
+    val canGiftToday: Boolean
+        get() = dailyGiftsRemaining > 0
 
     val archetype: String get() = archetypeId
 

@@ -620,6 +620,8 @@ class GameEngine(private val context: Context) {
 
             val updatedCharacters = current.characters.map { c ->
                 val copy = c.copy()
+                copy.dailyTalksCount = 0
+                copy.dailyGiftsCount = 0
                 val oldMood = copy.nalada
                 val newMood = moodsList.random()
                 copy.nalada = newMood
@@ -1125,6 +1127,12 @@ class GameEngine(private val context: Context) {
         val current = _gameState.value
         val character = current.characters.firstOrNull { it.id == characterId }
             ?: return Pair(false, "Dívka nebyla nalezena.")
+
+        if (!character.canTalkToday) {
+            return Pair(false, "Dnes jsi již s ${character.name} vedl maximální počet rozhovorů (${character.maxDailyTalks}/${character.maxDailyTalks}). Dopřej jí čas a odpočiň si do dalšího dne.")
+        }
+
+        character.dailyTalksCount += 1
 
         if (prompt.isNotEmpty()) {
             character.relationshipHistory.add(
@@ -2638,6 +2646,10 @@ class GameEngine(private val context: Context) {
         val character = current.characters.firstOrNull { it.id == characterId }
             ?: return Pair(false, "Dívka nenalezena.")
 
+        if (!character.canGiftToday) {
+            return Pair(false, "Dnes jsi již obdaroval ${character.name} ${character.maxDailyGifts}× (dosažen denní limit darů). Dívka potřebuje čas na vstřebání radosti z darů. Vyčkej na další den.")
+        }
+
         if (current.player.gold < gift.goldCost) {
             return Pair(false, "Nedostatek zlata! Potřebuješ ${gift.goldCost} zlatých (máš ${current.player.gold}).")
         }
@@ -2672,6 +2684,7 @@ class GameEngine(private val context: Context) {
                         partnerka = isPartner,
                         affinityPoints = newAffinity,
                         affinityLevel = newAffinityLvl,
+                        dailyGiftsCount = c.dailyGiftsCount + 1,
                         lastInteractionDay = state.player.day
                     )
                 } else c
@@ -2755,6 +2768,7 @@ class GameEngine(private val context: Context) {
         val inventoryItem = current.player.items.find { it.id == giftId }
         val availableCount = inventoryItem?.count ?: 0
         if (availableCount < count) return null
+        if (character.dailyGiftsRemaining < count) return null
 
         val isFavorite = gift.isFavoriteOf(character.archetypeId)
         val singleAffinity = gift.calculateTotalAffinity(character.archetypeId)
@@ -2820,6 +2834,7 @@ class GameEngine(private val context: Context) {
                         romanceBody = (c.romanceBody + (gift.desireBonus * count)).coerceIn(0, 100),
                         affinityPoints = newAffinityPoints,
                         affinityLevel = newAffinityLevel,
+                        dailyGiftsCount = c.dailyGiftsCount + count,
                         lastInteractionDay = state.player.day
                     )
                 } else c
@@ -2983,6 +2998,11 @@ class GameEngine(private val context: Context) {
         val character = current.characters.firstOrNull { it.id == characterId }
             ?: return Pair(false, "Dívka nenalezena.")
 
+        val isGift = itemId.startsWith("gift_") || itemId == "drahy_obojek"
+        if (isGift && !character.canGiftToday) {
+            return Pair(false, "Dnes jsi již obdaroval ${character.name} ${character.maxDailyGifts}× (dosažen denní limit darů). Dopřej dívce čas a odpočiň si do dalšího dne.")
+        }
+
         var msg = "Předal jsi ${item.name} dívce ${character.name}."
 
         updateState { state ->
@@ -3032,6 +3052,7 @@ class GameEngine(private val context: Context) {
                                 romanceBody = (c.romanceBody + 10).coerceAtMost(100),
                                 affinityPoints = newAff,
                                 affinityLevel = AffinityData.getLevelForPoints(newAff),
+                                dailyGiftsCount = c.dailyGiftsCount + 1,
                                 lastInteractionDay = state.player.day
                             )
                         }
@@ -3044,6 +3065,7 @@ class GameEngine(private val context: Context) {
                                 submisivita = (c.submisivita + 20).coerceAtMost(100),
                                 affinityPoints = newAff,
                                 affinityLevel = AffinityData.getLevelForPoints(newAff),
+                                dailyGiftsCount = c.dailyGiftsCount + 1,
                                 lastInteractionDay = state.player.day
                             )
                         }
@@ -3056,6 +3078,7 @@ class GameEngine(private val context: Context) {
                                 vlhkost = (c.vlhkost + 15).coerceAtMost(100),
                                 affinityPoints = newAff,
                                 affinityLevel = AffinityData.getLevelForPoints(newAff),
+                                dailyGiftsCount = c.dailyGiftsCount + 1,
                                 lastInteractionDay = state.player.day
                             )
                         }

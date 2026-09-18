@@ -34,6 +34,24 @@ import com.example.haremdark.models.Character
 import com.example.haremdark.models.CombatRole
 import com.example.haremdark.models.GameSave
 
+enum class PartySortOption(val title: String, val icon: String) {
+    AFFINITY("Úroveň náklonnosti", "💖"),
+    CLASS_ROLE("Třída / Role", "🎭"),
+    ATTACK("Bojový útok", "⚔️"),
+    HP("Životy (HP)", "💚"),
+    SPEED("Rychlost", "⚡"),
+    LOYALTY("Loajalita & Morálka", "👑"),
+    NAME("Jméno (A-Z)", "🔤")
+}
+
+enum class PartyAffinityFilter(val title: String, val levelRange: IntRange?) {
+    ALL("Všechny úrovně", null),
+    TIER_0_1("Neznámá (0-1)", 0..1),
+    TIER_2_3("Důvěrnice (2-3)", 2..3),
+    TIER_4_5("Milenka (4-5)", 4..5),
+    TIER_6_PLUS("Královna (6+)", 6..10)
+}
+
 @Composable
 fun PartySelectionDialog(
     gameState: GameSave,
@@ -52,6 +70,16 @@ fun PartySelectionDialog(
     var formationNameInput by remember { mutableStateOf("Boss Squad") }
     var formationIconInput by remember { mutableStateOf("🐉") }
 
+    // Sorting and Filtering states for party recruitment / selection
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedRoleFilter by remember { mutableStateOf<CombatRole?>(null) }
+    var selectedAffinityFilter by remember { mutableStateOf(PartyAffinityFilter.ALL) }
+    var selectedSortOption by remember { mutableStateOf(PartySortOption.AFFINITY) }
+    var sortDescending by remember { mutableStateOf(true) }
+    var onlyFullHp by remember { mutableStateOf(false) }
+    var showFilterChips by remember { mutableStateOf(true) }
+    var sortDropdownExpanded by remember { mutableStateOf(false) }
+
     // Default select up to 3 healthiest girls
     val availableGirls = remember(gameState.characters) {
         gameState.characters.filter { it.hp > 0 }
@@ -69,6 +97,71 @@ fun PartySelectionDialog(
     var includePlayer by remember { mutableStateOf(true) }
 
     val maxGirlsAllowed = if (includePlayer) 3 else 4
+
+    // Filtered and Sorted Party Members List
+    val filteredAndSortedGirls = remember(
+        availableGirls,
+        searchQuery,
+        selectedRoleFilter,
+        selectedAffinityFilter,
+        selectedSortOption,
+        sortDescending,
+        onlyFullHp
+    ) {
+        availableGirls
+            .filter { girl ->
+                if (searchQuery.isNotBlank()) {
+                    girl.name.contains(searchQuery, ignoreCase = true) ||
+                    girl.archetype.contains(searchQuery, ignoreCase = true)
+                } else true
+            }
+            .filter { girl ->
+                if (selectedRoleFilter != null) {
+                    PartyCombatCatalog.getRoleForArchetype(girl.archetype) == selectedRoleFilter
+                } else true
+            }
+            .filter { girl ->
+                val range = selectedAffinityFilter.levelRange
+                if (range != null) {
+                    girl.affinityLevel in range
+                } else true
+            }
+            .filter { girl ->
+                if (onlyFullHp) girl.hp >= girl.maxHp else true
+            }
+            .let { list ->
+                when (selectedSortOption) {
+                    PartySortOption.AFFINITY -> {
+                        if (sortDescending) list.sortedByDescending { it.affinityLevel * 1000 + it.affinityPoints }
+                        else list.sortedBy { it.affinityLevel * 1000 + it.affinityPoints }
+                    }
+                    PartySortOption.CLASS_ROLE -> {
+                        if (sortDescending) list.sortedByDescending { PartyCombatCatalog.getRoleForArchetype(it.archetype).title }
+                        else list.sortedBy { PartyCombatCatalog.getRoleForArchetype(it.archetype).title }
+                    }
+                    PartySortOption.ATTACK -> {
+                        if (sortDescending) list.sortedByDescending { it.skills["combat"] ?: 5 }
+                        else list.sortedBy { it.skills["combat"] ?: 5 }
+                    }
+                    PartySortOption.HP -> {
+                        if (sortDescending) list.sortedByDescending { it.maxHp }
+                        else list.sortedBy { it.maxHp }
+                    }
+                    PartySortOption.SPEED -> {
+                        if (sortDescending) list.sortedByDescending { it.skills["agility"] ?: it.skills["speed"] ?: 10 }
+                        else list.sortedBy { it.skills["agility"] ?: it.skills["speed"] ?: 10 }
+                    }
+                    PartySortOption.LOYALTY -> {
+                        if (sortDescending) list.sortedByDescending { it.loajalita + it.morale }
+                        else list.sortedBy { it.loajalita + it.morale }
+                    }
+                    PartySortOption.NAME -> {
+                        if (sortDescending) list.sortedByDescending { it.name }
+                        else list.sortedBy { it.name }
+                    }
+                }
+            }
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -290,119 +383,431 @@ fun PartySelectionDialog(
                     }
                 }
 
-                // --- 3. ROSTER OF HAREM GIRLS ---
-                Text("Dostupné společnice v dominiu:", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.White)
-
-                if (availableGirls.isEmpty()) {
-                    Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        Text("Všechny tvé dívky jsou zraněné! Ošetři je v komnatách.", color = Color(0xFFFF8A80), fontSize = 12.sp)
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                // --- 3. ROSTER OF HAREM GIRLS (WITH SEARCH, SORTING & FILTERING) ---
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // Search & Sorting Header Bar
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        items(availableGirls) { char ->
-                            val isSelected = selectedGirls.contains(char.id)
-                            val role = PartyCombatCatalog.getRoleForArchetype(char.archetype)
-                            val portraitRes = StaticData.getPortraitForArchetype(char.archetype)
-                            val affinityTier = AffinityData.getTierForPoints(char.affinityPoints)
-                            val combatSkill = char.skills["combat"] ?: 5
+                        Text(
+                            "Dostupné společnice v dominiu:",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = Color.White
+                        )
 
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        if (isSelected) {
-                                            selectedGirls = selectedGirls - char.id
-                                        } else {
-                                            if (selectedGirls.size < maxGirlsAllowed) {
-                                                selectedGirls = selectedGirls + char.id
-                                            }
-                                        }
-                                    }
-                                    .border(
-                                        width = if (isSelected) 1.5.dp else 1.dp,
-                                        color = if (isSelected) Color(0xFFFF4081) else Color.White.copy(alpha = 0.1f),
-                                        shape = RoundedCornerShape(10.dp)
-                                    ),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (isSelected) Color(0xFF3B152A) else Color(0xFF1E1224)
-                                ),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            // Sort Dropdown Button
+                            Box {
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0xFF2A163B),
+                                    border = BorderStroke(1.dp, Color(0xFFFF4081).copy(alpha = 0.5f)),
+                                    modifier = Modifier.clickable { sortDropdownExpanded = true }
                                 ) {
                                     Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(40.dp)
-                                                .clip(CircleShape)
-                                        ) {
-                                            SubcomposeAsyncImage(
-                                                model = ImageRequest.Builder(LocalContext.current)
-                                                    .data(portraitRes)
-                                                    .crossfade(true)
-                                                    .build(),
-                                                contentDescription = char.name,
-                                                contentScale = ContentScale.Crop,
-                                                modifier = Modifier.fillMaxSize()
-                                            )
-                                        }
+                                        Text(selectedSortOption.icon, fontSize = 11.sp)
+                                        Text(
+                                            selectedSortOption.title,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFFFFD700)
+                                        )
+                                        Icon(
+                                            Icons.Default.ArrowDropDown,
+                                            contentDescription = null,
+                                            tint = Color(0xFFFFD700),
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
 
-                                        Column {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                DropdownMenu(
+                                    expanded = sortDropdownExpanded,
+                                    onDismissRequest = { sortDropdownExpanded = false },
+                                    modifier = Modifier.background(Color(0xFF211130))
+                                ) {
+                                    PartySortOption.values().forEach { option ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                ) {
+                                                    Text(option.icon, fontSize = 14.sp)
+                                                    Text(
+                                                        option.title,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = if (selectedSortOption == option) FontWeight.Bold else FontWeight.Normal,
+                                                        color = if (selectedSortOption == option) Color(0xFFFFD700) else Color.White
+                                                    )
+                                                }
+                                            },
+                                            onClick = {
+                                                selectedSortOption = option
+                                                sortDropdownExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Sort Direction Toggle (Asc / Desc)
+                            IconButton(
+                                onClick = { sortDescending = !sortDescending },
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .background(Color(0xFF2A163B), RoundedCornerShape(8.dp))
+                                    .border(1.dp, Color(0xFFFF4081).copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                            ) {
+                                Text(
+                                    if (sortDescending) "⬇️" else "⬆️",
+                                    fontSize = 11.sp
+                                )
+                            }
+
+                            // Toggle Filter Chips
+                            IconButton(
+                                onClick = { showFilterChips = !showFilterChips },
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .background(if (showFilterChips) Color(0xFF51183E) else Color(0xFF2A163B), RoundedCornerShape(8.dp))
+                                    .border(1.dp, Color(0xFFFF4081).copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                            ) {
+                                Icon(
+                                    Icons.Default.FilterList,
+                                    contentDescription = "Filtry",
+                                    tint = if (showFilterChips) Color(0xFFFF4081) else Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Search input & Filter chips
+                    if (showFilterChips) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            // Search bar
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                placeholder = { Text("Hledat hrdinku podle jména či role...", fontSize = 10.sp, color = Color.Gray) },
+                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp)) },
+                                trailingIcon = {
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(20.dp)) {
+                                            Icon(Icons.Default.Clear, contentDescription = "Vymazat", tint = Color.Gray, modifier = Modifier.size(14.dp))
+                                        }
+                                    }
+                                },
+                                singleLine = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(44.dp),
+                                textStyle = LocalTextStyle.current.copy(fontSize = 11.sp, color = Color.White),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color(0xFFFF4081),
+                                    unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                                    focusedContainerColor = Color(0xFF1E1026),
+                                    unfocusedContainerColor = Color(0xFF180C1E)
+                                )
+                            )
+
+                            // Class / Combat Role Filter Chips Row
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                item {
+                                    FilterChip(
+                                        selected = selectedRoleFilter == null,
+                                        onClick = { selectedRoleFilter = null },
+                                        label = { Text("Všechny třídy", fontSize = 9.sp) },
+                                        shape = RoundedCornerShape(6.dp),
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = Color(0xFF7B1FA2),
+                                            selectedLabelColor = Color.White,
+                                            containerColor = Color(0xFF1F122B),
+                                            labelColor = Color(0xFFB0BEC5)
+                                        )
+                                    )
+                                }
+                                items(CombatRole.values()) { role ->
+                                    val isSelected = selectedRoleFilter == role
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = {
+                                            selectedRoleFilter = if (isSelected) null else role
+                                        },
+                                        label = {
+                                            Text("${role.icon} ${role.title}", fontSize = 9.sp)
+                                        },
+                                        shape = RoundedCornerShape(6.dp),
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = Color(0xFFC2185B),
+                                            selectedLabelColor = Color.White,
+                                            containerColor = Color(0xFF1F122B),
+                                            labelColor = Color(0xFFB0BEC5)
+                                        )
+                                    )
+                                }
+                            }
+
+                            // Affinity Tier Filter Chips Row
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(PartyAffinityFilter.values()) { affFilter ->
+                                    val isSelected = selectedAffinityFilter == affFilter
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = { selectedAffinityFilter = affFilter },
+                                        label = {
+                                            Text(
+                                                affFilter.title,
+                                                fontSize = 9.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        },
+                                        shape = RoundedCornerShape(6.dp),
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = Color(0xFFE91E63),
+                                            selectedLabelColor = Color.White,
+                                            containerColor = Color(0xFF1F122B),
+                                            labelColor = Color(0xFFB0BEC5)
+                                        )
+                                    )
+                                }
+                                item {
+                                    FilterChip(
+                                        selected = onlyFullHp,
+                                        onClick = { onlyFullHp = !onlyFullHp },
+                                        label = { Text("💚 Jen plné HP", fontSize = 9.sp) },
+                                        shape = RoundedCornerShape(6.dp),
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = Color(0xFF2E7D32),
+                                            selectedLabelColor = Color.White,
+                                            containerColor = Color(0xFF1F122B),
+                                            labelColor = Color(0xFFB0BEC5)
+                                        )
+                                    )
+                                }
+                            }
+
+                            // Summary count & active filters reset
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "Zobrazeno ${filteredAndSortedGirls.size} z ${availableGirls.size} hrdinek",
+                                    fontSize = 9.sp,
+                                    color = Color(0xFFB39DDB)
+                                )
+
+                                if (searchQuery.isNotEmpty() || selectedRoleFilter != null || selectedAffinityFilter != PartyAffinityFilter.ALL || onlyFullHp) {
+                                    Text(
+                                        "Vymazat filtry ✕",
+                                        fontSize = 9.sp,
+                                        color = Color(0xFFFF4081),
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier
+                                            .clickable {
+                                                searchQuery = ""
+                                                selectedRoleFilter = null
+                                                selectedAffinityFilter = PartyAffinityFilter.ALL
+                                                onlyFullHp = false
+                                            }
+                                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Girls List or Empty State
+                    if (availableGirls.isEmpty()) {
+                        Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            Text("Všechny tvé dívky jsou zraněné! Ošetři je v komnatách dominia.", color = Color(0xFFFF8A80), fontSize = 12.sp)
+                        }
+                    } else if (filteredAndSortedGirls.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .background(Color(0xFF1A0E22), RoundedCornerShape(10.dp))
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text("🔍 Žádná hrdinka neodpovídá zvoleným filtrům", color = Color(0xFFFF80AB), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Button(
+                                    onClick = {
+                                        searchQuery = ""
+                                        selectedRoleFilter = null
+                                        selectedAffinityFilter = PartyAffinityFilter.ALL
+                                        onlyFullHp = false
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7B1FA2)),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                ) {
+                                    Text("Zrušit všechny filtry", fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            items(filteredAndSortedGirls, key = { it.id }) { char ->
+                                val isSelected = selectedGirls.contains(char.id)
+                                val role = PartyCombatCatalog.getRoleForArchetype(char.archetype)
+                                val portraitRes = StaticData.getPortraitForArchetype(char.archetype)
+                                val affinityTier = AffinityData.getTierForPoints(char.affinityPoints)
+                                val combatSkill = char.skills["combat"] ?: 5
+                                val speedStat = char.skills["agility"] ?: char.skills["speed"] ?: 10
+
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            if (isSelected) {
+                                                selectedGirls = selectedGirls - char.id
+                                            } else {
+                                                if (selectedGirls.size < maxGirlsAllowed) {
+                                                    selectedGirls = selectedGirls + char.id
+                                                }
+                                            }
+                                        }
+                                        .border(
+                                            width = if (isSelected) 1.5.dp else 1.dp,
+                                            color = if (isSelected) Color(0xFFFF4081) else Color.White.copy(alpha = 0.1f),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isSelected) Color(0xFF3B152A) else Color(0xFF1E1224)
+                                    ),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(44.dp)
+                                                    .clip(CircleShape)
+                                                    .border(1.5.dp, Color(affinityTier.colorHex), CircleShape)
                                             ) {
-                                                Text(char.name, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
+                                                SubcomposeAsyncImage(
+                                                    model = ImageRequest.Builder(LocalContext.current)
+                                                        .data(portraitRes)
+                                                        .crossfade(true)
+                                                        .build(),
+                                                    contentDescription = char.name,
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier.fillMaxSize()
+                                                )
+                                            }
+
+                                            Column(
+                                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    Text(char.name, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
+                                                    Surface(
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        color = Color(0xFF311B92)
+                                                    ) {
+                                                        Text(
+                                                            text = "${role.icon} ${role.title}",
+                                                            fontSize = 8.sp,
+                                                            color = Color(0xFFB388FF),
+                                                            fontWeight = FontWeight.Bold,
+                                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                        )
+                                                    }
+                                                }
+
+                                                // Affinity level badge
                                                 Surface(
                                                     shape = RoundedCornerShape(4.dp),
-                                                    color = Color(0xFF311B92)
+                                                    color = Color(affinityTier.colorHex).copy(alpha = 0.2f),
+                                                    border = BorderStroke(0.5.dp, Color(affinityTier.colorHex).copy(alpha = 0.6f))
                                                 ) {
                                                     Text(
-                                                        text = "${role.icon} ${role.title}",
-                                                        fontSize = 9.sp,
-                                                        color = Color(0xFFB388FF),
+                                                        text = "💖 Náklonnost: Lv.${char.affinityLevel} (${affinityTier.title} • ${char.affinityPoints}b)",
+                                                        fontSize = 8.sp,
+                                                        color = Color(affinityTier.colorHex),
                                                         fontWeight = FontWeight.Bold,
                                                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                                     )
                                                 }
-                                            }
 
-                                            Row(
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text("HP: ${char.hp}/${char.maxHp}", fontSize = 10.sp, color = Color(0xFF81C784))
-                                                Text("Útok: $combatSkill", fontSize = 10.sp, color = Color(0xFFFFB74D))
-                                                Text("💖 ${affinityTier.title}", fontSize = 10.sp, color = Color(0xFFFF80AB))
+                                                // Base Stats Breakdown Bar
+                                                Row(
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text("💚 ${char.hp}/${char.maxHp} HP", fontSize = 9.sp, color = if (char.hp == char.maxHp) Color(0xFF81C784) else Color(0xFFFFB74D), fontWeight = FontWeight.Bold)
+                                                    Text("⚔️ Útok: $combatSkill", fontSize = 9.sp, color = Color(0xFFFF80AB), fontWeight = FontWeight.Bold)
+                                                    Text("⚡ Spd: $speedStat", fontSize = 9.sp, color = Color(0xFF80D8FF))
+                                                    Text("✨ Morálka: ${char.morale}", fontSize = 9.sp, color = Color(0xFFFFD54F))
+                                                }
                                             }
                                         }
-                                    }
 
-                                    Checkbox(
-                                        checked = isSelected,
-                                        onCheckedChange = { checked ->
-                                            if (checked && selectedGirls.size < maxGirlsAllowed) {
-                                                selectedGirls = selectedGirls + char.id
-                                            } else if (!checked) {
-                                                selectedGirls = selectedGirls - char.id
-                                            }
-                                        },
-                                        colors = CheckboxDefaults.colors(
-                                            checkedColor = Color(0xFFFF4081),
-                                            uncheckedColor = Color.Gray
+                                        Checkbox(
+                                            checked = isSelected,
+                                            onCheckedChange = { checked ->
+                                                if (checked && selectedGirls.size < maxGirlsAllowed) {
+                                                    selectedGirls = selectedGirls + char.id
+                                                } else if (!checked) {
+                                                    selectedGirls = selectedGirls - char.id
+                                                }
+                                            },
+                                            colors = CheckboxDefaults.colors(
+                                                checkedColor = Color(0xFFFF4081),
+                                                uncheckedColor = Color.Gray
+                                            )
                                         )
-                                    )
+                                    }
                                 }
                             }
                         }

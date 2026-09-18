@@ -77,10 +77,115 @@ fun EmpireScreen(
     }
 }
 
+data class RecruitmentPackage(
+    val id: String,
+    val type: String,
+    val title: String,
+    val desc: String,
+    val tier: Int,
+    val recommendedClass: String,
+    val classIcon: String,
+    val goldCost: Int,
+    val manaCost: Int,
+    val estHp: String,
+    val estCombat: String,
+    val estMagic: String,
+    val startingAffinity: String
+)
+
+enum class RecruitmentSortOption(val label: String, val icon: String) {
+    COST_GOLD("Cena (Zlato)", "💰"),
+    COST_MANA("Cena (Mana)", "🔮"),
+    TIER_LEVEL("Úroveň a Staty", "⭐"),
+    AFFINITY_POTENTIAL("Potenciál náklonnosti", "💖")
+}
+
 @Composable
 fun RecruitmentTab(gameState: GameSave, engine: GameEngine) {
     val context = LocalContext.current
     val player = gameState.player
+
+    var selectedClassFilter by remember { mutableStateOf("ALL") }
+    var selectedSortOption by remember { mutableStateOf(RecruitmentSortOption.TIER_LEVEL) }
+    var sortDescending by remember { mutableStateOf(false) }
+
+    val allPackages = remember {
+        listOf(
+            RecruitmentPackage(
+                id = "basic",
+                type = "basic",
+                title = "Běžný otrok",
+                desc = "Mladá dívka z chudých provincií. Ideální pro začátek, snadno se přizpůsobí chodu harému.",
+                tier = 1,
+                recommendedClass = "Služka / Strážkyně",
+                classIcon = "🛡️",
+                goldCost = 250,
+                manaCost = 0,
+                estHp = "80-100",
+                estCombat = "10-15",
+                estMagic = "5-10",
+                startingAffinity = "Úroveň 0 (Neznámá)"
+            ),
+            RecruitmentPackage(
+                id = "advanced",
+                type = "advanced",
+                title = "Vzácný zajatec",
+                desc = "Dívka z lepší rodiny či rytířského řádu, zajatá při hraničních nájezdech. Zvýšené bojové a magické vlohy.",
+                tier = 2,
+                recommendedClass = "Gladiátorka / Čarodějka",
+                classIcon = "⚔️",
+                goldCost = 600,
+                manaCost = 20,
+                estHp = "120-150",
+                estCombat = "25-35",
+                estMagic = "20-30",
+                startingAffinity = "Úroveň 1 (Poddajná)"
+            ),
+            RecruitmentPackage(
+                id = "elite",
+                type = "elite",
+                title = "Exkluzivní trofej",
+                desc = "Prvotřídní kráska s vysokou krví nebo arcimágickým talentem, získaná z tajné aukce podsvětí.",
+                tier = 3,
+                recommendedClass = "Vražedkyně / Kněžka / Siréna",
+                classIcon = "👑",
+                goldCost = 1500,
+                manaCost = 50,
+                estHp = "180-220",
+                estCombat = "45-60",
+                estMagic = "40-55",
+                startingAffinity = "Úroveň 2 (Důvěrnice)"
+            )
+        )
+    }
+
+    val filteredAndSortedPackages = remember(selectedClassFilter, selectedSortOption, sortDescending) {
+        allPackages
+            .filter { pkg ->
+                if (selectedClassFilter == "ALL") true
+                else pkg.recommendedClass.contains(selectedClassFilter, ignoreCase = true)
+            }
+            .let { list ->
+                when (selectedSortOption) {
+                    RecruitmentSortOption.COST_GOLD -> {
+                        if (sortDescending) list.sortedByDescending { it.goldCost }
+                        else list.sortedBy { it.goldCost }
+                    }
+                    RecruitmentSortOption.COST_MANA -> {
+                        if (sortDescending) list.sortedByDescending { it.manaCost }
+                        else list.sortedBy { it.manaCost }
+                    }
+                    RecruitmentSortOption.TIER_LEVEL -> {
+                        if (sortDescending) list.sortedByDescending { it.tier }
+                        else list.sortedBy { it.tier }
+                    }
+                    RecruitmentSortOption.AFFINITY_POTENTIAL -> {
+                        if (sortDescending) list.sortedByDescending { it.tier }
+                        else list.sortedBy { it.tier }
+                    }
+                }
+            }
+    }
 
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -93,55 +198,112 @@ fun RecruitmentTab(gameState: GameSave, engine: GameEngine) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Trh s otroky (Nábor)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text("Trh s otroky (Nábor dívek)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("Rozšiř svůj harém nákupem nových dívek. Kvalita a vzácnost dívky závisí na množství investovaných zdrojů.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text("Kapacita harému: ${gameState.characters.size} / ${player.maxPopulation}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (gameState.characters.size >= player.maxPopulation) Color.Red else MaterialTheme.colorScheme.primary)
+                    Text("Rozšiř svůj harém a sestav silnější družinu. Vybírej a filtruj nabídky podle třídy, odhadovaných základních statistik i náklonnosti.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Kapacita harému: ${gameState.characters.size} / ${player.maxPopulation}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (gameState.characters.size >= player.maxPopulation) Color.Red else MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            "Zlato: 💰 ${player.gold}  |  Mana: 🔮 ${player.mana}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFFD700)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Sorting & Filtering Controls
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1F122B)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Filtrace a řazení nákupů:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            IconButton(
+                                onClick = { sortDescending = !sortDescending },
+                                modifier = Modifier.size(26.dp)
+                            ) {
+                                Text(if (sortDescending) "⬇️" else "⬆️", fontSize = 11.sp)
+                            }
+                        }
+                    }
+
+                    // Sort By Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RecruitmentSortOption.values().forEach { option ->
+                            val isSelected = selectedSortOption == option
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { selectedSortOption = option },
+                                label = { Text("${option.icon} ${option.label}", fontSize = 9.sp) },
+                                shape = RoundedCornerShape(6.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Color(0xFF7B1FA2),
+                                    selectedLabelColor = Color.White,
+                                    containerColor = Color(0xFF140A1C),
+                                    labelColor = Color(0xFFB0BEC5)
+                                )
+                            )
+                        }
+                    }
+
+                    // Class Specialization Filter Chips
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        listOf("ALL" to "Všechny", "Strážkyně" to "🛡️ Obrana", "Gladiátorka" to "⚔️ Boj", "Čarodějka" to "🔮 Magie", "Siréna" to "👑 Elitní").forEach { (filterKey, label) ->
+                            val isSelected = selectedClassFilter == filterKey
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { selectedClassFilter = filterKey },
+                                label = { Text(label, fontSize = 9.sp) },
+                                shape = RoundedCornerShape(6.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Color(0xFFC2185B),
+                                    selectedLabelColor = Color.White,
+                                    containerColor = Color(0xFF140A1C),
+                                    labelColor = Color(0xFFB0BEC5)
+                                )
+                            )
+                        }
+                    }
                 }
             }
         }
         
-        item {
+        items(filteredAndSortedPackages, key = { it.id }) { pkg ->
             RecruitmentOption(
-                title = "Běžný otrok",
-                desc = "Mladá, nezkušená dívka pochybného původu. (Úroveň 1)",
-                goldCost = 250,
-                manaCost = 0,
+                pkg = pkg,
                 playerGold = player.gold,
                 playerMana = player.mana,
                 onRecruit = {
-                    val (success, msg) = engine.recruitCharacter("basic")
-                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                }
-            )
-        }
-        
-        item {
-            RecruitmentOption(
-                title = "Vzácný zajatec",
-                desc = "Dívka z lepší rodiny, možná nižší šlechta, zajatá při raziích. (Úroveň 2, lepší staty)",
-                goldCost = 600,
-                manaCost = 20,
-                playerGold = player.gold,
-                playerMana = player.mana,
-                onRecruit = {
-                    val (success, msg) = engine.recruitCharacter("advanced")
-                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                }
-            )
-        }
-        
-        item {
-            RecruitmentOption(
-                title = "Exkluzivní trofej",
-                desc = "Prvotřídní kráska s magickým nadáním či královskou krví, ukradená z tajných aukcí. (Úroveň 3, nejlepší staty)",
-                goldCost = 1500,
-                manaCost = 50,
-                playerGold = player.gold,
-                playerMana = player.mana,
-                onRecruit = {
-                    val (success, msg) = engine.recruitCharacter("elite")
+                    val (success, msg) = engine.recruitCharacter(pkg.type)
                     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                 }
             )
@@ -151,15 +313,12 @@ fun RecruitmentTab(gameState: GameSave, engine: GameEngine) {
 
 @Composable
 fun RecruitmentOption(
-    title: String,
-    desc: String,
-    goldCost: Int,
-    manaCost: Int,
+    pkg: RecruitmentPackage,
     playerGold: Int,
     playerMana: Int,
     onRecruit: () -> Unit
 ) {
-    val canAfford = playerGold >= goldCost && playerMana >= manaCost
+    val canAfford = playerGold >= pkg.goldCost && playerMana >= pkg.manaCost
     
     Card(
         shape = RoundedCornerShape(12.dp),
@@ -172,19 +331,45 @@ fun RecruitmentOption(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(pkg.classIcon, fontSize = 18.sp)
+                    Column {
+                        Text(pkg.title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                        Text("Třída: ${pkg.recommendedClass}", fontSize = 10.sp, color = Color(0xFFCE93D8), fontWeight = FontWeight.Bold)
+                    }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (goldCost > 0) {
-                        Text("💰 $goldCost", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (playerGold >= goldCost) Color(0xFFFFD700) else Color.Red)
+                    if (pkg.goldCost > 0) {
+                        Text("💰 ${pkg.goldCost}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (playerGold >= pkg.goldCost) Color(0xFFFFD700) else Color.Red)
                         Spacer(modifier = Modifier.width(6.dp))
                     }
-                    if (manaCost > 0) {
-                        Text("🔮 $manaCost", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (playerMana >= manaCost) Color(0xFFE040FB) else Color.Red)
+                    if (pkg.manaCost > 0) {
+                        Text("🔮 ${pkg.manaCost}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (playerMana >= pkg.manaCost) Color(0xFFE040FB) else Color.Red)
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(desc, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(pkg.desc, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Stat and Affinity Preview Chips
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFF160D1E),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(8.dp).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("💚 HP: ${pkg.estHp}", fontSize = 10.sp, color = Color(0xFF81C784), fontWeight = FontWeight.Bold)
+                    Text("⚔️ Útok: ${pkg.estCombat}", fontSize = 10.sp, color = Color(0xFFFFB74D), fontWeight = FontWeight.Bold)
+                    Text("🔮 Magie: ${pkg.estMagic}", fontSize = 10.sp, color = Color(0xFF80D8FF), fontWeight = FontWeight.Bold)
+                    Text("💖 ${pkg.startingAffinity}", fontSize = 10.sp, color = Color(0xFFFF80AB), fontWeight = FontWeight.Bold)
+                }
+            }
+
             Spacer(modifier = Modifier.height(10.dp))
             Button(
                 onClick = onRecruit,
@@ -192,7 +377,7 @@ fun RecruitmentOption(
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
-                Text("Koupit na trhu", fontWeight = FontWeight.Bold)
+                Text("Koupit na trhu (${pkg.title})", fontWeight = FontWeight.Bold)
             }
         }
     }

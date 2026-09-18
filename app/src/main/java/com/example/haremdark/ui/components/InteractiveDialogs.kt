@@ -105,9 +105,46 @@ fun CharacterDetailDialog(
     val portraitRes = StaticData.getPortraitForArchetype(currentActiveCharacter.archetypeId)
 
     var selectedSection by remember { mutableIntStateOf(initialTab) }
-    val sectionTabs = listOf("📖 Životopis", "📊 Profil", "🛡️ Výbava", "💖 Náklonnost", "🎁 Dary", "📦 Sklad & Inventář", "⚡ Akce", "✨ Dovednosti", "🎯 Výcvik", "📋 Úkoly", "🕰️ Klíčové Momenty", "🖼️ Galerie", "🏆 Milníky", "📜 Historie")
+    val sectionTabs = listOf("📖 Životopis", "📊 Profil", "🛡️ Výbava", "💖 Náklonnost", "📖 Příběhy Pouta", "🎁 Dary", "📦 Sklad & Inventář", "⚡ Akce", "✨ Dovednosti", "🎯 Výcvik", "📋 Úkoly", "🕰️ Klíčové Momenty", "🖼️ Galerie", "🏆 Milníky", "📜 Historie")
     var activeEmote by remember { mutableStateOf<String?>(null) }
     var emoteKey by remember { mutableLongStateOf(0L) }
+
+    // Lottie Animated Emotion Reactions (Blushing, Cheering, Love, Shy, Sparkle)
+    var emotionTriggerKey by remember(character.id) { mutableLongStateOf(0L) }
+    var activeEmotionType by remember { mutableStateOf(CharacterEmotionType.BLUSH) }
+
+    val triggerEmotionReaction: (CharacterEmotionType) -> Unit = { emotion ->
+        activeEmotionType = emotion
+        emotionTriggerKey = System.currentTimeMillis()
+    }
+
+    // Interactive Particle Burst Effect for High-Affinity Actions
+    var particleBurstTrigger by remember(character.id) { mutableLongStateOf(0L) }
+    var particleBurstType by remember { mutableStateOf(AffinityBurstType.LOVE_BURST) }
+    var particleIntensity by remember { mutableFloatStateOf(1.0f) }
+    var previousAffinityPoints by remember(character.id) { mutableIntStateOf(currentActiveCharacter.affinityPoints) }
+
+    val triggerAffinityEffect: (AffinityBurstType, Float) -> Unit = { type, intensity ->
+        particleBurstType = type
+        particleIntensity = intensity
+        particleBurstTrigger = System.currentTimeMillis()
+        when (type) {
+            AffinityBurstType.HEARTS -> triggerEmotionReaction(CharacterEmotionType.BLUSH)
+            AffinityBurstType.SPARKLES -> triggerEmotionReaction(CharacterEmotionType.CHEER)
+            AffinityBurstType.LOVE_BURST -> triggerEmotionReaction(CharacterEmotionType.LOVE)
+            AffinityBurstType.DEVOTION_GOLD -> triggerEmotionReaction(CharacterEmotionType.SPARKLE)
+        }
+    }
+
+    LaunchedEffect(currentActiveCharacter.affinityPoints, currentActiveCharacter.affinityLevel) {
+        if (currentActiveCharacter.affinityPoints > previousAffinityPoints) {
+            val isHighAffinity = (currentActiveCharacter.affinityPoints - previousAffinityPoints) >= 15 || currentActiveCharacter.affinityLevel >= 4
+            particleBurstType = if (isHighAffinity) AffinityBurstType.LOVE_BURST else AffinityBurstType.HEARTS
+            particleIntensity = if (isHighAffinity) 1.4f else 1.0f
+            particleBurstTrigger = System.currentTimeMillis()
+        }
+        previousAffinityPoints = currentActiveCharacter.affinityPoints
+    }
 
     val offsetY = remember { androidx.compose.animation.core.Animatable(150f) }
     val alphaVal = remember { androidx.compose.animation.core.Animatable(0f) }
@@ -152,12 +189,42 @@ fun CharacterDetailDialog(
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Top Hero Portrait Banner
+                // Top Hero Portrait Banner with Dynamic Mood & Affinity Background
+                val moodTheme = MoodThemeResolver.resolve(currentActiveCharacter)
+                val transition = rememberInfiniteTransition(label = "HeroMoodParticle")
+                val particleProgress by transition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(4000, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "HeroParticleProg"
+                )
+                val pulseScale by transition.animateFloat(
+                    initialValue = 0.85f,
+                    targetValue = 1.15f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(3000, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "HeroPulseScale"
+                )
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(130.dp)
+                        .height(138.dp)
                 ) {
+                    // Dynamic Mood Background Asset Layer
+                    Image(
+                        painter = painterResource(id = moodTheme.backgroundDrawableRes),
+                        contentDescription = "Atmosféra: ${moodTheme.moodTitle}",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+
+                    // Character Portrait overlay with subtle transparency blend
                     SubcomposeAsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(portraitRes)
@@ -165,14 +232,16 @@ fun CharacterDetailDialog(
                             .build(),
                         contentDescription = currentActiveCharacter.name,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .alpha(0.85f),
                         loading = {
                             Box(
                                 modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center
                             ) {
                                 CircularProgressIndicator(
-                                    color = MaterialTheme.colorScheme.primary,
+                                    color = moodTheme.primaryAccent,
                                     modifier = Modifier.size(36.dp)
                                 )
                             }
@@ -193,6 +262,8 @@ fun CharacterDetailDialog(
                             }
                         }
                     )
+
+                    // Dynamic Mood Gradient Tint
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -200,11 +271,37 @@ fun CharacterDetailDialog(
                                 Brush.verticalGradient(
                                     colors = listOf(
                                         Color(0x33000000),
-                                        Color(0x9910061A),
+                                        moodTheme.ambientGlowColor.copy(alpha = 0.35f),
+                                        Color(0xBB10061A),
                                         MaterialTheme.colorScheme.surface
                                     )
                                 )
                             )
+                    )
+
+                    // Dynamic Mood Particle Layer (Floating hearts, embers, celestial stars)
+                    MoodParticleCanvas(
+                        particleType = moodTheme.particleType,
+                        particleColor = moodTheme.particleColor,
+                        progress = particleProgress,
+                        pulseScale = pulseScale,
+                        modifier = Modifier.fillMaxSize()
+                    )
+
+                    // High-Affinity Interaction Particle Burst Overlay (Hearts & Sparkles)
+                    AffinityParticleOverlay(
+                        triggerKey = particleBurstTrigger,
+                        burstType = particleBurstType,
+                        intensity = particleIntensity,
+                        modifier = Modifier.fillMaxSize()
+                    )
+
+                    // Lottie Emotional Reaction Overlay (Blushing, Cheering, Love, Shy, Sparkles)
+                    LottieEmotionOverlay(
+                        triggerKey = emotionTriggerKey,
+                        emotionType = activeEmotionType,
+                        sizeDp = 180.dp,
+                        modifier = Modifier.fillMaxSize()
                     )
 
                     // Close Button
@@ -346,6 +443,12 @@ fun CharacterDetailDialog(
                     }
                 )
 
+                // Dynamic Mood Resonance & Atmosphere Banner
+                MoodAtmosphereBanner(
+                    character = currentActiveCharacter,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
+                )
+
                 LowMoraleWarningBanner(
                     character = currentActiveCharacter,
                     onOpenTraining = { selectedSection = 8 }
@@ -384,15 +487,25 @@ fun CharacterDetailDialog(
                         0 -> BioTab(character = currentActiveCharacter)
                         1 -> ProfileAndStatsTab(character = currentActiveCharacter, loyaltyTier = loyalty, archetype = archetype, phase = phase)
                         2 -> EquipmentTab(character = currentActiveCharacter, player = player, onEquip = onEquipItem, onUnequip = onUnequipItem, engine = engine)
-                        3 -> AffinityAndDialogueTab(character = currentActiveCharacter, engine = engine)
-                        4 -> GiftingAndItemsTab(
+                        3 -> AffinityAndDialogueTab(character = currentActiveCharacter, engine = engine, onTriggerAffinityEffect = triggerAffinityEffect)
+                        4 -> BondStoryTab(
                             character = currentActiveCharacter,
                             player = player,
-                            onGiveDirectGift = onGiveDirectGift,
-                            onUseInventoryItem = onUseInventoryItem,
-                            engine = engine
+                            engine = engine,
+                            onTriggerEmotion = triggerEmotionReaction
                         )
-                        5 -> {
+                        5 -> GiftingAndItemsTab(
+                            character = currentActiveCharacter,
+                            player = player,
+                            onGiveDirectGift = { gift ->
+                                triggerAffinityEffect(AffinityBurstType.LOVE_BURST, 1.25f)
+                                onGiveDirectGift(gift)
+                            },
+                            onUseInventoryItem = onUseInventoryItem,
+                            engine = engine,
+                            onTriggerAffinityEffect = triggerAffinityEffect
+                        )
+                        6 -> {
                             if (engine != null) {
                                 InventoryManagementPanel(
                                     gameState = engine.gameState.value,
@@ -406,40 +519,55 @@ fun CharacterDetailDialog(
                                 GiftingAndItemsTab(
                                     character = currentActiveCharacter,
                                     player = player,
-                                    onGiveDirectGift = onGiveDirectGift,
+                                    onGiveDirectGift = { gift ->
+                                        triggerAffinityEffect(AffinityBurstType.LOVE_BURST, 1.25f)
+                                        onGiveDirectGift(gift)
+                                    },
                                     onUseInventoryItem = onUseInventoryItem,
-                                    engine = engine
+                                    engine = engine,
+                                    onTriggerAffinityEffect = triggerAffinityEffect
                                 )
                             }
                         }
-                        6 -> InteractionsSectionTab(
+                        7 -> InteractionsSectionTab(
                             character = currentActiveCharacter,
                             player = player,
-                            onExecuteInteraction = onExecuteInteraction,
-                            onCourtRomance = onCourtRomance,
-                            onMarry = onMarry,
+                            onExecuteInteraction = { inter ->
+                                if (inter.type == "odmena" || inter.type == "intimni") {
+                                    triggerAffinityEffect(AffinityBurstType.HEARTS, 1.2f)
+                                }
+                                onExecuteInteraction(inter)
+                            },
+                            onCourtRomance = {
+                                triggerAffinityEffect(AffinityBurstType.DEVOTION_GOLD, 1.5f)
+                                onCourtRomance()
+                            },
+                            onMarry = {
+                                triggerAffinityEffect(AffinityBurstType.DEVOTION_GOLD, 2.0f)
+                                onMarry()
+                            },
                             onRent = onRent,
                             onUpgradeSkill = onUpgradeSkill
                         )
-                        7 -> SkillTreeTab(
+                        8 -> SkillTreeTab(
                             character = currentActiveCharacter,
                             engine = engine,
                             onUpgradeSkill = onUpgradeSkill
                         )
-                        8 -> TrainingMiniGameComponent(
+                        9 -> TrainingMiniGameComponent(
                             character = currentActiveCharacter,
                             engine = engine
                         )
-                        9 -> DailyAssignmentsTab(
+                        10 -> DailyAssignmentsTab(
                             character = currentActiveCharacter,
                             engine = engine
                         )
-                        10 -> KeyMomentsTab(
+                        11 -> KeyMomentsTab(
                             character = currentActiveCharacter
                         )
-                        11 -> MemoryGalleryTab(character = currentActiveCharacter)
-                        12 -> MilestonesTab(character = currentActiveCharacter)
-                        13 -> SlaveInteractionLogTab(
+                        12 -> MemoryGalleryTab(character = currentActiveCharacter)
+                        13 -> MilestonesTab(character = currentActiveCharacter)
+                        14 -> SlaveInteractionLogTab(
                             character = currentActiveCharacter,
                             engine = engine
                         )
@@ -1127,7 +1255,11 @@ fun ProfileAndStatsTab(
 }
 
 @Composable
-fun AffinityAndDialogueTab(character: Character, engine: GameEngine? = null) {
+fun AffinityAndDialogueTab(
+    character: Character,
+    engine: GameEngine? = null,
+    onTriggerAffinityEffect: ((AffinityBurstType, Float) -> Unit)? = null
+) {
     val tier = AffinityData.getTierForPoints(character.affinityPoints)
     val nextTier = AffinityData.TIERS.firstOrNull { it.level == tier.level + 1 }
     val progressInTier = if (nextTier != null) {
@@ -1136,16 +1268,26 @@ fun AffinityAndDialogueTab(character: Character, engine: GameEngine? = null) {
         (currentSpan / totalSpan).coerceIn(0f, 1f)
     } else 1.0f
 
+    val animatedAffinityProgress by animateFloatAsState(
+        targetValue = progressInTier,
+        animationSpec = spring(dampingRatio = 0.75f, stiffness = 250f),
+        label = "AffinityProgressBarAnim"
+    )
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Dynamic Mood Atmosphere Banner
+        MoodAtmosphereBanner(character = character)
+
         // Main Affinity Level Status Card
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            shape = RoundedCornerShape(14.dp)
+            shape = RoundedCornerShape(14.dp),
+            border = BorderStroke(1.dp, Color(tier.colorHex).copy(alpha = 0.4f))
         ) {
             Column(
                 modifier = Modifier.padding(14.dp),
@@ -1178,7 +1320,7 @@ fun AffinityAndDialogueTab(character: Character, engine: GameEngine? = null) {
                 }
 
                 LinearProgressIndicator(
-                    progress = { progressInTier },
+                    progress = { animatedAffinityProgress },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(8.dp)
@@ -1297,6 +1439,66 @@ fun AffinityAndDialogueTab(character: Character, engine: GameEngine? = null) {
                 modifier = Modifier.padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                // DAILY DIALOGUE QUOTA & COOLDOWN STATUS
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (character.canTalkToday) Color(0xFFFF80AB).copy(alpha = 0.15f) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f),
+                    border = BorderStroke(1.dp, if (character.canTalkToday) Color(0xFFFF80AB).copy(alpha = 0.5f) else MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(if (character.canTalkToday) "💬" else "😴", fontSize = 14.sp)
+                            Column {
+                                Text(
+                                    text = if (character.canTalkToday) "Denní rozhovory: ${character.dailyTalksRemaining}/${character.maxDailyTalks} zbývá dnes"
+                                    else "Denní limit rozhovorů vyčerpán (${character.maxDailyTalks}/${character.maxDailyTalks})",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (character.canTalkToday) Color(0xFFFF80AB) else MaterialTheme.colorScheme.error
+                                )
+                                Text(
+                                    text = if (character.canTalkToday) "Rozhovory prohlubují náklonnost a mění pohled dívky."
+                                    else "Dívka vstřebává dnešní slova. Nové rozhovory zítra po odpočinku.",
+                                    fontSize = 9.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+
+                        // Status dot indicators
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            repeat(character.maxDailyTalks) { idx ->
+                                val isUsed = idx < character.dailyTalksCount
+                                Box(
+                                    modifier = Modifier
+                                        .size(9.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (isUsed) Color.Gray.copy(alpha = 0.35f)
+                                            else Color(0xFFFF80AB)
+                                        )
+                                        .border(
+                                            1.dp,
+                                            if (isUsed) Color.Gray.copy(alpha = 0.5f) else Color(0xFFFF80AB),
+                                            CircleShape
+                                        )
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1309,18 +1511,34 @@ fun AffinityAndDialogueTab(character: Character, engine: GameEngine? = null) {
                         color = Color(0xFFFF80AB)
                     )
                     if (activeScenario == null && !showOutcome) {
-                        Button(
-                            onClick = {
-                                activeScenario = com.example.haremdark.data.AffinityData.getScenarioForArchetype(character.archetypeId, character.name)
-                                selectedOptionIdx = null
-                                currentFeedback = null
-                                showOutcome = false
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF80AB)),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Text("Zahájit rozhovor 💬", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        if (character.canTalkToday) {
+                            Button(
+                                onClick = {
+                                    activeScenario = com.example.haremdark.data.AffinityData.getScenarioForArchetype(character.archetypeId, character.name)
+                                    selectedOptionIdx = null
+                                    currentFeedback = null
+                                    showOutcome = false
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF80AB)),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text("Zahájit rozhovor 💬 (${character.dailyTalksRemaining}x)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color.Gray.copy(alpha = 0.2f),
+                                border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.4f))
+                            ) {
+                                Text(
+                                    text = "😴 Dnes vyčerpáno",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.LightGray,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -1679,7 +1897,8 @@ fun GiftingAndItemsTab(
     player: Player,
     onGiveDirectGift: (DirectGiftItem) -> Unit,
     onUseInventoryItem: (InventoryItem) -> Unit,
-    engine: GameEngine? = null
+    engine: GameEngine? = null,
+    onTriggerAffinityEffect: ((AffinityBurstType, Float) -> Unit)? = null
 ) {
     var giftSubTab by remember { mutableIntStateOf(0) } // 0: Collectible Gifts & Inventory, 1: Potions & Direct
 
@@ -1687,6 +1906,8 @@ fun GiftingAndItemsTab(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        MoodAtmosphereBanner(character = character)
+
         // Tab Mode Selector
         Row(
             modifier = Modifier.fillMaxWidth(),
