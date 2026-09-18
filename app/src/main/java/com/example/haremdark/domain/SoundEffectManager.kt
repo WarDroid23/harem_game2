@@ -165,6 +165,27 @@ object SoundEffectManager {
     private val _primaryAmbientVolume = MutableStateFlow(1.0f)
     private val _secondaryAmbientVolume = MutableStateFlow(0.0f)
 
+    private val _bgmVolume = MutableStateFlow(0.8f)
+    val bgmVolume = _bgmVolume.asStateFlow()
+
+    private val _sfxVolume = MutableStateFlow(0.8f)
+    val sfxVolume = _sfxVolume.asStateFlow()
+
+    private val _voiceVolume = MutableStateFlow(0.8f)
+    val voiceVolume = _voiceVolume.asStateFlow()
+
+    fun setBgmVolume(volume: Float) {
+        _bgmVolume.value = volume.coerceIn(0f, 1f)
+    }
+
+    fun setSfxVolume(volume: Float) {
+        _sfxVolume.value = volume.coerceIn(0f, 1f)
+    }
+
+    fun setVoiceVolume(volume: Float) {
+        _voiceVolume.value = volume.coerceIn(0f, 1f)
+    }
+
     init {
         try {
             toneGenerator = ToneGenerator(AudioManager.STREAM_MUSIC, 80)

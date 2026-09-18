@@ -1254,9 +1254,10 @@ class GameEngine(private val context: Context) {
                 val copy = c.copy()
                 if (copy.id == characterId) {
                     copy.oblibena = true
+                    copy.isPinned = true
                     copy.loajalita = (copy.loajalita + 15).coerceAtMost(100)
                     copy.duvera = (copy.duvera + 10).coerceAtMost(100)
-                    msg = "★ ${copy.name} byla jmenována tvou jedinou vyvolenou Oblíbenkyní! Ostatní v harému zatajily dech."
+                    msg = "★ ${copy.name} byla jmenována tvou jedinou vyvolenou Oblíbenkyní a připnuta na vrchol!"
                 } else {
                     copy.oblibena = false
                 }
@@ -1266,6 +1267,25 @@ class GameEngine(private val context: Context) {
         }
         addLog(msg)
         return msg
+    }
+
+    fun togglePin(characterId: String): Pair<Boolean, String> {
+        var msg = ""
+        var newPinnedState = false
+        updateState { current ->
+            val updated = current.characters.map { c ->
+                val copy = c.copy()
+                if (copy.id == characterId) {
+                    copy.isPinned = !copy.isPinned
+                    newPinnedState = copy.isPinned
+                    msg = if (copy.isPinned) "📌 ${copy.name} byla připnuta na vrchol seznamu!" else "📍 ${copy.name} byla odepnuta."
+                }
+                copy
+            }
+            current.copy(characters = updated)
+        }
+        addLog(msg)
+        return Pair(newPinnedState, msg)
     }
 
     fun courtRomance(characterId: String): Pair<Boolean, String> {
@@ -4706,25 +4726,6 @@ class GameEngine(private val context: Context) {
         }
         if (result.first) autoSave()
         return result
-    }
-
-
-    fun togglePin(characterId: String): Pair<Boolean, String> {
-        var msg = ""
-        var success = false
-        updateState { current ->
-            val updated = current.characters.map { c ->
-                if (c.id == characterId) {
-                    val pinned = !c.isPinned
-                    msg = if (pinned) "${c.name} byla připnuta na vrch seznamu." else "${c.name} již není připnutá."
-                    success = true
-                    c.copy(isPinned = pinned)
-                } else c
-            }
-            current.copy(characters = updated)
-        }
-        if (success) autoSave()
-        return Pair(success, msg)
     }
 
 

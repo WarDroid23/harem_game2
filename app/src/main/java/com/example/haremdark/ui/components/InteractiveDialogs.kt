@@ -407,6 +407,45 @@ fun CharacterDetailDialog(
                             }
                         }
 
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Button(
+                                onClick = {
+                                    engine?.togglePin(currentActiveCharacter.id)
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (currentActiveCharacter.isPinned) Color(0xFFFFD700) else MaterialTheme.colorScheme.surfaceVariant
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(26.dp)
+                            ) {
+                                Text(
+                                    text = if (currentActiveCharacter.isPinned) "★ Připnuto (Oblíbené)" else "☆ Připnout na vrch",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (currentActiveCharacter.isPinned) Color.Black else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            
+                            if (!currentActiveCharacter.oblibena) {
+                                OutlinedButton(
+                                    onClick = {
+                                        engine?.setFavorite(currentActiveCharacter.id)
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(26.dp)
+                                ) {
+                                    Text("👑 Jmenovat favoritkou", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+
                         Text(
                             text = "${archetype?.name ?: "Otrokyně"} • ${currentActiveCharacter.age} let • Fáze ${currentActiveCharacter.fazeZkazenosti}: ${phase?.name ?: "Poddajná"}",
                             style = MaterialTheme.typography.bodySmall,
