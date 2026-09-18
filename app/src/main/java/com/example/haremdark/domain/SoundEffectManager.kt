@@ -24,7 +24,8 @@ enum class HaremSound {
     TRAIN,
     SEDUCE,
     AFFINITY_UP,
-    SECRET_WHISPER
+    SECRET_WHISPER,
+    FAIL
 }
 
 enum class EventSound {
@@ -412,6 +413,10 @@ object SoundEffectManager {
                     }
                     HaremSound.SECRET_WHISPER -> {
                         playPcmTrack(synthesizeArpeggio(listOf(740.0, 880.0, 1108.7), 0.12, 0.5f))
+                    }
+                    HaremSound.FAIL -> {
+                        // Low descending failure tone (330Hz -> 220Hz)
+                        playPcmTrack(synthesizeDescending(329.6, 220.0, 0.35))
                     }
                 }
             } catch (e: Exception) {

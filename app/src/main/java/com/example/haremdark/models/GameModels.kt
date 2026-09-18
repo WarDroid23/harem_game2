@@ -3,6 +3,14 @@ package com.example.haremdark.models
 import kotlinx.serialization.Serializable
 
 @Serializable
+enum class CombatStrategy(val displayName: String, val icon: String, val description: String) {
+    BALANCED("Vyvážená", "⚖️", "Standardní přístup k boji bez specifických bonusů."),
+    AGGRESSIVE("Agresivní", "⚔️", "Zaměřuje se na útok. +20% poškození, ale -15% obrana."),
+    DEFENSIVE("Defenzivní", "🛡️", "Zaměřuje se na přežití. +20% obrana, ale -15% poškození."),
+    SUPPORT("Podpora", "✨", "Zaměřuje se na léčení a buffy. +25% účinnost léčení, ale -20% poškození.")
+}
+
+@Serializable
 data class Weapon(
     val name: String,
     val type: String, // "kratka", "dlouha", "magicka", "bic"
@@ -234,7 +242,10 @@ data class Character(
     var unlockedVoiceLines: MutableSet<String> = mutableSetOf(),
     var unlockedEmotions: MutableSet<String> = mutableSetOf("BLUSH", "CHEER", "LOVE", "SHY", "SPARKLE"),
     var favorBoostActive: Boolean = false,
-    var favorBoostDaysRemaining: Int = 0
+    var favorBoostDaysRemaining: Int = 0,
+    var preferredCombatRole: CombatStrategy = CombatStrategy.BALANCED,
+    var moodScore: Int = 50, // 0-100 scale
+    var dailyInteractionsCount: Int = 0
 ) {
     var loyalty: Int
         get() = loajalita
@@ -503,6 +514,7 @@ data class Player(
     var gold: Int = 500,
     var influence: Int = 35,
     var maxInfluence: Int = 100,
+    var manaEssence: Int = 0,
     var wood: Int = 100,
     var stone: Int = 50,
     var iron: Int = 10,
@@ -608,7 +620,7 @@ data class CombatSession(
 @Serializable
 data class DailyMission(
     val id: String,
-    val type: String, // e.g., "HUNT", "GIFT", "INTERACT", "EXPLORE"
+    val type: String, // e.g., "HUNT", "GIFT", "INTERACT", "EXPLORE", "TREAT", "GREET", "GRANT_FAVOR"
     val description: String,
     val targetCount: Int,
     var currentProgress: Int = 0,
@@ -616,7 +628,10 @@ data class DailyMission(
     var isClaimed: Boolean = false,
     val rewardGold: Int = 0,
     val rewardDarkEnergy: Int = 0,
-    val rewardSexEnergy: Int = 0
+    val rewardSexEnergy: Int = 0,
+    val targetCharacterId: String? = null,
+    val rewardAffinity: Int = 0,
+    val rewardItem: InventoryItem? = null
 )
 
 @Serializable
@@ -718,6 +733,7 @@ data class DailyResourceStat(
     val day: Int,
     val goldProduced: Int,
     val manaProduced: Int,
+    val manaEssenceProduced: Int,
     val woodProduced: Int,
     val stoneProduced: Int,
     val ironProduced: Int

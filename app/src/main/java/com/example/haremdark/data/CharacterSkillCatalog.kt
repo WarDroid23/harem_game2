@@ -26,6 +26,10 @@ data class CharacterSkillNode(
     val spCost: Int = 1,
     val reqNodeId: String? = null,
     val reqLevel: Int = 1,
+    val reqAffinityLevel: Int = 0,
+    val reqLoajalita: Int = 0,
+    val x: Float = 0f, // Normalized x (0-100)
+    val y: Float = 0f, // Normalized y (0-100)
     val activeSkill: PartyCombatSkill? = null,
     val attackBonus: Int = 0,
     val defenseBonus: Int = 0,
@@ -45,7 +49,7 @@ object CharacterSkillCatalog {
      * Universal and Archetype-specific skill nodes available in the game.
      */
     val ALL_SKILL_NODES: List<CharacterSkillNode> = listOf(
-        // === WARRIOR / GLADIATOR BRANCH (Odvaha & Čepel) ===
+        // === WARRIOR / GLADIATOR BRANCH (Odvaha & Čepel) - Left Side ===
         CharacterSkillNode(
             id = "warrior_strike_1",
             name = "Rychlý výpad",
@@ -57,6 +61,8 @@ object CharacterSkillCatalog {
             xpCost = 60,
             spCost = 1,
             reqLevel = 1,
+            x = 25f,
+            y = 20f,
             attackBonus = 5,
             critBonus = 3,
             specialEffectText = "+5 Útok, +3% Kritický zásah"
@@ -73,6 +79,9 @@ object CharacterSkillCatalog {
             spCost = 1,
             reqNodeId = "warrior_strike_1",
             reqLevel = 2,
+            reqAffinityLevel = 2,
+            x = 15f,
+            y = 40f,
             activeSkill = PartyCombatSkill(
                 id = "skill_cleave",
                 name = "Krvavé rozpolcení",
@@ -102,6 +111,9 @@ object CharacterSkillCatalog {
             spCost = 1,
             reqNodeId = "warrior_active_cleave",
             reqLevel = 3,
+            reqLoajalita = 40,
+            x = 25f,
+            y = 60f,
             lifestealPercent = 15,
             hpBonus = 20,
             specialEffectText = "Vysaje 15% způsobeného poškození zpět jako HP, +20 Max HP"
@@ -118,12 +130,16 @@ object CharacterSkillCatalog {
             spCost = 2,
             reqNodeId = "warrior_passive_vampire",
             reqLevel = 5,
+            reqAffinityLevel = 4,
+            x = 15f,
+            y = 85f,
             activeSkill = PartyCombatSkill(
                 id = "skill_berserk_whirlwind",
                 name = "Vřava hněvu",
                 icon = "🌪️",
                 description = "Zasáhne VŠECHNY nepřátele za 150% poškození a sníží jejich obranu.",
                 manaCost = 38,
+                manaEssenceCost = 5,
                 cooldownTurns = 3,
                 targetType = SkillTargetType.ALL_ENEMIES,
                 category = SkillCategory.PHYSICAL_ATTACK,
@@ -137,7 +153,7 @@ object CharacterSkillCatalog {
             specialEffectText = "Odemkne plošnou ultimátní schopnost 'Vřava hněvu'"
         ),
 
-        // === SORCERESS & SHADOW MAGIC BRANCH (Magie & Prokletí) ===
+        // === SORCERESS & SHADOW MAGIC BRANCH (Magie & Prokletí) - Right Side ===
         CharacterSkillNode(
             id = "sorc_mana_focus_1",
             name = "Temná meditace",
@@ -149,6 +165,8 @@ object CharacterSkillCatalog {
             xpCost = 60,
             spCost = 1,
             reqLevel = 1,
+            x = 75f,
+            y = 20f,
             manaRegenBonus = 6,
             attackBonus = 4,
             specialEffectText = "+6 Mana regenerace za kolo, +4 Magický útok"
@@ -165,6 +183,9 @@ object CharacterSkillCatalog {
             spCost = 1,
             reqNodeId = "sorc_mana_focus_1",
             reqLevel = 2,
+            reqAffinityLevel = 2,
+            x = 85f,
+            y = 40f,
             activeSkill = PartyCombatSkill(
                 id = "skill_shadow_bolt",
                 name = "Stínová koule zkázy",
@@ -193,6 +214,9 @@ object CharacterSkillCatalog {
             spCost = 1,
             reqNodeId = "sorc_active_shadow_bolt",
             reqLevel = 3,
+            reqLoajalita = 40,
+            x = 75f,
+            y = 60f,
             bonusComboGain = 8,
             attackBonus = 6,
             specialEffectText = "+8 Bodů k Harémovému Kombu při každém kouzlu, +6 Útok"
@@ -209,12 +233,16 @@ object CharacterSkillCatalog {
             spCost = 2,
             reqNodeId = "sorc_passive_curse_aura",
             reqLevel = 5,
+            reqAffinityLevel = 4,
+            x = 85f,
+            y = 85f,
             activeSkill = PartyCombatSkill(
                 id = "skill_abyssal_meteor",
                 name = "Hvězda prázdnoty",
                 icon = "🌌",
                 description = "190% Plamenné temné poškození všem nepřátelům + šance na omráčení.",
                 manaCost = 45,
+                manaEssenceCost = 8,
                 cooldownTurns = 4,
                 targetType = SkillTargetType.ALL_ENEMIES,
                 category = SkillCategory.DARK_MAGIC,
@@ -227,7 +255,7 @@ object CharacterSkillCatalog {
             specialEffectText = "Odemkne ultimátní plošné kouzlo 'Hvězda prázdnoty'"
         ),
 
-        // === DEFENDER, HEALER & SUPPORT BRANCH (Obrana & Podpora) ===
+        // === DEFENDER & SUPPORT BRANCH (Obrana & Podpora) - Center ===
         CharacterSkillNode(
             id = "def_shield_up_1",
             name = "Obranný postoj",
@@ -239,6 +267,8 @@ object CharacterSkillCatalog {
             xpCost = 60,
             spCost = 1,
             reqLevel = 1,
+            x = 50f,
+            y = 15f,
             defenseBonus = 6,
             hpBonus = 25,
             specialEffectText = "+6 Obrana, +25 Max HP"
@@ -255,6 +285,9 @@ object CharacterSkillCatalog {
             spCost = 1,
             reqNodeId = "def_shield_up_1",
             reqLevel = 2,
+            reqAffinityLevel = 1,
+            x = 50f,
+            y = 35f,
             activeSkill = PartyCombatSkill(
                 id = "skill_holy_shield",
                 name = "Posvátný ochranný štít",
@@ -284,6 +317,9 @@ object CharacterSkillCatalog {
             spCost = 1,
             reqNodeId = "def_active_holy_shield",
             reqLevel = 3,
+            reqLoajalita = 50,
+            x = 50f,
+            y = 55f,
             damageMitigationPercent = 15,
             defenseBonus = 8,
             hpBonus = 35,
@@ -301,12 +337,16 @@ object CharacterSkillCatalog {
             spCost = 2,
             reqNodeId = "def_passive_aegis",
             reqLevel = 5,
+            reqAffinityLevel = 5,
+            x = 50f,
+            y = 80f,
             activeSkill = PartyCombatSkill(
                 id = "skill_harem_ecstasy",
                 name = "Extáze oddanosti",
                 icon = "💖",
                 description = "Vyléčí VŠECHNY spojence za 50 HP a zvýší jejich útok o +8 na 3 kola.",
                 manaCost = 40,
+                manaEssenceCost = 6,
                 cooldownTurns = 3,
                 targetType = SkillTargetType.ALL_ALLIES,
                 category = SkillCategory.HOLY_HEAL,
@@ -319,7 +359,7 @@ object CharacterSkillCatalog {
             specialEffectText = "Odemkne ultimátní týmové léčení 'Extáze oddanosti'"
         ),
 
-        // === ASSASSIN & SIREN BRANCH (Rychlost, Jed & Šarm) ===
+        // === ASSASSIN & SIREN BRANCH (Rychlost, Jed & Šarm) - Far Sides / Hidden Paths ===
         CharacterSkillNode(
             id = "assassin_reflex_1",
             name = "Bleskové reflexy",
@@ -331,6 +371,8 @@ object CharacterSkillCatalog {
             xpCost = 60,
             spCost = 1,
             reqLevel = 1,
+            x = 10f,
+            y = 15f,
             speedBonus = 6,
             critBonus = 8,
             specialEffectText = "+6 Rychlost, +8% Šance na kritický úder"
@@ -347,6 +389,9 @@ object CharacterSkillCatalog {
             spCost = 1,
             reqNodeId = "assassin_reflex_1",
             reqLevel = 2,
+            reqAffinityLevel = 3,
+            x = 5f,
+            y = 35f,
             activeSkill = PartyCombatSkill(
                 id = "skill_venom_strike",
                 name = "Smrtící stínový bod",
@@ -376,6 +421,9 @@ object CharacterSkillCatalog {
             spCost = 1,
             reqNodeId = "assassin_active_venom",
             reqLevel = 3,
+            reqLoajalita = 60,
+            x = 10f,
+            y = 55f,
             critBonus = 10,
             attackBonus = 6,
             specialEffectText = "+10% Krit, +40% Bonus k poškození zraněných cílů (<40% HP)"
@@ -392,12 +440,16 @@ object CharacterSkillCatalog {
             spCost = 2,
             reqNodeId = "assassin_passive_fatal",
             reqLevel = 5,
+            reqAffinityLevel = 5,
+            x = 5f,
+            y = 75f,
             activeSkill = PartyCombatSkill(
                 id = "skill_siren_charm",
                 name = "Vábivý polibek sirény",
                 icon = "💋",
                 description = "Omráčí nepřítele na 2 kola a sníží jeho útok i obranu o 35%.",
                 manaCost = 35,
+                manaEssenceCost = 4,
                 cooldownTurns = 3,
                 targetType = SkillTargetType.SINGLE_ENEMY,
                 category = SkillCategory.HEX_DEBUFF,
@@ -409,6 +461,7 @@ object CharacterSkillCatalog {
             specialEffectText = "Odemkne silné kontrolní kouzlo 'Vábivý polibek sirény'"
         )
     )
+
 
     /**
      * Get nodes grouped by branch.
@@ -425,6 +478,12 @@ object CharacterSkillCatalog {
             return false // Already unlocked
         }
         if (character.level < node.reqLevel) {
+            return false
+        }
+        if (character.affinityLevel < node.reqAffinityLevel) {
+            return false
+        }
+        if (character.loajalita < node.reqLoajalita) {
             return false
         }
         if (node.reqNodeId != null) {

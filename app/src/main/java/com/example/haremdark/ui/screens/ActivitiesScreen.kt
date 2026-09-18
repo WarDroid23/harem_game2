@@ -3,6 +3,7 @@ package com.example.haremdark.ui.screens
 import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -38,7 +39,7 @@ fun ActivitiesScreen(
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("🗺️ Mapa", "🏹 Lov", "🏛️ Dražba", "⚔️ Souboje", "🧪 Alchymie", "📜 Úkoly", "📚 Kodex")
+    val tabs = listOf("🗺️ Mapa", "🏹 Lov", "🏛️ Dražba", "⚔️ Souboje", "🧪 Alchymie", "📜 Úkoly", "💰 Bounty", "📚 Kodex")
 
     Column(
         modifier = modifier
@@ -71,7 +72,8 @@ fun ActivitiesScreen(
             3 -> CombatTab(gameState, combatSession, engine)
             4 -> AlchemyTab(gameState, engine)
             5 -> QuestsTab(gameState, engine)
-            6 -> CodexTab(gameState, engine)
+            6 -> BountiesTab(gameState, engine)
+            7 -> CodexTab(gameState, engine)
         }
     }
 }
@@ -244,6 +246,125 @@ fun CombatTab(gameState: GameSave, session: CombatSession?, engine: GameEngine) 
 @Composable
 fun AlchemyTab(gameState: GameSave, engine: GameEngine) {
     DrugResourceManager(gameState = gameState, engine = engine)
+}
+
+@Composable
+fun BountiesTab(gameState: GameSave, engine: GameEngine) {
+    val context = LocalContext.current
+
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("💰", fontSize = 24.sp)
+                Column {
+                    Text("Denní Výzvy & Bounty", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text("Splň tyto úkoly pro bonusové suroviny a přízeň tvých dívek.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(bottom = 90.dp)
+        ) {
+            items(gameState.dailyMissions) { mission ->
+                BountyItem(mission, engine, gameState)
+            }
+        }
+    }
+}
+
+@Composable
+fun BountyItem(mission: com.example.haremdark.models.DailyMission, engine: GameEngine, gameState: GameSave) {
+    val context = LocalContext.current
+    val targetCharacter = gameState.characters.find { it.id == mission.targetCharacterId }
+
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = if (mission.isClaimed) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
+        ),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (targetCharacter != null) "🎯 Bounty: ${targetCharacter.name}" else "📜 Úkol: ${mission.type}",
+                    fontWeight = FontWeight.Bold,
+                    color = if (targetCharacter != null) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
+                )
+                if (mission.isClaimed) {
+                    Text("VYBRÁNO ✅", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4CAF50))
+                } else if (mission.isCompleted) {
+                    Text("HOTOVO ✨", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFD700))
+                }
+            }
+
+            Text(mission.description, style = MaterialTheme.typography.bodySmall)
+
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                LinearProgressIndicator(
+                    progress = { (mission.currentProgress.toFloat() / mission.targetCount.toFloat()).coerceIn(0f, 1f) },
+                    modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)),
+                    color = if (mission.isCompleted) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary
+                )
+                Text("${mission.currentProgress}/${mission.targetCount}", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (mission.rewardGold > 0) RewardTag("${mission.rewardGold}💰", Color(0xFFFFD700))
+                    if (mission.rewardAffinity > 0) RewardTag("+${mission.rewardAffinity}💞", Color(0xFFFF4081))
+                    if (mission.rewardDarkEnergy > 0) RewardTag("+${mission.rewardDarkEnergy}✨", Color(0xFF9C27B0))
+                    if (mission.rewardItem != null) RewardTag("${mission.rewardItem.icon} ${mission.rewardItem.name}", Color(0xFF00E5FF))
+                }
+
+                if (!mission.isClaimed) {
+                    Button(
+                        onClick = {
+                            val (success, msg) = engine.claimMissionReward(mission.id)
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        },
+                        enabled = mission.isCompleted,
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Text("Vyzvednout", fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun RewardTag(text: String, color: Color) {
+    Surface(
+        color = color.copy(alpha = 0.15f),
+        shape = RoundedCornerShape(6.dp),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.3f))
+    ) {
+        Text(text, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = color, modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
+    }
 }
 
 @Composable

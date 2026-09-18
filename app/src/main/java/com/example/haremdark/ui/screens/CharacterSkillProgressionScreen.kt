@@ -36,7 +36,8 @@ import com.example.haremdark.domain.EventSound
 import com.example.haremdark.domain.GameEngine
 import com.example.haremdark.domain.HaremSound
 import com.example.haremdark.domain.SoundEffectManager
-import com.example.haremdark.models.Character
+import com.example.haremdark.models.Character as GameCharacter
+import com.example.haremdark.ui.components.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,6 +62,7 @@ fun CharacterSkillProgressionScreen(
 
     val selectedChar = characters.firstOrNull { it.id == selectedCharacterId }
     var selectedBranchFilter by remember { mutableStateOf("Vše") }
+    var isGraphView by remember { mutableStateOf(true) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
@@ -91,6 +93,18 @@ fun CharacterSkillProgressionScreen(
                         )
                     }
                 },
+                actions = {
+                    IconButton(onClick = { 
+                        isGraphView = !isGraphView 
+                        SoundEffectManager.playEvent(EventSound.EVENT_CHOICE)
+                    }) {
+                        Icon(
+                            imageVector = if (isGraphView) Icons.Default.List else Icons.Default.AccountTree,
+                            contentDescription = "Přepnout zobrazení",
+                            tint = if (isGraphView) Color(0xFFFFD700) else Color.White
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color(0xFF140810)
                 )
@@ -114,15 +128,13 @@ fun CharacterSkillProgressionScreen(
                 )
             }
         } else {
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(innerPadding)
             ) {
-                // 1. Horizontal Girl Carousel
-                item {
+                // 1. Horizontal Girl Carousel (Always visible)
+                Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = "VYBER SPOLEČNICI K TRÉNINKU",
                         fontSize = 12.sp,
@@ -212,271 +224,126 @@ fun CharacterSkillProgressionScreen(
                     }
                 }
 
-                // 2. Selected Character Hero Card & Currency Hub
                 if (selectedChar != null) {
-                    item {
-                        CharacterProgressHeroCard(
-                            character = selectedChar,
-                            onConvertXpToSp = {
-                                val (ok, msg) = engine.convertCharacterXpToSp(selectedChar.id)
-                                if (ok) SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
+                    if (isGraphView) {
+                        // Graph View Layout
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                CharacterProgressHeroCard(
+                                    character = selectedChar,
+                                    onConvertXpToSp = {
+                                        val (ok, msg) = engine.convertCharacterXpToSp(selectedChar.id)
+                                        if (ok) SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
+                                    }
+                                )
                             }
-                        )
-                    }
-
-                    // 3. Active Passive Bonuses Summary
-                    item {
-                        val bonuses = CharacterSkillCatalog.calculatePassiveBonuses(selectedChar)
-                        PassiveBonusSummaryCard(bonuses = bonuses)
-                    }
-
-                    // 4. Branch Filter Chips
-                    item {
-                        val branches = listOf("Vše", "Boj", "Magie & Efekty", "Obrana & Podpora")
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            SkillTreeGraphComponent(
+                                character = selectedChar,
+                                onUnlock = { node ->
+                                    val (ok, msg) = if (node.spCost > 0) {
+                                        engine.unlockCharacterSkillWithSp(selectedChar.id, node.id)
+                                    } else {
+                                        engine.unlockCharacterSkillWithXp(selectedChar.id, node.id)
+                                    }
+                                    if (ok) SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    } else {
+                        // Traditional List View
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            items(branches) { branch ->
-                                val isSelected = (selectedBranchFilter == branch)
-                                FilterChip(
-                                    selected = isSelected,
-                                    onClick = {
-                                        SoundEffectManager.playEvent(EventSound.EVENT_CHOICE)
-                                        selectedBranchFilter = branch
+                            item {
+                                CharacterProgressHeroCard(
+                                    character = selectedChar,
+                                    onConvertXpToSp = {
+                                        val (ok, msg) = engine.convertCharacterXpToSp(selectedChar.id)
+                                        if (ok) SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
+                                    }
+                                )
+                            }
+
+                            item {
+                                val bonuses = CharacterSkillCatalog.calculatePassiveBonuses(selectedChar)
+                                PassiveBonusSummaryCard(bonuses = bonuses)
+                            }
+
+                            item {
+                                val branches = listOf("Vše", "Boj", "Magie & Efekty", "Obrana & Podpora")
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    items(branches) { branch ->
+                                        val isSelected = (selectedBranchFilter == branch)
+                                        FilterChip(
+                                            selected = isSelected,
+                                            onClick = {
+                                                SoundEffectManager.playEvent(EventSound.EVENT_CHOICE)
+                                                selectedBranchFilter = branch
+                                            },
+                                            label = { Text(branch, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = Color(0xFF880E4F),
+                                                selectedLabelColor = Color.White,
+                                                containerColor = Color(0xFF1E0E18),
+                                                labelColor = Color(0xFFCFD8DC)
+                                            ),
+                                            border = FilterChipDefaults.filterChipBorder(
+                                                borderColor = if (isSelected) Color(0xFFFF4081) else Color.White.copy(alpha = 0.2f),
+                                                selectedBorderColor = Color(0xFFFF4081),
+                                                enabled = true,
+                                                selected = isSelected
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+
+                            val allNodes = CharacterSkillCatalog.getSkillTreeForCharacter(selectedChar)
+                            val filteredNodes = allNodes.filter { node ->
+                                if (selectedBranchFilter == "Vše") true else node.branchName == selectedBranchFilter
+                            }
+
+                            items(filteredNodes) { node ->
+                                val isUnlocked = selectedChar.unlockedPassives.contains(node.id) || selectedChar.unlockedCombatSkills.contains(node.id)
+                                val canUnlock = CharacterSkillCatalog.canUnlockNode(selectedChar, node)
+
+                                SkillNodeProgressionCard(
+                                    node = node,
+                                    character = selectedChar,
+                                    isUnlocked = isUnlocked,
+                                    canUnlock = canUnlock,
+                                    onUnlockWithXp = {
+                                        val (ok, msg) = engine.unlockCharacterSkillWithXp(selectedChar.id, node.id)
+                                        if (ok) {
+                                            SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
+                                        }
                                     },
-                                    label = { Text(branch, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = Color(0xFF880E4F),
-                                        selectedLabelColor = Color.White,
-                                        containerColor = Color(0xFF1E0E18),
-                                        labelColor = Color(0xFFCFD8DC)
-                                    ),
-                                    border = FilterChipDefaults.filterChipBorder(
-                                        borderColor = if (isSelected) Color(0xFFFF4081) else Color.White.copy(alpha = 0.2f),
-                                        selectedBorderColor = Color(0xFFFF4081),
-                                        enabled = true,
-                                        selected = isSelected
-                                    )
+                                    onUnlockWithSp = {
+                                        val (ok, msg) = engine.unlockCharacterSkillWithSp(selectedChar.id, node.id)
+                                        if (ok) {
+                                            SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
+                                        }
+                                    }
                                 )
                             }
                         }
                     }
-
-                    // 5. Skill Nodes List
-                    val allNodes = CharacterSkillCatalog.getSkillTreeForCharacter(selectedChar)
-                    val filteredNodes = allNodes.filter { node ->
-                        if (selectedBranchFilter == "Vše") true else node.branchName == selectedBranchFilter
-                    }
-
-                    items(filteredNodes) { node ->
-                        val isUnlocked = selectedChar.unlockedPassives.contains(node.id) || selectedChar.unlockedCombatSkills.contains(node.id)
-                        val canUnlock = CharacterSkillCatalog.canUnlockNode(selectedChar, node)
-
-                        SkillNodeProgressionCard(
-                            node = node,
-                            character = selectedChar,
-                            isUnlocked = isUnlocked,
-                            canUnlock = canUnlock,
-                            onUnlockWithXp = {
-                                val (ok, msg) = engine.unlockCharacterSkillWithXp(selectedChar.id, node.id)
-                                if (ok) {
-                                    SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
-                                }
-                            },
-                            onUnlockWithSp = {
-                                val (ok, msg) = engine.unlockCharacterSkillWithSp(selectedChar.id, node.id)
-                                if (ok) {
-                                    SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
-                                }
-                            }
-                        )
-                    }
                 }
             }
         }
-    }
-}
-
-@Composable
-fun CharacterProgressHeroCard(
-    character: Character,
-    onConvertXpToSp: () -> Unit
-) {
-    val reqXpForNextLevel = character.level * 100
-    val progress = (character.xp.toFloat() / reqXpForNextLevel.toFloat()).coerceIn(0f, 1f)
-    val loyaltyTier = StaticData.getLoyaltyTier(character.loajalita)
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(
-                1.5.dp,
-                Brush.horizontalGradient(listOf(Color(0xFFFF4081), Color(0xFFFFD700))),
-                RoundedCornerShape(16.dp)
-            ),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF220A17)),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .border(2.dp, Color(0xFFFFD700), CircleShape)
-                ) {
-                    Image(
-                        painter = painterResource(id = StaticData.getPortraitForArchetype(character.archetypeId)),
-                        contentDescription = character.name,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = character.name,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "${character.archetypeId} • Úroveň ${character.level}",
-                        fontSize = 12.sp,
-                        color = Color(0xFFFFD700),
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = "Oddanost: ${loyaltyTier.title} (${character.affinityPoints} bodů)",
-                        fontSize = 11.sp,
-                        color = Color(0xFFFF80AB)
-                    )
-                }
-            }
-
-            // XP and SP stats row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Bojové ZK: ${character.xp} / $reqXpForNextLevel",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier
-                            .width(180.dp)
-                            .height(8.dp)
-                            .clip(RoundedCornerShape(4.dp)),
-                        color = Color(0xFFFF4081),
-                        trackColor = Color(0xFF4A142A)
-                    )
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFF3E1229),
-                    border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.4f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text("💎", fontSize = 14.sp)
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text("Dovednostní body", fontSize = 9.sp, color = Color(0xFFB0BEC5))
-                            Text("${character.skillPoints} SP", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFD700))
-                        }
-                    }
-                }
-            }
-
-            // XP conversion button
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                OutlinedButton(
-                    onClick = onConvertXpToSp,
-                    enabled = character.xp >= 100,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = Color(0xFFFFD700)
-                    ),
-                    border = BorderStroke(1.dp, if (character.xp >= 100) Color(0xFFFFD700) else Color.Gray.copy(alpha = 0.3f)),
-                    shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                ) {
-                    Text("🔄 Převést 100 ZK ➔ 1 SP", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun PassiveBonusSummaryCard(bonuses: com.example.haremdark.data.CombatPassiveBonuses) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF190C18)),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, Color(0xFF00E5FF).copy(alpha = 0.3f))
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("🛡️", fontSize = 14.sp)
-                Text(
-                    text = "AKTIVNÍ PASIVNÍ BONUSY ZE STROMU",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF00E5FF),
-                    letterSpacing = 0.5.sp
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceAround
-            ) {
-                StatBadgeItem(label = "Útok", value = "+${bonuses.attackBonus}", icon = "⚔️", color = Color(0xFFFF5252))
-                StatBadgeItem(label = "Obrana", value = "+${bonuses.defenseBonus}", icon = "🛡️", color = Color(0xFF448AFF))
-                StatBadgeItem(label = "Max HP", value = "+${bonuses.hpBonus}", icon = "❤️", color = Color(0xFF00E676))
-                StatBadgeItem(label = "Krit", value = "+${bonuses.critBonus}%", icon = "💥", color = Color(0xFFFFD700))
-                if (bonuses.lifestealPercent > 0) {
-                    StatBadgeItem(label = "Vysávání", value = "${bonuses.lifestealPercent}%", icon = "🩸", color = Color(0xFFFF1744))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun StatBadgeItem(label: String, value: String, icon: String, color: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("$icon $value", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = color)
-        Text(label, fontSize = 10.sp, color = Color.Gray)
     }
 }
 
 @Composable
 fun SkillNodeProgressionCard(
     node: CharacterSkillNode,
-    character: Character,
+    character: GameCharacter,
     isUnlocked: Boolean,
     canUnlock: Boolean,
     onUnlockWithXp: () -> Unit,
@@ -682,7 +549,7 @@ fun SkillNodeProgressionCard(
                                 text = "Odemknout (${node.xpCost} ZK)",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
-                            )
+                              )
                         }
 
                         Button(
@@ -722,148 +589,4 @@ fun SkillNodeProgressionCard(
             }
         )
     }
-}
-
-@Composable
-fun SkillNodeDetailModal(
-    node: CharacterSkillNode,
-    character: Character,
-    isUnlocked: Boolean,
-    canUnlock: Boolean,
-    onDismiss: () -> Unit,
-    onUnlockWithXp: () -> Unit,
-    onUnlockWithSp: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(node.icon, fontSize = 24.sp)
-                Column {
-                    Text(node.name, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
-                    Text("Podrobná analýza schopnosti • Stupeň ${node.tier}", fontSize = 11.sp, color = Color(0xFFFF80AB))
-                }
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Description
-                Text(node.description, fontSize = 13.sp, color = Color(0xFFE0E0E0))
-
-                // Scaling math breakdown for active skills
-                if (node.activeSkill != null) {
-                    val act = node.activeSkill
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFF220918),
-                        border = BorderStroke(1.dp, Color(0xFFFF4081).copy(alpha = 0.5f))
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text("📐 Matematický vzorec a škálování", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFFFFD700))
-                            Text(
-                                text = "• Základní násobič: ${act.powerMultiplier}x Útok\n• Základní bonus k poškození: ${act.baseDamageBonus}\n• Výpočet poškození: ((Útok × ${act.powerMultiplier}) + ${act.baseDamageBonus}) × Afinitní bonus × Synergie\n• Spotřeba many: ${act.manaCost} MP\n• Obnova (Cooldown): ${act.cooldownTurns} kola\n• Typ cíle: ${act.targetType.name}",
-                                fontSize = 11.sp,
-                                color = Color(0xFFCFD8DC),
-                                lineHeight = 16.sp
-                            )
-                            if (act.appliedStatus != null) {
-                                Text(
-                                    text = "• Efekt stavu: ${act.appliedStatus.icon} ${act.appliedStatus.name} (${act.appliedStatus.durationTurns} kola, síla ${act.appliedStatus.value})",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFFFF80AB),
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                            if (act.voiceQuote != null) {
-                                Text(
-                                    text = "💬 Hláška: \"${act.voiceQuote}\"",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF00E5FF),
-                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // Stat bonuses breakdown
-                if (node.attackBonus > 0 || node.defenseBonus > 0 || node.hpBonus > 0 || node.critBonus > 0 || node.lifestealPercent > 0) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color(0xFF141C2E),
-                        border = BorderStroke(1.dp, Color(0xFF00E5FF).copy(alpha = 0.4f))
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text("⭐ Trvalé pasivní bonusy", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF00E5FF))
-                            if (node.attackBonus > 0) Text("• +${node.attackBonus} Útok", fontSize = 11.sp, color = Color.White)
-                            if (node.defenseBonus > 0) Text("• +${node.defenseBonus} Obrana", fontSize = 11.sp, color = Color.White)
-                            if (node.hpBonus > 0) Text("• +${node.hpBonus} Max HP", fontSize = 11.sp, color = Color.White)
-                            if (node.critBonus > 0) Text("• +${node.critBonus}% Kritická šance", fontSize = 11.sp, color = Color.White)
-                            if (node.lifestealPercent > 0) Text("• +${node.lifestealPercent}% Vysávání HP (Lifesteal)", fontSize = 11.sp, color = Color.White)
-                        }
-                    }
-                }
-
-                // Requirements & Costs
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFF1F121C),
-                    border = BorderStroke(1.dp, Color(0xFF9C27B0).copy(alpha = 0.4f))
-                ) {
-                    Column(
-                        modifier = Modifier.padding(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text("📌 Požadavky na odemknutí", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFFE1BEE7))
-                        Text("• Požadovaná úroveň hrdinky: ${node.reqLevel} (Aktuálně: ${character.level})", fontSize = 11.sp, color = if (character.level >= node.reqLevel) Color(0xFF00E676) else Color(0xFFFF5252))
-                        Text("• Náklady v ZK: ${node.xpCost} ZK (Aktuálně: ${character.xp})", fontSize = 11.sp, color = if (character.xp >= node.xpCost) Color(0xFF00E676) else Color(0xFFFF5252))
-                        Text("• Náklady v SP: ${node.spCost} SP (Aktuálně: ${character.skillPoints})", fontSize = 11.sp, color = if (character.skillPoints >= node.spCost) Color(0xFF00E676) else Color(0xFFFF5252))
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            if (!isUnlocked) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = onUnlockWithXp,
-                        enabled = canUnlock && character.xp >= node.xpCost,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF4081))
-                    ) {
-                        Text("Odemknout (${node.xpCost} ZK)")
-                    }
-                    Button(
-                        onClick = onUnlockWithSp,
-                        enabled = canUnlock && character.skillPoints >= node.spCost,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700))
-                    ) {
-                        Text("Odemknout (${node.spCost} SP)", color = Color.Black)
-                    }
-                }
-            } else {
-                TextButton(onClick = onDismiss) {
-                    Text("Zavřít", color = Color(0xFFFFD700))
-                }
-            }
-        },
-        dismissButton = {
-            if (!isUnlocked) {
-                TextButton(onClick = onDismiss) {
-                    Text("Zpět", color = Color.Gray)
-                }
-            }
-        },
-        containerColor = Color(0xFF140810)
-    )
 }

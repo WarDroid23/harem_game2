@@ -66,6 +66,7 @@ data class PartyCombatSkill(
     val icon: String,
     val description: String,
     val manaCost: Int = 0,
+    val manaEssenceCost: Int = 0,
     val cooldownTurns: Int = 0,
     var currentCooldown: Int = 0,
     val targetType: SkillTargetType = SkillTargetType.SINGLE_ENEMY,
@@ -105,7 +106,8 @@ data class PartyMember(
     val relationshipTierLevel: Int = 1,
     val relationshipStageName: String = "Acquaintance",
     val relationshipCombatDescription: String = "Základní bojové zapojení",
-    val combatRegenBonus: Int = 0
+    val combatRegenBonus: Int = 0,
+    val strategy: CombatStrategy = CombatStrategy.BALANCED
 ) {
     val isAlive: Boolean get() = hp > 0
     val hpPercent: Float get() = if (maxHp > 0) (hp.toFloat() / maxHp.toFloat()).coerceIn(0f, 1f) else 0f

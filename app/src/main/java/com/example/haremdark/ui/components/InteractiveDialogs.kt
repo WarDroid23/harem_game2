@@ -77,6 +77,8 @@ import com.example.haremdark.models.Player
 import com.example.haremdark.domain.GameEngine
 import com.example.haremdark.domain.VoiceManager
 import com.example.haremdark.domain.VoiceTriggerType
+import com.example.haremdark.ui.components.RelationshipMilestoneSystem
+import com.example.haremdark.ui.components.SkillTreeGraphComponent
 import com.example.haremdark.models.EquipmentLoadout
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -530,7 +532,13 @@ fun CharacterDetailDialog(
                 ) {
                     when (selectedSection) {
                         0 -> BioTab(character = currentActiveCharacter)
-                        1 -> ProfileAndStatsTab(character = currentActiveCharacter, loyaltyTier = loyalty, archetype = archetype, phase = phase)
+                        1 -> ProfileAndStatsTab(
+                            character = currentActiveCharacter,
+                            loyaltyTier = loyalty,
+                            archetype = archetype,
+                            phase = phase,
+                            engine = engine
+                        )
                         2 -> EquipmentTab(character = currentActiveCharacter, player = player, onEquip = onEquipItem, onUnequip = onUnequipItem, engine = engine)
                         3 -> AffinityAndDialogueTab(character = currentActiveCharacter, engine = engine, onTriggerAffinityEffect = triggerAffinityEffect)
                         4 -> BondStoryTab(
@@ -1236,7 +1244,8 @@ fun ProfileAndStatsTab(
     character: Character,
     loyaltyTier: com.example.haremdark.models.LoyaltyTier,
     archetype: com.example.haremdark.models.CharacterArchetype?,
-    phase: com.example.haremdark.models.DegradationPhase?
+    phase: com.example.haremdark.models.DegradationPhase?,
+    engine: GameEngine? = null
 ) {
     Column(
         modifier = Modifier
@@ -1244,6 +1253,109 @@ fun ProfileAndStatsTab(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        // Combat Role Selection Card
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(character.preferredCombatRole.icon, fontSize = 18.sp)
+                    Text("Bojová Role & Strategie", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+                
+                Text(
+                    "Nastav preferovaný přístup k boji. Tato volba ovlivňuje automatické chování a statistiky v boji.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    com.example.haremdark.models.CombatStrategy.entries.forEach { strategy ->
+                        val isSelected = character.preferredCombatRole == strategy
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { engine?.setCombatStrategy(character.id, strategy) },
+                            label = { Text(strategy.displayName, fontSize = 10.sp) },
+                            leadingIcon = { Text(strategy.icon, fontSize = 12.sp) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                
+                Surface(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = character.preferredCombatRole.description,
+                        modifier = Modifier.padding(8.dp),
+                        fontSize = 10.sp,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+
+        // Mood Score Indicator Card
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val (moodLabel, moodColor, moodIcon) = when {
+                    character.moodScore >= 85 -> Triple("Extatická", Color(0xFFFF4081), "✨")
+                    character.moodScore >= 65 -> Triple("Veselá", Color(0xFF81C784), "😊")
+                    character.moodScore >= 40 -> Triple("Stabilní", Color(0xFF64B5F6), "😐")
+                    character.moodScore >= 20 -> Triple("Podrážděná", Color(0xFFFFB74D), "😑")
+                    else -> Triple("Rozzlobená", Color(0xFFE57373), "💢")
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(moodIcon, fontSize = 18.sp)
+                        Text("Aktuální Duševní Stav", fontWeight = FontWeight.Bold, color = moodColor)
+                    }
+                    Text("$moodLabel (${character.moodScore}/100)", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = moodColor)
+                }
+
+                LinearProgressIndicator(
+                    progress = { (character.moodScore / 100f).coerceIn(0f, 1f) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    color = moodColor,
+                    trackColor = moodColor.copy(alpha = 0.2f)
+                )
+
+                Text(
+                    "Nálada ovlivňuje úspěšnost 'Udělení Přízně' a ochotu dívky spolupracovat. Zlepšuj ji dárky a rozhovory, ale pozor na přesycení (víc než 3 interakce denně náladu snižují).",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    lineHeight = 14.sp
+                )
+            }
+        }
+
         // Archetype and Phase Card
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -1527,6 +1639,9 @@ fun AffinityAndDialogueTab(
 
         // Active Speech Dialogue Card
         val activeLine = AffinityData.getRandomActiveDialogue(character)
+        
+        RelationshipMilestoneSystem(character = character)
+
         Card(
             colors = CardDefaults.cardColors(
                 containerColor = Color(tier.colorHex).copy(alpha = 0.12f)
@@ -1907,7 +2022,7 @@ fun AffinityAndDialogueTab(
                         if (character.canTalkToday) {
                             Button(
                                 onClick = {
-                                    activeScenario = com.example.haremdark.data.AffinityData.getScenarioForArchetype(character.archetypeId, character.name)
+                                    activeScenario = com.example.haremdark.data.AffinityData.getScenarioForArchetype(character.archetypeId, character.name, tier.level)
                                     selectedOptionIdx = null
                                     currentFeedback = null
                                     showOutcome = false
@@ -2869,97 +2984,21 @@ fun SkillTreeTab(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
+                .weight(1f),
             contentAlignment = Alignment.TopCenter
         ) {
             when (selectedBranch) {
                 "Bojové Schopnosti" -> {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            text = "Aktivní & Pasivní dovednosti archetypu:",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-
-                        val allSkills = CharacterSkillCatalog.getSkillTreeForCharacter(character)
-                        allSkills.forEach { skillDef ->
-                            val isUnlocked = character.unlockedCombatSkills.contains(skillDef.id) || character.unlockedPassives.contains(skillDef.id)
-                            val canUnlockXp = !isUnlocked && character.xp >= skillDef.xpCost && character.level >= skillDef.reqLevel
-                            val canUnlockSp = !isUnlocked && character.skillPoints >= skillDef.spCost && character.level >= skillDef.reqLevel
-                            val isPassive = skillDef.nodeType == SkillNodeType.PASSIVE_PERK || skillDef.nodeType == SkillNodeType.SYNERGY_MASTERY
-
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (isUnlocked) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                                ),
-                                shape = RoundedCornerShape(10.dp),
-                                border = if (isUnlocked) BorderStroke(1.dp, Color(0xFFFF80AB).copy(alpha = 0.5f)) else null,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                            Text(skillDef.icon, fontSize = 18.sp)
-                                            Column {
-                                                Text(skillDef.name, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (isUnlocked) Color(0xFFFF80AB) else MaterialTheme.colorScheme.onSurface)
-                                                Text(if (isPassive) "Pasivní dovednost" else "Aktivní bojová schopnost (Cena: ${skillDef.activeSkill?.manaCost ?: 0} many)", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-                                            }
-                                        }
-
-                                        if (isUnlocked) {
-                                            Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF4CAF50).copy(alpha = 0.2f)) {
-                                                Text("Odemčeno ✓", color = Color(0xFF4CAF50), fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                                            }
-                                        } else {
-                                            Text("Vyžaduje Úr. ${skillDef.reqLevel}", fontSize = 10.sp, color = if (character.level >= skillDef.reqLevel) Color(0xFF81C784) else Color(0xFFE53935), fontWeight = FontWeight.SemiBold)
-                                        }
-                                    }
-
-                                    Text(skillDef.description, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
-
-                                    if (!isUnlocked && engine != null) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            if (skillDef.xpCost > 0) {
-                                                Button(
-                                                    onClick = { engine.unlockCharacterSkillWithXp(character.id, skillDef.id) },
-                                                    enabled = canUnlockXp,
-                                                    shape = RoundedCornerShape(6.dp),
-                                                    modifier = Modifier.weight(1f),
-                                                    contentPadding = PaddingValues(vertical = 4.dp),
-                                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF))
-                                                ) {
-                                                    Text("Odemknout (${skillDef.xpCost} ZK)", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                                }
-                                            }
-                                            if (skillDef.spCost > 0) {
-                                                Button(
-                                                    onClick = { engine.unlockCharacterSkillWithSp(character.id, skillDef.id) },
-                                                    enabled = canUnlockSp,
-                                                    shape = RoundedCornerShape(6.dp),
-                                                    modifier = Modifier.weight(1f),
-                                                    contentPadding = PaddingValues(vertical = 4.dp),
-                                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700))
-                                                ) {
-                                                    Text("Odemknout (${skillDef.spCost} SP)", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                    SkillTreeGraphComponent(
+                        character = character,
+                        onUnlock = { node ->
+                            if (node.spCost > 0) {
+                                engine?.unlockCharacterSkillWithSp(character.id, node.id)
+                            } else {
+                                engine?.unlockCharacterSkillWithXp(character.id, node.id)
                             }
                         }
-                    }
+                    )
                 }
                 "Pasivní Statistiky" -> {
                     SkillTreeLayout(

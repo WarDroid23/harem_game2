@@ -92,8 +92,27 @@ object PartyCombatManager {
                     relationshipTierLevel = affinityTier.level,
                     relationshipStageName = "${affinityTier.icon} ${affinityTier.stageName}",
                     relationshipCombatDescription = affinityTier.combatBonusDescription,
-                    combatRegenBonus = combatBonuses.regenBonus
+                    combatRegenBonus = combatBonuses.regenBonus,
+                    strategy = char.preferredCombatRole
                 )
+
+                // Apply strategy modifiers to base stats
+                when (member.strategy) {
+                    CombatStrategy.AGGRESSIVE -> {
+                        member.attack = (member.attack * 1.20f).toInt()
+                        member.defense = (member.defense * 0.85f).toInt()
+                    }
+                    CombatStrategy.DEFENSIVE -> {
+                        member.defense = (member.defense * 1.20f).toInt()
+                        member.attack = (member.attack * 0.85f).toInt()
+                    }
+                    CombatStrategy.SUPPORT -> {
+                        member.attack = (member.attack * 0.80f).toInt()
+                        // Heal bonus is applied during skill execution
+                    }
+                    CombatStrategy.BALANCED -> {}
+                }
+                
                 partyList.add(member)
             }
         }
@@ -263,7 +282,9 @@ object PartyCombatManager {
                     }
 
                     if (skill.healAmount > 0) {
-                        activeMember.hp = (activeMember.hp + skill.healAmount).coerceAtMost(activeMember.maxHp)
+                        val healBonus = if (activeMember.strategy == CombatStrategy.SUPPORT) 1.25f else 1.0f
+                        val finalHeal = (skill.healAmount * healBonus).toInt()
+                        activeMember.hp = (activeMember.hp + finalHeal).coerceAtMost(activeMember.maxHp)
                     }
 
                     SoundEffectManager.playCombat(if (skill.category == SkillCategory.DARK_MAGIC) CombatSound.DARK_SPELL else CombatSound.PLAYER_SLASH)
@@ -296,8 +317,10 @@ object PartyCombatManager {
                 }
 
                 if (skill.healAmount > 0) {
+                    val healBonus = if (activeMember.strategy == CombatStrategy.SUPPORT) 1.25f else 1.0f
+                    val finalHeal = (skill.healAmount * healBonus).toInt()
                     session.party.filter { it.isAlive }.forEach { ally ->
-                        ally.hp = (ally.hp + skill.healAmount).coerceAtMost(ally.maxHp)
+                        ally.hp = (ally.hp + finalHeal).coerceAtMost(ally.maxHp)
                     }
                 }
 
@@ -319,8 +342,10 @@ object PartyCombatManager {
                 val aliveParty = session.aliveParty
                 val targetAlly = aliveParty.getOrNull(targetIndex) ?: activeMember
                 if (skill.healAmount > 0) {
+                    val healBonus = if (activeMember.strategy == CombatStrategy.SUPPORT) 1.25f else 1.0f
+                    val finalHeal = (skill.healAmount * healBonus).toInt()
                     val prevHp = targetAlly.hp
-                    targetAlly.hp = (targetAlly.hp + skill.healAmount).coerceAtMost(targetAlly.maxHp)
+                    targetAlly.hp = (targetAlly.hp + finalHeal).coerceAtMost(targetAlly.maxHp)
                     val healed = targetAlly.hp - prevHp
 
                     if (skill.appliedStatus != null) {
@@ -341,9 +366,11 @@ object PartyCombatManager {
                 }
             }
             SkillTargetType.ALL_ALLIES -> {
+                val healBonus = if (activeMember.strategy == CombatStrategy.SUPPORT) 1.25f else 1.0f
+                val finalHeal = (skill.healAmount * healBonus).toInt()
                 session.aliveParty.forEach { ally ->
                     if (skill.healAmount > 0) {
-                        ally.hp = (ally.hp + skill.healAmount).coerceAtMost(ally.maxHp)
+                        ally.hp = (ally.hp + finalHeal).coerceAtMost(ally.maxHp)
                     }
                     if (skill.appliedStatus != null) {
                         ally.statusEffects.add(skill.appliedStatus.copy())

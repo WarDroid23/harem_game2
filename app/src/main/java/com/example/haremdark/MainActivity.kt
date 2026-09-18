@@ -177,6 +177,18 @@ class MainActivity : ComponentActivity() {
                                             fontWeight = FontWeight.SemiBold,
                                             color = Color(0xFF80D8FF)
                                         )
+                                        Text(
+                                            "🧪 ${gameState.player.manaEssence} ME",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color(0xFF00E676)
+                                        )
+                                        Text(
+                                            "🤝 ${gameState.player.influence} INF",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color(0xFF03A9F4)
+                                        )
                                     }
                                 }
 

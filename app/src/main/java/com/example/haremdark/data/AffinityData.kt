@@ -410,96 +410,86 @@ object AffinityData {
         }
     }
 
-    fun getScenarioForArchetype(archetypeId: String, characterName: String): DialogueScenario {
-        return when (archetypeId) {
-            "subka" -> DialogueScenario(
-                prompt = "„Můj drahý pane... poklekám před tebou. Daří se mi dobře plnit mé úkoly? Chci pro tebe být dokonalou...“",
-                options = listOf(
-                    DialogueOption("„Dělej víc a mluv méně. Tvou jedinou starostí je poslušnost.“", "S povzdechem a chvěním přijímá tvůj chladný rozkaz.", 14, submissiveness = 12, fear = 6, loyalty = 8),
-                    DialogueOption("„Zasloužíš si pochvalu, děláš mi velkou radost.“", "Její tváře zrudnou štěstím a v jejích očích se zalesknou slzy vděku.", 16, trust = 15, submissiveness = -4, loyalty = 12),
-                    DialogueOption("„Tvůj osud závisí na mém rozmaru. Pamatuj na to.“", "Zatají dech, její submisivní srdce divoce bije nadšením z tvé nadvlády.", 18, submissiveness = 18, broken = 5, fear = 8)
+    fun getScenarioForArchetype(archetypeId: String, characterName: String, tier: Int): DialogueScenario {
+        return when (tier) {
+            1, 2 -> when (archetypeId) {
+                "subka" -> DialogueScenario(
+                    prompt = "„Můj drahý pane... poklekám před tebou. Daří se mi dobře plnit mé úkoly? Chci pro tebe být dokonalou...“",
+                    options = listOf(
+                        DialogueOption("„Dělej víc a mluv méně. Tvou jedinou starostí je poslušnost.“", "S povzdechem a chvěním přijímá tvůj chladný rozkaz.", 14, submissiveness = 12, fear = 6, loyalty = 8),
+                        DialogueOption("„Zasloužíš si pochvalu, děláš mi velkou radost.“", "Její tváře zrudnou štěstím a v jejích očích se zalesknou slzy vděku.", 16, trust = 15, submissiveness = -4, loyalty = 12),
+                        DialogueOption("„Tvůj osud závisí na mém rozmaru. Pamatuj na to.“", "Zatají dech, její submisivní srdce divoce bije nadšením z tvé nadvlády.", 18, submissiveness = 18, broken = 5, fear = 8)
+                    )
                 )
-            )
-            "slechticna" -> DialogueScenario(
-                prompt = "„Tyto komnaty jsou sice čisté, ale v mém rodném paláci jsme měli stropy zdobené zlatem a hedvábný nábytek...“",
-                options = listOf(
-                    DialogueOption("„Tvůj dřívější palác je minulostí. Nyní jsi ozdobou mého dominia.“", "Překvapeně zamrká, tvá pevná sebejistota v ní vzbuzuje nečekaný respekt.", 18, loyalty = 12, submissiveness = 8, trust = 5),
-                    DialogueOption("„Stěžuj si dál a nechám tě spát v chladném sklepě na slámě.“", "Hrdě se narovná, ale v očích se jí mihne záblesk skutečné bázně.", -3, fear = 15, broken = 6),
-                    DialogueOption("„Zajistím, aby tvé komnaty byly co nejluxusnější.“", "Jemně se usměje, oceňuje tvou snahu, i když tě v duchu považuje za trochu slabého.", 10, trust = 18, submissiveness = -10, loyalty = 10)
+                "slechticna" -> DialogueScenario(
+                    prompt = "„Tyto komnaty jsou sice čisté, ale v mém rodném paláci jsme měli stropy zdobené zlatem a hedvábný nábytek...“",
+                    options = listOf(
+                        DialogueOption("„Tvůj dřívější palác je minulostí. Nyní jsi ozdobou mého dominia.“", "Překvapeně zamrká, tvá pevná sebejistota v ní vzbuzuje nečekaný respekt.", 18, loyalty = 12, submissiveness = 8, trust = 5),
+                        DialogueOption("„Stěžuj si dál a nechám tě spát v chladném sklepě na slámě.“", "Hrdě se narovná, ale v očích se jí mihne záblesk skutečné bázně.", -3, fear = 15, broken = 6),
+                        DialogueOption("„Zajistím, aby tvé komnaty byly co nejluxusnější.“", "Jemně se usměje, oceňuje tvou snahu, i když tě v duchu považuje za trochu slabého.", 10, trust = 18, submissiveness = -10, loyalty = 10)
+                    )
                 )
-            )
-            "touha" -> DialogueScenario(
-                prompt = "„Pane... dnes je v ložnici takový chlad. Smím ti být blíž? Moje kůže touží po tvém hřejivém doteku...“",
-                options = listOf(
-                    DialogueOption("„Pak tě zahřeji svým vlastním tělem. Pojď ke mně.“", "Její dech se zrychlí a s vášnivým povzdechem se ti tiskne do náruče.", 20, trust = 12, submissiveness = 5),
-                    DialogueOption("„Vrať se ke své práci. Rozkoš a teplo si musíš nejprve zasloužit.“", "Kousne se do rtu, odmítnutí v ní rozpaluje ještě divočejší plamen touhy.", 14, submissiveness = 15, fear = 5),
-                    DialogueOption("„Možná by ti pomohlo nosit víc těžkého dřeva do krbu.“", "Rozesměje se tvému škádlení a hravě do tebe strčí ramínkem.", 16, loyalty = 10, trust = 10)
+                else -> DialogueScenario(
+                    prompt = "„Můj pane... uvažuji o své budoucnosti v tvém dominiu. Co ode mě skutečně očekáváš?“",
+                    options = listOf(
+                        DialogueOption("„Očekávám absolutní věrnost a poslušnost bez otázek.“", "Skloní hlavu a tichým hlasem potvrzuje své podvolení tvé vůli.", 14, submissiveness = 12, loyalty = 10, fear = 5),
+                        DialogueOption("„Chci tě chránit a vybudovat pro tebe bezpečné místo.“", "Na chvíli zjihne a v jejích očích zahlédneš jiskru skutečné důvěry.", 16, trust = 15, loyalty = 12),
+                        DialogueOption("„Jsi mou majetkovou hračkou, nic víc mě nezajímá.“", "Smířeně sklopí zrak, její hrdost pomalu umírá, ale podřizuje se osudu.", 10, submissiveness = 15, broken = 8, fear = 10)
+                    )
                 )
-            )
-            "odvazna" -> DialogueScenario(
-                prompt = "„Pane... čistím svou čepel a přemýšlím. Troufl by sis se mnou bojovat bez doprovodu svých stráží?“",
-                options = listOf(
-                    DialogueOption("„Vyzývám tě k souboji tělo na tělo. Ukaž, co umíš.“", "Její oči zazáří bojovým nadšením. Respektuje tvou odvahu utkat se s ní jako rovný s rovným.", 22, trust = 15, loyalty = 15),
-                    DialogueOption("„Tvá síla i tvá zbraň patří mně. Nauč se sklonit hlavu.“", "Zatne zuby, vzdoruje tvé moci, ale její instinkty ji nutí sklopit zrak.", 10, submissiveness = 15, broken = 6, fear = 5),
-                    DialogueOption("„Tvá čepel je jen hračka. Jsi jen slabá žena v mé moci.“", "Hněvivě sevře jílec, ale tvá chladná převaha ji vnitřně znejistí.", -2, fear = 12, broken = 5)
+            }
+            3, 4 -> when (archetypeId) {
+                "subka" -> DialogueScenario(
+                    prompt = "„Pane... přinesla jsem ti víno a přemýšlela jsem. Moje místo je zde, po tvém boku... cítím to čím dál silněji.“",
+                    options = listOf(
+                        DialogueOption("„Tvé místo je u mých nohou, tam kde tě mohu cítit.“", "Slastně vydechne a okamžitě klesá na kolena, vděčná za tvůj nárok.", 22, submissiveness = 20, loyalty = 15),
+                        DialogueOption("„Jsi víc než jen služebná. Jsi mou pravou rukou v komnatách.“", "Její srdce zaplesá, cítí, že její oddanost začíná mít skutečnou váhu.", 25, trust = 20, loyalty = 18, submissiveness = -5),
+                        DialogueOption("„Pij se mnou. Chci slyšet tvé nejvnitřnější myšlenky.“", "Nejistě, ale s velkou radostí přijímá tvé pozvání do tvé blízkosti.", 20, trust = 25, loyalty = 15)
+                    )
                 )
-            )
-            "sukuba" -> DialogueScenario(
-                prompt = "„Můj pane... tvá duše voní tak lahodně a hříšně. Smím si vzít jen malý, sladký doušek tvé životní síly?“",
-                options = listOf(
-                    DialogueOption("„Spolkni svůj hlad. To já ovládám tvou démonickou podstatu.“", "Gaspne údivem, tvá vnitřní síla a nadvláda ji vzrušuje víc než samotná krev.", 22, submissiveness = 18, loyalty = 12, fear = 8),
-                    DialogueOption("„Můžeš se napít, pokud mi za to slíbíš svou absolutní věrnost.“", "Sladce se usměje, její stíny se k tobě lísají jako věrný pes.", 16, trust = 18, loyalty = 15),
-                    DialogueOption("„Zpátky, nestvůro! Tvůj vliv na mou mysl neplatí.“", "Odtáhne se s uraženým, ale nesmírně fascinovaným výrazem. Tvůj odpor ji přitahuje.", 12, fear = 12, submissiveness = 8)
+                "slechticna" -> DialogueScenario(
+                    prompt = "„Můj pane... uvažovala jsem o tvém vítězství nad mým rodem. Možná to tak mělo být. Ty vládneš s ohněm, který můj otec nikdy neměl...“",
+                    options = listOf(
+                        DialogueOption("„Tvůj rod byl slabý. Jen silní jako já si zaslouží tvou krásu a oddanost.“", "Dlouze se ti zadívá do očí a poprvé v nich vidíš něco jiného než pýchu – opravdový obdiv.", 24, loyalty = 20, trust = 12),
+                        DialogueOption("„Před tebou leží nová budoucnost. Jako královna mého stínu.“", "Pousměje se, titul 'Královna stínu' v ní probouzí její staré ambice v nové formě.", 26, loyalty = 22, submissiveness = 10),
+                        DialogueOption("„Přestaň mluvit o minulosti a ukaž mi svou dnešní věrnost.“", "Tiše přikývne a začne plnit tvá přání s nečekanou precizností.", 20, submissiveness = 15, fear = 8)
+                    )
                 )
-            )
-            "draci_divka" -> DialogueScenario(
-                prompt = "„Můj dračí duch se neskloní před nikým, kdo sám neprošel skutečným ohněm. Co jsi dokázal ty, smrtelníku?“",
-                options = listOf(
-                    DialogueOption("„Kráčím ohněm stínů a podmaňuji si říše. Ty se skloníš přede mnou.“", "Dlouze se ti zadívá do očí a nakonec pomalu skloní hlavu. Tvůj žhnoucí pohled ji přemohl.", 24, loyalty = 18, submissiveness = 12, broken = 6),
-                    DialogueOption("„Chápu tvou pýchu, ale zde jsi v bezpečí. Společně vybudujeme neporazitelné dominium.“", "Její napjaté tělo se uvolní. V jejích očích se poprvé objeví hluboká důvěra.", 18, trust = 20, loyalty = 16),
-                    DialogueOption("„Tvůj oheň bude sloužit mé obraně v řetězech, pokud se nepodvolíš dobrovolně.“", "Zavrčí a vyfoukne malý obláček dýmu, ale tvá nekompromisní ruka v ní vzbuzuje respekt k moci.", 12, submissiveness = 15, broken = 10, fear = 10)
+                else -> DialogueScenario(
+                    prompt = "„Cítím, jak se naše pouto prohlubuje, můj pane. Dřív jsem se tě bála, teď se na tvůj příchod těším...“",
+                    options = listOf(
+                        DialogueOption("„Těš se dál. Má přítomnost je tvou největší odměnou.“", "Její tvář se rozzáří a s úctou sleduje každý tvůj pohyb.", 22, loyalty = 15, trust = 15),
+                        DialogueOption("„A co bys udělala, kdybych tě dnes nechal o samotě?“", "Její výraz posmutní, je na tobě už emočně zcela závislá.", 18, submissiveness = 20, loyalty = 12),
+                        DialogueOption("„Pojď blíž a ukaž mi, jak moc ses těšila.“", "S radostným povzdechem zkracuje vzdálenost mezi vámi.", 24, trust = 20, loyalty = 18)
+                    )
                 )
-            )
-            "nymfomanka" -> DialogueScenario(
-                prompt = "„Pane... já se tak hrozně stydím. Moje tělo mě neposlouchá... každá tvá myšlenka nebo pohled mě uvádí do šílenství...“",
-                options = listOf(
-                    DialogueOption("„Pak ti dám přesně to, po čem tvá hříšná povaha touží.“", "Vykřikne potěšením a vrhá se k tvým nohám s nenasytným pohledem.", 20, submissiveness = 15, trust = 10),
-                    DialogueOption("„Trestem za tvou nenasytnost bude odpírání mé přítomnosti.“", "Kňučí a škemrá o milost, její mysl je zcela fixovaná na tebe.", 14, submissiveness = 18, broken = 8, fear = 6),
-                    DialogueOption("„Uklidni se a soustřeď svou energii na obranu našeho hradu.“", "Snaží se ovládnout svůj zrychlený dech, vděčná za tvé pevné vedení.", 12, loyalty = 15, trust = 12)
+            }
+            else -> when (archetypeId) {
+                "subka" -> DialogueScenario(
+                    prompt = "„Můj božský pane... jsi smyslem mého bytí. Mé tělo, má duše, můj dech... vše patří jen tobě. Co si přeješ, abych pro tebe dnes byla?“",
+                    options = listOf(
+                        DialogueOption("„Buď mou absolutní loutkou. Zapomeň na vlastní vůli.“", "Její oči ztratí poslední záblesk pochybnosti. Je zcela tvá, prázdná schránka naplněná tvým rozkazem.", 30, submissiveness = 30, broken = 15, loyalty = 25),
+                        DialogueOption("„Buď mou milovanou družkou, se kterou budu vládnout všem.“", "Pláče radostí, cítí se být na vrcholu světa jako tvá vyvolená.", 35, trust = 30, loyalty = 35),
+                        DialogueOption("„Buď matkou mých budoucích dědiců temnoty.“", "S posvátnou úctou přijímá tvůj nejvyšší nárok na její život.", 40, loyalty = 40, trust = 25, submissiveness = 10)
+                    )
                 )
-            )
-            "ticha_panenka" -> DialogueScenario(
-                prompt = "„... (Sedí tiše se sklopenou hlavou, čeká na tvé slovo a jemně si pohrává s lemem šatů)“",
-                options = listOf(
-                    DialogueOption("„Pohlaď ji po vlasech a řekni: Jsi hodná holčička.“", "Její oči se rozsvítí čistou radostí a na tváři se jí objeví vzácný, tichý úsměv.", 18, trust = 18, loyalty = 15, submissiveness = 8),
-                    DialogueOption("„Přikaž jí, aby klečela bez hnutí po zbytek večera.“", "Bez jediného slova okamžitě plní tvůj příkaz, její odevzdanost je absolutní.", 14, submissiveness = 20, fear = 8),
-                    DialogueOption("„Zeptej se jí na její sny a minulost.“", "Na moment se ti podívá do očí s hlubokým smutkem, poté jen ticho zatřese hlavou.", 10, trust = 12, loyalty = 8)
+                "slechticna" -> DialogueScenario(
+                    prompt = "„Vládče... moji předkové mě varovali před temnotou, ale v tvém objetí jsem našla pravou svobodu. Svobodu sloužit někomu, kdo je skutečně hoden mé koruny.“",
+                    options = listOf(
+                        DialogueOption("„Tvá koruna nyní září jen pro mě. Společně budeme nesmrtelní.“", "Její oddanost dosahuje absolutní výše. Už nejsi jejím věznitelem, jsi jejím bohem.", 35, loyalty = 40, trust = 30),
+                        DialogueOption("„Poklekni a polib mou ruku jako symbol tvého konečného podrobení.“", "Dělá to s neuvěřitelnou grácií a pokorou, její pýcha se proměnila v čistou věrnost.", 32, submissiveness = 25, loyalty = 30),
+                        DialogueOption("„Tvé aristokratické srdce teď bije v rytmu mých kroků.“", "Vášnivě tě líbá, potvrzujíc, že její život je navždy spjat s tvým.", 38, trust = 35, loyalty = 30)
+                    )
                 )
-            )
-            "krvava_subka" -> DialogueScenario(
-                prompt = "„Pane... viděla jsem tvůj bič. Moje záda pálí touhou po tvém hněvu. Nech mě prosím krvácet pro tvou potěchu...“",
-                options = listOf(
-                    DialogueOption("„Vyhovět její žádosti a tvrdě ji potrestat.“", "S každým úderem její tvář plní extatický úsměv, bolest je pro ni nejvyšším darem.", 22, submissiveness = 18, broken = 8, fear = 5),
-                    DialogueOption("„Odmítnout s tím, že její bolest patří jen mně a já rozhoduji, kdy ji dostane.“", "Třese se touhou, tvé odepření bolesti ji psychicky zcela podmaňuje.", 18, submissiveness = 20, loyalty = 12),
-                    DialogueOption("„Ošetřit její staré šrámy teplým olejem.“", "Je zmatená tvou něhou, pláče vděčností, která zasahuje její nejhlubší nitro.", 16, trust = 22, loyalty = 15, submissiveness = -5)
+                else -> DialogueScenario(
+                    prompt = "„Můj pane, má láska k tobě překonala vše – strach, hrdost i čas. Jsi mým osudem. Kamkoliv půjdeš, půjdu s tebou, i do nejhlubšího pekla.“",
+                    options = listOf(
+                        DialogueOption("„A tam také společně ovládneme vše stinné a mocné.“", "Její víra v tebe je neotřesitelná. Jste jedna duše v dvou tělech.", 40, loyalty = 40, trust = 40),
+                        DialogueOption("„Zůstaň klečet v mém stínu a buď mým věčným klidem.“", "S tichou radostí a odevzdaností plní tvou vůli, nacházejíc v tom absolutní mír.", 35, submissiveness = 30, loyalty = 35),
+                        DialogueOption("„Tvá věrnost je mou největší trofejí.“", "Dívá se na tebe s nepopsatelným obdivem a láskou v očích.", 38, trust = 35, loyalty = 35)
+                    )
                 )
-            )
-            "posedla" -> DialogueScenario(
-                prompt = "„Něco hluboko ve mně je zlomené... Jsem jako prázdná nádoba. Použij mě, můj pane, naplň mě svou temnotou, abych mohla existovat...“",
-                options = listOf(
-                    DialogueOption("„Budeš mou věrnou stínovou loutkou. Tvá mysl patří mně.“", "Její oči ztratí poslední zbytky pochybností, odevzdává se ti jako dokonalá schránka.", 24, submissiveness = 20, broken = 12, loyalty = 15),
-                    DialogueOption("„Pomohu ti najít tvé ztracené já. Společně tě vyléčíme.“", "Chytí se tvé ruky jako stébla trávy v bouři, její loajalita se stává neochvějnou.", 16, trust = 24, loyalty = 20, submissiveness = -8),
-                    DialogueOption("„Zneužít její prázdnoty a uvalit na ni těžkou práci.“", "Tiše a bez odporu plní úkoly, její prázdný pohled je zcela oddaný tvé vůli.", 12, submissiveness = 18, broken = 15, fear = 10)
-                )
-            )
-            else -> DialogueScenario(
-                prompt = "„Můj pane... uvažuji o své budoucnosti v tvém dominiu. Co ode mě skutečně očekáváš?“",
-                options = listOf(
-                    DialogueOption("„Očekávám absolutní věrnost a poslušnost bez otázek.“", "Skloní hlavu a tichým hlasem potvrzuje své podvolení tvé vůli.", 14, submissiveness = 12, loyalty = 10, fear = 5),
-                    DialogueOption("„Chci tě chránit a vybudovat pro tebe bezpečné místo.“", "Na chvíli zjihne a v jejích očích zahlédneš jiskru skutečné důvěry.", 16, trust = 15, loyalty = 12),
-                    DialogueOption("„Jsi mou majetkovou hračkou, nic víc mě nezajímá.“", "Smířeně sklopí zrak, její hrdost pomalu umírá, ale podřizuje se osudu.", 10, submissiveness = 15, broken = 8, fear = 10)
-                )
-            )
+            }
         }
     }
 }

@@ -644,6 +644,8 @@ fun DomainResourceBanner(gameState: GameSave) {
         AnimatedResourceItem("🪨", "Kamení", gameState.player.stone)
         AnimatedResourceItem("⛓️", "Železo", gameState.player.iron)
         AnimatedResourceItem("🔮", "Mana", gameState.player.mana, gameState.player.maxMana)
+        AnimatedResourceItem("🧪", "Esence", gameState.player.manaEssence)
+        AnimatedResourceItem("🤝", "Vliv", gameState.player.influence, gameState.player.maxInfluence)
         AnimatedResourceItem("👥", "Populace", gameState.player.population, gameState.player.maxPopulation)
     }
 }

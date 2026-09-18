@@ -214,6 +214,56 @@ fun GameTopBar(
                 }
             }
 
+            // Row 1.5: Expansion Resources (Mana Essence & Influence)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF1B5E20).copy(alpha = 0.1f),
+                    border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF00E676).copy(alpha = 0.3f)),
+                    modifier = Modifier.weight(1f).clickable { isExpanded = !isExpanded }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(text = "🧪", fontSize = 10.sp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Esence: ${player.manaEssence}",
+                            color = Color(0xFF00E676),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF01579B).copy(alpha = 0.1f),
+                    border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF03A9F4).copy(alpha = 0.3f)),
+                    modifier = Modifier.weight(1f).clickable { isExpanded = !isExpanded }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(text = "🤝", fontSize = 10.sp)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Vliv: ${player.influence}/${player.maxInfluence}",
+                            color = Color(0xFF03A9F4),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+
             // Row 2: Standard Stat Meters (HP, SE, TE)
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -331,6 +381,25 @@ fun GameTopBar(
                                     title = "👑 Prestiž a Sláva",
                                     desc = "Aktuální prestiž pána: ${player.prestige} ⭐\nCelkem vyhraných bitev: ${player.battlesWon} ⚔️",
                                     regenText = "Vliv: Vyšší prestiž odemyká vzácná privilegia a tituly.",
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            // Row C: Mana Essence & Influence Detailed
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                DetailedStatItem(
+                                    title = "🧪 Esence Many",
+                                    desc = "Koncentrovaná magická energie získávaná z bitev a rituálů v Chrámu temnoty.",
+                                    regenText = "Využití: Nutná pro pokročilé budovy a rituály.",
+                                    modifier = Modifier.weight(1f)
+                                )
+                                DetailedStatItem(
+                                    title = "🤝 Vliv v Dominantě",
+                                    desc = "Tvůj politický a sociální dosah v podsvětí a mezi tvými otrokyněmi.",
+                                    regenText = "Zisk: Získáváš interakcemi a upevňováním moci.",
                                     modifier = Modifier.weight(1f)
                                 )
                             }

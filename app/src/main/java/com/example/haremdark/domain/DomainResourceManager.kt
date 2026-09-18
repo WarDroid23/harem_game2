@@ -11,6 +11,7 @@ class DomainResourceManager {
         val stone: Int,
         val iron: Int,
         val mana: Int,
+        val manaEssence: Int,
         val populationGrowth: Int
     )
 
@@ -20,6 +21,7 @@ class DomainResourceManager {
         var stone = 0
         var iron = 0
         var mana = 0
+        var manaEssence = 0
         var populationGrowth = 0
 
         val buildings = state.buildings
@@ -34,7 +36,10 @@ class DomainResourceManager {
                 "drevohorec" -> wood += b.level * 15
                 "kamenolom" -> stone += b.level * 10
                 "zelezny_dul" -> iron += b.level * 5
-                "chram_temnoty" -> mana += b.level * 5
+                "chram_temnoty" -> {
+                    mana += b.level * 5
+                    manaEssence += b.level * 2
+                }
                 "ubytovny" -> populationGrowth += b.level * 2
             }
         }
@@ -44,7 +49,7 @@ class DomainResourceManager {
             populationGrowth += 1 // Natural growth
         }
 
-        return DailyYield(gold, wood, stone, iron, mana, populationGrowth)
+        return DailyYield(gold, wood, stone, iron, mana, manaEssence, populationGrowth)
     }
 
     fun applyYield(player: Player, yield: DailyYield) {
@@ -53,6 +58,7 @@ class DomainResourceManager {
         player.stone += yield.stone
         player.iron += yield.iron
         player.mana = (player.mana + yield.mana).coerceAtMost(player.maxMana)
+        player.manaEssence += yield.manaEssence
         
         val newPop = player.population + yield.populationGrowth
         player.population = newPop.coerceAtMost(player.maxPopulation)

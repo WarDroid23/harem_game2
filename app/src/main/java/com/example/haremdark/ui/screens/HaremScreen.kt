@@ -772,6 +772,14 @@ fun HaremScreen(
                                     onFavoriteClick = {
                                         val res = engine.setFavorite(character.id)
                                         Toast.makeText(context, res, Toast.LENGTH_SHORT).show()
+                                    },
+                                    onGrantFavorClick = {
+                                        val (success, msg) = engine.grantFavor(character.id)
+                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                    },
+                                    onGreetClick = {
+                                        val (success, msg) = engine.greetCharacter(character.id)
+                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                                     }
                                 )
                             }

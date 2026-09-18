@@ -229,19 +229,88 @@ class GameEngine(private val context: Context) {
         }
         if (_gameState.value.dailyMissions.isEmpty() || _gameState.value.lastMissionUpdateDay != _gameState.value.player.day) {
             val day = _gameState.value.player.day
-            val initMissions = listOf(
-                DailyMission(id = "m1_$day", type = "INTERACT", description = "Provést interakce s dívkami", targetCount = 3, rewardGold = 50, rewardSexEnergy = 20),
-                DailyMission(id = "m2_$day", type = "EXPLORE", description = "Vyrazit na výpravu", targetCount = 1, rewardGold = 100, rewardDarkEnergy = 15),
-                DailyMission(id = "m3_$day", type = "GIFT", description = "Darovat předmět z brašny", targetCount = 1, rewardGold = 75)
-            )
             _gameState.value = _gameState.value.copy(
-                dailyMissions = initMissions,
+                dailyMissions = generateDailyMissions(_gameState.value),
                 lastMissionUpdateDay = day
             )
         }
     }
 
 
+
+    private fun generateDailyMissions(state: com.example.haremdark.models.GameSave): List<com.example.haremdark.models.DailyMission> {
+        val day = state.player.day
+        val characters = state.characters
+        val missions = mutableListOf<com.example.haremdark.models.DailyMission>()
+        
+        // 1. General interaction mission
+        missions.add(com.example.haremdark.models.DailyMission(
+            id = "m_gen_int_$day",
+            type = "INTERACT",
+            description = "Provést interakce s libovolnými dívkami v harému",
+            targetCount = 3,
+            rewardGold = 60,
+            rewardSexEnergy = 25
+        ))
+        
+        // 2. Specific character bounties (up to 2)
+        if (characters.isNotEmpty()) {
+            val shuffled = characters.shuffled()
+            val bountyTargets = shuffled.take(2)
+            
+            bountyTargets.forEachIndexed { index, target ->
+                val bountyType = listOf("GREET", "GRANT_FAVOR", "GIFT").random()
+                when(bountyType) {
+                    "GREET" -> {
+                        missions.add(com.example.haremdark.models.DailyMission(
+                            id = "m_spec_greet_${index}_$day",
+                            type = "GREET_SPECIFIC",
+                            description = "Pozdravit a věnovat ráno čas dívce: ${target.name}",
+                            targetCount = 1,
+                            targetCharacterId = target.id,
+                            rewardGold = 40,
+                            rewardAffinity = 8,
+                            rewardItem = if (Math.random() < 0.3) com.example.haremdark.models.InventoryItem("vonna_svice", "Vonná svíce", "Uklidňuje mysl a zvyšuje náklonnost při darování.", 1, 30, "gift", "🕯️", "Běžný", "+12 Náklonnost") else null
+                        ))
+                    }
+                    "GRANT_FAVOR" -> {
+                        missions.add(com.example.haremdark.models.DailyMission(
+                            id = "m_spec_favor_${index}_$day",
+                            type = "GRANT_FAVOR_SPECIFIC",
+                            description = "Prokázat laskavost a splnit přání dívce: ${target.name}",
+                            targetCount = 1,
+                            targetCharacterId = target.id,
+                            rewardGold = 50,
+                            rewardAffinity = 12,
+                            rewardItem = if (Math.random() < 0.4) com.example.haremdark.models.InventoryItem("hedvabny_satek", "Hedvábný šátek", "Luxusní doplněk zvyšující pouto.", 1, 50, "gift", "🧣", "Vzácný", "+20 Náklonnost") else null
+                        ))
+                    }
+                    "GIFT" -> {
+                        missions.add(com.example.haremdark.models.DailyMission(
+                            id = "m_spec_gift_${index}_$day",
+                            type = "GIFT_SPECIFIC",
+                            description = "Obdarovat dívku ${target.name} něčím speciálním pro upevnění vztahu",
+                            targetCount = 1,
+                            targetCharacterId = target.id,
+                            rewardGold = 80,
+                            rewardAffinity = 18,
+                            rewardItem = com.example.haremdark.models.InventoryItem("tajemny_amulet", "Amulet souznění", "Zvyšuje rychlost růstu vztahu.", 1, 100, "equipment", "🧿", "Epický", "+5 Boj, +10% Affinity zisk", "accessory", 5, 0, 0)
+                        ))
+                    }
+                }
+            }
+        }
+        
+        // 3. Activity mission
+        val activityType = listOf("EXPLORE", "HUNT", "COMBAT_WIN").random()
+        when(activityType) {
+            "EXPLORE" -> missions.add(com.example.haremdark.models.DailyMission(id = "m_act_exp_$day", type = "EXPLORE", description = "Prozkoumat neprobádané území a odhalit tajemství", targetCount = 1, rewardGold = 100, rewardDarkEnergy = 15))
+            "HUNT" -> missions.add(com.example.haremdark.models.DailyMission(id = "m_act_hunt_$day", type = "HUNT", description = "Zúčastnit se lovu nebezpečných stvůr", targetCount = 2, rewardGold = 120, rewardDarkEnergy = 20))
+            "COMBAT_WIN" -> missions.add(com.example.haremdark.models.DailyMission(id = "m_act_win_$day", type = "COMBAT_WIN", description = "Zvítězit v soubojích a prokázat svou sílu", targetCount = 3, rewardGold = 150, rewardDarkEnergy = 25))
+        }
+        
+        return missions
+    }
 
     private suspend fun loadStateSuspend(keyStr: String): GameSave? {
         val key = stringPreferencesKey(keyStr)
@@ -368,7 +437,10 @@ class GameEngine(private val context: Context) {
         val affinityGain = (loyaltyBoost + trustBoost) / 2 + 12
         val successMsg = "🎁 Předal jsi dar '$giftName' dívce ${character.name}. $flavorText"
         updateState { state ->
-            val p = state.player.copy(gold = (state.player.gold - goldCost).coerceAtLeast(0))
+            val p = state.player.copy(
+                gold = (state.player.gold - goldCost).coerceAtLeast(0),
+                influence = (state.player.influence + (loyaltyBoost / 5).coerceAtLeast(1)).coerceAtMost(state.player.maxInfluence)
+            )
             val updatedCharacters = state.characters.map { c ->
                 if (c.id == characterId) {
                     val copy = c.copy()
@@ -423,7 +495,9 @@ class GameEngine(private val context: Context) {
             else -> 12
         }
         updateState { state ->
-            val p = state.player.copy()
+            val p = state.player.copy(
+                influence = (state.player.influence + (affinityGain / 10).coerceAtLeast(1)).coerceAtMost(state.player.maxInfluence)
+            )
             val itemInInv = p.items.firstOrNull { it.id == itemId }
             if (itemInInv != null) {
                 itemInInv.count -= 1
@@ -562,6 +636,9 @@ class GameEngine(private val context: Context) {
             
             val totalPassiveGold = (basePassiveGold * globalIncomeMultiplier).toInt()
 
+            // Refresh Daily Missions for the new day
+            val newMissions = generateDailyMissions(current.copy(player = p.copy(day = newDay)))
+            
             // Process slave rentals
             var rentalIncome = 0
             val moodsList = listOf("veselá", "rozmarná", "neutrální", "znuděná", "rozzlobená")
@@ -577,12 +654,41 @@ class GameEngine(private val context: Context) {
             var assignmentSexEnergy = 0
             var assignmentDarkEnergy = 0
 
-            // 1. Retroactively ensure all characters have traits
+            // 1. Retroactively ensure all characters have traits & Apply mood decay
             current.characters.forEach { c ->
                 if (c.traits.isEmpty()) {
                     val availableTraits = listOf("Arogantní", "Pracovitá", "Líná", "Týmová hráčka", "Samotářka", "Povýšená", "Mírná").shuffled()
                     c.traits.add(availableTraits[0])
                     c.traits.add(availableTraits[1])
+                }
+
+                // Apply mood decay if no interactions, and reset daily interaction counter
+                val interactionDay = c.lastInteractionDay
+                val daysSinceInteraction = newDay - interactionDay
+                
+                // Interaction frequency affecting mood
+                if (daysSinceInteraction > 1) {
+                    // Neglect penalty
+                    c.moodScore = (c.moodScore - (daysSinceInteraction * 5)).coerceAtLeast(0)
+                }
+                
+                // Reset daily interaction count for the new day
+                c.dailyInteractionsCount = 0
+
+                // Update string-based nalada based on moodScore
+                c.nalada = when {
+                    c.moodScore >= 85 -> "Šťastná"
+                    c.moodScore >= 65 -> "Veselá"
+                    c.moodScore >= 40 -> "Neutrální"
+                    c.moodScore >= 20 -> "Znuděná"
+                    else -> "Rozzlobená"
+                }
+                c.statusIcon = when(c.nalada) {
+                    "Šťastná" -> "✨"
+                    "Veselá" -> "😊"
+                    "Znuděná" -> "😑"
+                    "Rozzlobená" -> "💢"
+                    else -> "😐"
                 }
             }
 
@@ -763,14 +869,15 @@ class GameEngine(private val context: Context) {
                 day = newDay,
                 goldProduced = modifiedYield.gold,
                 manaProduced = modifiedYield.mana,
+                manaEssenceProduced = modifiedYield.manaEssence,
                 woodProduced = modifiedYield.wood,
                 stoneProduced = modifiedYield.stone,
                 ironProduced = modifiedYield.iron
             )
             val newHistory = (current.resourceHistory + newStat).takeLast(14) // Keep last 14 days
 
-            if (yield.wood > 0 || yield.stone > 0 || yield.iron > 0 || yield.mana > 0) {
-                addLog("🏘️ Dominium vyprodukovalo: +${yield.wood} dreva, +${yield.stone} kameni, +${yield.iron} zeleza, +${yield.mana} many. Populace vzrostla o ${yield.populationGrowth}.")
+            if (yield.wood > 0 || yield.stone > 0 || yield.iron > 0 || yield.mana > 0 || yield.manaEssence > 0) {
+                addLog("🏘️ Dominium vyprodukovalo: +${yield.wood} dřeva, +${yield.stone} kamení, +${yield.iron} železa, +${yield.mana} many, +${yield.manaEssence} esence many. Populace vzrostla o ${yield.populationGrowth}.")
             }
             p.day = newDay
             p.maxSexEnergy = newMaxSex
@@ -882,12 +989,6 @@ class GameEngine(private val context: Context) {
 
             val logs = (logsList + current.gameLog).take(30)
 
-            val newMissions = listOf(
-                DailyMission(id = "m1_$newDay", type = "INTERACT", description = "Provést interakce s dívkami", targetCount = 3, rewardGold = 50, rewardSexEnergy = 20),
-                DailyMission(id = "m2_$newDay", type = "EXPLORE", description = "Vyrazit na výpravu", targetCount = 1, rewardGold = 100, rewardDarkEnergy = 15),
-                DailyMission(id = "m3_$newDay", type = "GIFT", description = "Darovat předmět z brašny", targetCount = 1, rewardGold = 75)
-            )
-
             current.copy(
                 player = p,
                 characters = updatedCharacters,
@@ -903,11 +1004,12 @@ class GameEngine(private val context: Context) {
     }
 
     // --- MISSIONS ---
-    fun progressMission(type: String, amount: Int = 1) {
+    fun progressMission(type: String, amount: Int = 1, characterId: String? = null) {
         updateState { current ->
             var updatedMissions = false
             val newMissions = current.dailyMissions.map { mission ->
-                if (mission.type == type && !mission.isCompleted) {
+                val typeMatch = (mission.type == type) || (mission.type == "${type}_SPECIFIC" && mission.targetCharacterId == characterId)
+                if (typeMatch && !mission.isCompleted) {
                     val newProgress = (mission.currentProgress + amount).coerceAtMost(mission.targetCount)
                     if (newProgress > mission.currentProgress) {
                         updatedMissions = true
@@ -932,13 +1034,25 @@ class GameEngine(private val context: Context) {
                 p.darkEnergy = (p.darkEnergy + mission.rewardDarkEnergy).coerceAtMost(p.maxDarkEnergy)
                 p.sexEnergy = (p.sexEnergy + mission.rewardSexEnergy).coerceAtMost(p.maxSexEnergy)
                 
+                val updatedCharacters = current.characters.map { c ->
+                    if (mission.targetCharacterId != null && c.id == mission.targetCharacterId) {
+                        c.affinityPoints += mission.rewardAffinity
+                        c.moodScore = (c.moodScore + 5).coerceAtMost(100)
+                        c
+                    } else c
+                }
+                
                 val newMissions = current.dailyMissions.map { 
                     if (it.id == missionId) it.copy(isClaimed = true) else it 
                 }
                 
-                addLog("Odměna vyzvednuta za úkol '${mission.description}': ${mission.rewardGold} zl.")
-                result = Pair(true, "Odměna vyzvednuta!")
-                current.copy(dailyMissions = newMissions, player = p)
+                if (mission.rewardItem != null) {
+                    p.items.add(mission.rewardItem)
+                }
+                
+                addLog("Odměna vyzvednuta za úkol '${mission.description}': ${mission.rewardGold} zl." + (if (mission.rewardItem != null) " a ${mission.rewardItem.name}" else ""))
+                result = Pair(true, "Odměna vyzvednuta!" + (if (mission.rewardItem != null) " Získán předmět: ${mission.rewardItem.name}" else ""))
+                current.copy(dailyMissions = newMissions, player = p, characters = updatedCharacters)
             } else {
                 result = Pair(false, "Odměnu nelze vybrat.")
                 current
@@ -979,32 +1093,31 @@ class GameEngine(private val context: Context) {
         player.gold -= interaction.goldCost
 
         val oldMood = character.nalada
+        val oldMoodScore = character.moodScore
 
         // Apply interaction
         val message = interaction.applyEffect(character, player)
+        
+        character.lastInteractionDay = player.day
+        character.dailyInteractionsCount++
 
         // Dynamic Mood and Status Update
-        when (interaction.type) {
-            "intimni" -> {
-                character.nalada = if (character.loajalita > 60) "Oddaná" else "Vzrušená"
-                character.statusIcon = if (character.loajalita > 60) "❤️" else "🫦"
-            }
-            "disciplina", "vycvik", "trest" -> {
-                character.nalada = if (character.strach > 50) "Ustrašená" else "Zkrocená"
-                character.statusIcon = if (character.strach > 50) "😨" else "⛓️"
-            }
-            "rozmluva" -> {
-                character.nalada = "Uvolněná"
-                character.statusIcon = "🍵"
-            }
-            "dar", "odmena" -> {
-                character.nalada = "Šťastná"
-                character.statusIcon = "✨"
-            }
+        val interactionQuality = if (interaction.type == "intimni" || interaction.type == "odmena") 10 else 5
+        val saturationPenalty = if (character.dailyInteractionsCount > 3) (character.dailyInteractionsCount - 3) * 15 else 0
+        
+        character.moodScore = (character.moodScore + interactionQuality - saturationPenalty).coerceIn(0, 100)
+
+        // Sync nalada string with score
+        character.nalada = when {
+            character.moodScore >= 85 -> "Šťastná"
+            character.moodScore >= 65 -> "Veselá"
+            character.moodScore >= 40 -> "Neutrální"
+            character.moodScore >= 20 -> "Znuděná"
+            else -> "Rozzlobená"
         }
 
-        if (character.nalada != oldMood) {
-            triggerMoodNotification(character, oldMood, "Po akci: ${interaction.name}")
+        if (character.moodScore != oldMoodScore) {
+            triggerMoodNotification(character, oldMood, "Po akci: ${interaction.name} (Změna nálady: ${character.moodScore - oldMoodScore})")
         } else {
             // Play feedback sound even if mood hasn't changed
             SoundEffectManager.playMoodFeedback(character.nalada, "interaction")
@@ -1086,7 +1199,7 @@ class GameEngine(private val context: Context) {
         // Add player XP & harem EXP
         addPlayerXp(12)
         addHaremExp(8)
-        progressMission("INTERACT", 1)
+        progressMission("INTERACT", 1, characterId = characterId)
 
         val fullMessage = "$message (+$affinityGain náklonnost)\n💬 ${character.name}: „$unlockedDialogue“$levelUpAnnouncement"
         addLog(fullMessage)
@@ -1215,9 +1328,33 @@ class GameEngine(private val context: Context) {
             return Pair(false, "${character.name} již má aktivní královskou přízeň (${character.favorBoostDaysRemaining} dny zbývají).")
         }
 
+        // Mood-based success rate (50-100% chance)
+        val successChance = 50 + (character.moodScore / 2)
+        val roll = (1..100).random()
+        
         player.gold -= cost
+        
+        if (roll > successChance) {
+            character.moodScore = (character.moodScore - 10).coerceAtLeast(0)
+            character.interactionLogs.add(
+                InteractionLogEntry(
+                    day = player.day,
+                    type = "morálka",
+                    title = "Přízeň odmítnuta ⛔",
+                    description = "${character.name} momentálně není v rozpoložení přijmout tvou zvláštní přízeň. Zlato bylo promrháno.",
+                    statChanges = "-$cost 💰, -10 Mood"
+                )
+            )
+            addLog("⛔ Pokus o udělení přízně pro ${character.name} selhal! (Šance: $successChance%, Hod: $roll)")
+            updateState { it.copy() }
+            SoundEffectManager.playHarem(HaremSound.FAIL)
+            autoSave("Selhání přízně (${character.name})")
+            return Pair(false, "${character.name} tvou přízeň v tomto rozpoložení odmítla. Zkus to, až bude mít lepší náladu.")
+        }
+
         character.favorBoostActive = true
         character.favorBoostDaysRemaining = 3
+        character.moodScore = (character.moodScore + 15).coerceAtMost(100)
 
         val prevAffinityLevel = character.affinityLevel
         character.affinityPoints += 15
@@ -1235,16 +1372,40 @@ class GameEngine(private val context: Context) {
                 type = "odměna",
                 title = "Udělena královská přízeň ✨",
                 description = "Pán obdařil ${character.name} zvláštní přízní. Růst vztahu a náklonnosti je zrychlen.",
-                statChanges = "-$cost 💰, +15 Affinity"
+                statChanges = "-$cost 💰, +15 Affinity, +15 Mood"
             )
         )
 
         addLog("✨ Udělena královská přízeň pro ${character.name} (-$cost 💰, +15 Náklonnost, Boost na 3 dny)!")
-        updateState { it.copy() }
+        progressMission("GRANT_FAVOR", 1, characterId = characterId)
+        updateState { it.copy(player = it.player.copy(influence = (it.player.influence + 10).coerceAtMost(it.player.maxInfluence))) }
         SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
         autoSave("Královská přízeň (${character.name})")
 
         return Pair(true, "Královská přízeň úspěšně udělena pro ${character.name}!")
+    }
+
+    fun greetCharacter(characterId: String): Pair<Boolean, String> {
+        val current = _gameState.value
+        val character = current.characters.find { it.id == characterId }
+            ?: return Pair(false, "Dívka nebyla nalezena.")
+
+        if (!character.canTalkToday) {
+            return Pair(false, "${character.name} už dnes s tebou mluvila dostatečně.")
+        }
+
+        character.dailyTalksCount++
+        character.affinityPoints += 5
+        character.moodScore = (character.moodScore + 3).coerceAtMost(100)
+        
+        addLog("Pozdravil jsi ${character.name}. Krátce jsi s ní promluvil (+5 Affinity, +3 Mood).")
+        progressMission("GREET", 1, characterId = characterId)
+        
+        updateState { it.copy(player = it.player.copy(influence = (it.player.influence + 2).coerceAtMost(it.player.maxInfluence))) }
+        SoundEffectManager.playEvent(EventSound.EVENT_CHOICE)
+        autoSave("Pozdrav (${character.name})")
+
+        return Pair(true, "Pozdravil jsi ${character.name}! (+5 Affinity)")
     }
 
     fun setFavorite(characterId: String): String {
@@ -1286,6 +1447,18 @@ class GameEngine(private val context: Context) {
         }
         addLog(msg)
         return Pair(newPinnedState, msg)
+    }
+
+    fun setCombatStrategy(characterId: String, strategy: com.example.haremdark.models.CombatStrategy) {
+        updateState { current ->
+            val updated = current.characters.map { c ->
+                if (c.id == characterId) {
+                    c.copy(preferredCombatRole = strategy)
+                } else c
+            }
+            current.copy(characters = updated)
+        }
+        addLog("⚔️ Bojová strategie pro jednu z tvých dívek byla změněna na: ${strategy.displayName}")
     }
 
     fun courtRomance(characterId: String): Pair<Boolean, String> {
@@ -1998,9 +2171,10 @@ class GameEngine(private val context: Context) {
         val costWood = (building.baseCostWood * (building.level + 1))
         val costStone = (building.baseCostStone * (building.level + 1))
         val costIron = (building.baseCostIron * (building.level + 1))
+        val costManaEssence = if (buildingType == "chram_temnoty") (building.level + 1) * 10 else 0
         
-        if (current.player.gold < costGold || current.player.wood < costWood || current.player.stone < costStone || current.player.iron < costIron) {
-            return Pair(false, "Nedostatek surovin! Potřebuješ: $costGold zl, $costWood dřeva, $costStone kamení, $costIron železa.")
+        if (current.player.gold < costGold || current.player.wood < costWood || current.player.stone < costStone || current.player.iron < costIron || current.player.manaEssence < costManaEssence) {
+            return Pair(false, "Nedostatek surovin! Potřebuješ: $costGold zl, $costWood dřeva, $costStone kamení, $costIron železa" + (if (costManaEssence > 0) ", $costManaEssence esence many." else "."))
         }
 
         val nextLevel = building.level + 1
@@ -2010,7 +2184,8 @@ class GameEngine(private val context: Context) {
                 gold = (state.player.gold - costGold).coerceAtLeast(0),
                 wood = (state.player.wood - costWood).coerceAtLeast(0),
                 stone = (state.player.stone - costStone).coerceAtLeast(0),
-                iron = (state.player.iron - costIron).coerceAtLeast(0)
+                iron = (state.player.iron - costIron).coerceAtLeast(0),
+                manaEssence = (state.player.manaEssence - costManaEssence).coerceAtLeast(0)
             )
             val updatedBuildings = state.buildings.map { b ->
                 if (b.type == buildingType) {
@@ -2032,14 +2207,19 @@ class GameEngine(private val context: Context) {
             ?: return Pair(false, "Území nenalezeno.")
 
         val cost = (territory.baseIncome * (territory.level + 1) * 3)
-        if (current.player.gold < cost) {
-            return Pair(false, "Ovládnutí území vyžaduje $cost zlatých (máš ${current.player.gold})!")
+        val costInfluence = (territory.level + 1) * 15
+        
+        if (current.player.gold < cost || current.player.influence < costInfluence) {
+            return Pair(false, "Ovládnutí území vyžaduje $cost zlatých a $costInfluence vlivu (máš ${current.player.gold} zl, ${current.player.influence} vlivu)!")
         }
 
         val nextLevel = territory.level + 1
         val msg = "🗡️ Území ${territory.name} povýšeno na úroveň $nextLevel! Pasivní příjem vzrostl."
         updateState { state ->
-            val p = state.player.copy(gold = (state.player.gold - cost).coerceAtLeast(0))
+            val p = state.player.copy(
+                gold = (state.player.gold - cost).coerceAtLeast(0),
+                influence = (state.player.influence - costInfluence).coerceAtLeast(0)
+            )
             val updatedTerritories = state.territories.map { t ->
                 if (t.id == territoryId) {
                     val copy = t.copy()
@@ -2812,7 +2992,7 @@ class GameEngine(private val context: Context) {
             com.example.haremdark.domain.VoiceManager.speak(unlockedDialogue, character.archetypeId)
         }
         addPlayerXp(12)
-        progressMission("GIFT", 1)
+        progressMission("GIFT", 1, characterId = characterId)
         return Pair(true, msg)
     }
 
@@ -2960,7 +3140,7 @@ class GameEngine(private val context: Context) {
         }
 
         addPlayerXp(15 * count)
-        progressMission("GIFT", count)
+        progressMission("GIFT", count, characterId = characterId)
 
         return GiftActionResult(
             character = character.copy(affinityPoints = newAffinityPoints, affinityLevel = newAffinityLevel),
@@ -3085,7 +3265,7 @@ class GameEngine(private val context: Context) {
         }
 
         addPlayerXp(25)
-        progressMission("INTERACT", 1)
+        progressMission("INTERACT", 1, characterId = characterId)
         return Pair(true, msg)
     }
 
@@ -3206,7 +3386,7 @@ class GameEngine(private val context: Context) {
             )
         }
         addPlayerXp(12)
-        progressMission("GIFT", 1)
+        progressMission("GIFT", 1, characterId = characterId)
         return Pair(true, msg)
     }
 
@@ -3916,6 +4096,111 @@ class GameEngine(private val context: Context) {
                     narrativeText = "$charName se s půvabem a divokou oddaností vrhla vpřed. Se slovy „$voiceShout“ zasadila mistrný zásah!"
                 ))
             }
+            "skill" -> {
+                val skillId = itemId ?: ""
+                val skill = com.example.haremdark.data.CharacterSkillCatalog.ALL_SKILL_NODES.find { it.activeSkill?.id == skillId }?.activeSkill
+                val char = currentGameState.characters.firstOrNull { it.id == session.deployedCharacterId }
+                
+                if (skill != null && char != null) {
+                    val cooldown = session.skillCooldowns[skillId] ?: 0
+                    if (cooldown > 0) {
+                        newLogEntries.add(0, CombatLogEntry(
+                            turn = currentTurn,
+                            type = "system",
+                            message = "❌ Schopnost ${skill.name} je ještě v regeneraci ($cooldown kol)!",
+                            actor = "Systém",
+                            actionName = "Cooldown"
+                        ))
+                    } else if (char.mana < skill.manaCost) {
+                        newLogEntries.add(0, CombatLogEntry(
+                            turn = currentTurn,
+                            type = "system",
+                            message = "❌ ${char.name} nemá dostatek many na ${skill.name} (vyžaduje ${skill.manaCost})!",
+                            actor = "Systém",
+                            actionName = "Nedostatek many"
+                        ))
+                    } else if (player.manaEssence < skill.manaEssenceCost) {
+                        newLogEntries.add(0, CombatLogEntry(
+                            turn = currentTurn,
+                            type = "system",
+                            message = "❌ Nemáš dostatek esence many na ${skill.name} (vyžaduje ${skill.manaEssenceCost} esencí)!",
+                            actor = "Systém",
+                            actionName = "Nedostatek esence"
+                        ))
+                    } else {
+                        // Success - consume resources
+                        char.mana -= skill.manaCost
+                        player.manaEssence -= skill.manaEssenceCost
+                        
+                        val newCooldowns = session.skillCooldowns.toMutableMap()
+                        if (skill.cooldownTurns > 0) {
+                            newCooldowns[skillId] = skill.cooldownTurns
+                        }
+                        session.skillCooldowns = newCooldowns
+
+                        // Apply effects
+                        val isCrit = Random.nextInt(100) < (20 + haremCritBonus + breakthroughCritBonus)
+                        val critMultiplier = if (isCrit) 1.8f else 1.0f
+                        
+                        var damage = 0
+                        var healing = 0
+                        
+                        if (skill.powerMultiplier > 0) {
+                            val basePower = (weaponDamage * 1.2f) + (char.skills["combat"] ?: 5) * 4
+                            val rawDmg = basePower * skill.powerMultiplier * breakthroughDmgMultiplier
+                            damage = (((rawDmg - (session.boss.defense * 0.2f)) * critMultiplier) * totalAffinityMultiplier).toInt().coerceAtLeast(15)
+                            newBossHp = (newBossHp - damage).coerceAtLeast(0)
+                        }
+                        
+                        if (skill.healAmount > 0) {
+                            healing = (skill.healAmount + (char.affinityLevel * 5)).toInt()
+                            newPlayerHp = (newPlayerHp + healing).coerceAtMost(session.playerMaxHp)
+                        }
+                        
+                        if (skill.appliedStatus != null) {
+                            when (skill.appliedStatus.type) {
+                                "BLEED", "POISON" -> newBleedTurns = skill.appliedStatus.durationTurns
+                                "STUN" -> newStunned = true
+                                "SHIELD", "ATK_BUFF", "DEF_BUFF" -> activeBuff = "${skill.appliedStatus.icon} ${skill.appliedStatus.name}"
+                            }
+                        }
+
+                        SoundEffectManager.playCombat(if (skill.category == com.example.haremdark.models.SkillCategory.DARK_MAGIC) CombatSound.DARK_SPELL else CombatSound.CRITICAL_HIT)
+
+                        val costText = mutableListOf<String>()
+                        if (skill.manaCost > 0) costText.add("-${skill.manaCost} MP")
+                        if (skill.manaEssenceCost > 0) costText.add("-${skill.manaEssenceCost} Esence")
+                        
+                        newLogEntries.add(0, CombatLogEntry(
+                            turn = currentTurn,
+                            type = "player_special",
+                            message = "${skill.icon} ${char.name} použila ${skill.name}! (${costText.joinToString(", ")})",
+                            actor = char.name,
+                            actionName = skill.name,
+                            damageDealt = damage,
+                            narrativeText = "Se slovy „${skill.voiceQuote ?: "Za mého pána!"}“ uvolnila ${char.name} svou skrytou sílu. ${skill.description}"
+                        ))
+                        
+                        if (damage > 0) {
+                            newLogEntries.add(1, CombatLogEntry(
+                                turn = currentTurn,
+                                type = "system",
+                                message = "💥 ${skill.name} způsobilo $damage poškození nepřítele!",
+                                actor = "Boj",
+                                damageDealt = damage
+                            ))
+                        }
+                        if (healing > 0) {
+                            newLogEntries.add(1, CombatLogEntry(
+                                turn = currentTurn,
+                                type = "system",
+                                message = "💖 ${skill.name} uzdravilo $healing HP!",
+                                actor = "Boj"
+                            ))
+                        }
+                    }
+                }
+            }
             "item" -> {
                 val targetItemId = itemId ?: "hojivy_balzam"
                 val item = player.items.firstOrNull { it.id == targetItemId && it.count > 0 }
@@ -4254,10 +4539,14 @@ class GameEngine(private val context: Context) {
         updateState { current ->
             val p = current.player.copy(
                 gold = current.player.gold + gold,
-                prestige = current.player.prestige + prestige
+                prestige = current.player.prestige + prestige,
+                manaEssence = current.player.manaEssence + (xp / 10).coerceAtLeast(1),
+                influence = (current.player.influence + (prestige / 5).coerceAtLeast(1)).coerceAtMost(current.player.maxInfluence)
             )
 
             // Update participating girls' stats, affinity points, and loyalty
+            progressMission("HUNT", 1)
+            progressMission("COMBAT_WIN", 1)
             val updatedCharacters = current.characters.map { girl ->
                 if (participatingGirlIds.contains(girl.id)) {
                     val newAffinity = girl.affinityPoints + affinityGain
@@ -5050,6 +5339,8 @@ class GameEngine(private val context: Context) {
             val updatedPlayer = player.copy(
                 gold = player.gold + rewards.gold,
                 mana = (player.mana + rewards.bloodRubies).coerceAtLeast(0),
+                manaEssence = player.manaEssence + (rewards.playerXp / 8).coerceAtLeast(2),
+                influence = (player.influence + (rewards.prestigeGain / 4).coerceAtLeast(2)).coerceAtMost(player.maxInfluence),
                 prestige = player.prestige + rewards.prestigeGain,
                 xp = player.xp + rewards.playerXp,
                 battlesWon = player.battlesWon + 1,

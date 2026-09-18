@@ -213,6 +213,26 @@ fun ActiveCombatView(
                                 modifier = Modifier.size(20.dp)
                             )
                         }
+
+                        VerticalDivider(modifier = Modifier.height(24.dp).width(1.dp), color = Color.White.copy(alpha = 0.2f))
+
+                        // Mana Essence Tracker
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("🔮", fontSize = 12.sp)
+                            Column {
+                                Text("ESENCE", color = Color.White.copy(alpha = 0.7f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                                Text("${player.manaEssence}", color = Color(0xFF00E5FF), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+                            }
+                        }
+
+                        // Influence Tracker
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("👑", fontSize = 12.sp)
+                            Column {
+                                Text("VLIV", color = Color.White.copy(alpha = 0.7f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                                Text("${player.influence}", color = Color(0xFFFFD700), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+                            }
+                        }
                     }
 
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -513,6 +533,7 @@ fun ActiveCombatView(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         ActionTabButton("Útoky", Icons.Default.FlashOn, selectedActionCategory == 0) { selectedActionCategory = 0 }
+                        ActionTabButton("Dovednosti", Icons.Default.AutoFixHigh, selectedActionCategory == 4) { selectedActionCategory = 4 }
                         ActionTabButton("Temnota", Icons.Default.AutoAwesome, selectedActionCategory == 1) { selectedActionCategory = 1 }
                         ActionTabButton("Obrana", Icons.Default.Shield, selectedActionCategory == 2) { selectedActionCategory = 2 }
                         ActionTabButton("Předměty", Icons.Default.Medication, selectedActionCategory == 3) { selectedActionCategory = 3 }
@@ -668,6 +689,54 @@ fun ActiveCombatView(
                                                 }
                                             }
                                         )
+                                    }
+                                }
+                            }
+                        }
+                        4 -> {
+                            // Character Skills from Skill Tree
+                            if (deployedChar == null) {
+                                Text(
+                                    "Musíš nasadit dívku do boje, abys mohl používat její dovednosti.",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                    modifier = Modifier.padding(vertical = 8.dp)
+                                )
+                            } else {
+                                val unlockedSkills = com.example.haremdark.data.CharacterSkillCatalog.getUnlockedActiveSkills(deployedChar)
+                                if (unlockedSkills.isEmpty()) {
+                                    Text(
+                                        "Tato dívka zatím nemá odemčené žádné aktivní dovednosti ve stromu dovedností.",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                        modifier = Modifier.padding(vertical = 8.dp)
+                                    )
+                                } else {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        unlockedSkills.forEach { skill ->
+                                            val cooldown = session.skillCooldowns[skill.id] ?: 0
+                                            val hasMana = deployedChar.mana >= skill.manaCost
+                                            val hasEssence = player.manaEssence >= skill.manaEssenceCost
+                                            
+                                            ActionRowButton(
+                                                title = "${skill.icon} ${skill.name}" + if (cooldown > 0) " ($cooldown kol)" else "",
+                                                subtitle = skill.description + if (skill.manaEssenceCost > 0) "\nNáklady: ${skill.manaEssenceCost} Esence many" else "",
+                                                icon = if (skill.category == com.example.haremdark.models.SkillCategory.DARK_MAGIC) Icons.Default.AutoAwesome else Icons.Default.Bolt,
+                                                buttonColor = when(skill.category) {
+                                                    com.example.haremdark.models.SkillCategory.PHYSICAL_ATTACK -> Color(0xFFD32F2F)
+                                                    com.example.haremdark.models.SkillCategory.DARK_MAGIC -> Color(0xFF6A1B9A)
+                                                    com.example.haremdark.models.SkillCategory.HOLY_HEAL -> Color(0xFF43A047)
+                                                    com.example.haremdark.models.SkillCategory.SUPPORT_BUFF -> Color(0xFF1976D2)
+                                                    else -> Color(0xFF455A64)
+                                                },
+                                                enabled = cooldown == 0 && hasMana && hasEssence,
+                                                onClick = {
+                                                    fxState.triggerAbility(CombatAbilityType.CHAR_SPECIAL, skill.name, coroutineScope) {
+                                                        engine.executeCombatTurn("skill", skill.id)
+                                                    }
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }

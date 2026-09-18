@@ -13,9 +13,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +34,7 @@ import com.example.haremdark.data.StaticData
 import com.example.haremdark.models.Character
 import com.example.haremdark.models.getRelationship
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CharacterCard(
     character: Character,
@@ -43,30 +43,103 @@ fun CharacterCard(
     onFavoriteClick: () -> Unit,
     onPinClick: () -> Unit = {},
     onGrantFavorClick: () -> Unit = {},
+    onGreetClick: () -> Unit = {},
     hasActiveEvent: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val loyaltyTier = StaticData.getLoyaltyTier(character.loajalita)
-    val archetype = StaticData.ARCHETYPES[character.archetypeId]
-    val phase = StaticData.DEGRADATION_PHASES[character.fazeZkazenosti]
-    val affinityTier = AffinityData.getTierForPoints(character.affinityPoints)
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    onGreetClick()
+                    false // Don't actually dismiss
+                }
+                SwipeToDismissBoxValue.EndToStart -> {
+                    onGrantFavorClick()
+                    false // Don't actually dismiss
+                }
+                else -> false
+            }
+        }
+    )
 
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+    SwipeToDismissBox(
+        state = dismissState,
+        backgroundContent = {
+            val direction = dismissState.dismissDirection
+            val color = when (direction) {
+                SwipeToDismissBoxValue.StartToEnd -> MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                SwipeToDismissBoxValue.EndToStart -> Color(0xFFFFD700).copy(alpha = 0.8f)
+                else -> Color.Transparent
+            }
+            val alignment = when (direction) {
+                SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
+                SwipeToDismissBoxValue.EndToStart -> Alignment.CenterEnd
+                else -> Alignment.Center
+            }
+            val icon = when (direction) {
+                SwipeToDismissBoxValue.StartToEnd -> Icons.Default.FavoriteBorder
+                SwipeToDismissBoxValue.EndToStart -> Icons.Default.AutoAwesome
+                else -> Icons.Default.Info
+            }
+            val label = when (direction) {
+                SwipeToDismissBoxValue.StartToEnd -> "Pozdravit"
+                SwipeToDismissBoxValue.EndToStart -> "Udělit přízeň"
+                else -> ""
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(vertical = 4.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(color),
+                contentAlignment = alignment
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (direction == SwipeToDismissBoxValue.EndToStart) {
+                        Text(label, fontWeight = FontWeight.Bold, color = Color.Black)
+                    }
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = label,
+                        tint = if (direction == SwipeToDismissBoxValue.EndToStart) Color.Black else Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    if (direction == SwipeToDismissBoxValue.StartToEnd) {
+                        Text(label, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+            }
+        },
+        enableDismissFromStartToEnd = true,
+        enableDismissFromEndToStart = true
     ) {
-        Column(
-            modifier = Modifier
+        val loyaltyTier = StaticData.getLoyaltyTier(character.loajalita)
+        val archetype = StaticData.ARCHETYPES[character.archetypeId]
+        val phase = StaticData.DEGRADATION_PHASES[character.fazeZkazenosti]
+        val affinityTier = AffinityData.getTierForPoints(character.affinityPoints)
+
+        Card(
+            modifier = modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .padding(vertical = 4.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
             // Header Row: Avatar, Name, Badges, Favorite Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -346,43 +419,72 @@ fun CharacterCard(
                 scaleAnim.animateTo(1f, animationSpec = androidx.compose.animation.core.tween(100))
             }
 
-            // Affinity Tier & Passive Thought Snippet
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = Color(affinityTier.colorHex).copy(alpha = 0.1f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(affinityTier.colorHex).copy(alpha = 0.25f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .graphicsLayer {
-                        scaleX = scaleAnim.value
-                        scaleY = scaleAnim.value
-                    }
-            ) {
-                Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(affinityTier.icon, fontSize = 13.sp)
-                        Text(
-                            text = "Úr. ${affinityTier.level} ${affinityTier.title} (${character.affinityPoints % 100}/100 pts)",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(affinityTier.colorHex)
-                        )
-                    }
-                    LinearProgressIndicator(
-                        progress = { (character.affinityPoints % 100 / 100f).coerceIn(0f, 1f) },
+                    // Affinity Tier & Passive Thought Snippet
+                    val nextTierInfo = AffinityData.TIERS.firstOrNull { it.level == affinityTier.level + 1 }
+                    val (currentInTier, tierSpan) = AffinityData.getProgressInTier(character.affinityPoints)
+                    val tierProgress = (currentInTier.toFloat() / tierSpan.toFloat()).coerceIn(0f, 1f)
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(affinityTier.colorHex).copy(alpha = 0.1f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(affinityTier.colorHex).copy(alpha = 0.25f)),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp)),
-                        color = Color(affinityTier.colorHex),
-                        trackColor = Color(affinityTier.colorHex).copy(alpha = 0.2f)
-                    )
-                    Text(
-                        text = "• „${AffinityData.getRandomActiveDialogue(character.affinityPoints, character.archetypeId)}“",
+                            .graphicsLayer {
+                                scaleX = scaleAnim.value
+                                scaleY = scaleAnim.value
+                            }
+                    ) {
+                        Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(affinityTier.icon, fontSize = 13.sp)
+                                    Text(
+                                        text = "Lvl ${affinityTier.level} ${affinityTier.title}",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(affinityTier.colorHex)
+                                    )
+                                }
+                                
+                                if (nextTierInfo != null) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = "K ${nextTierInfo.icon}",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        )
+                                        Text(
+                                            text = "${currentInTier}/${tierSpan}",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = Color(affinityTier.colorHex)
+                                        )
+                                    }
+                                }
+                            }
+                            LinearProgressIndicator(
+                                progress = { tierProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(2.dp)),
+                                color = Color(affinityTier.colorHex),
+                                trackColor = Color(affinityTier.colorHex).copy(alpha = 0.2f)
+                            )
+                            Text(
+                                text = "• „${AffinityData.getRandomActiveDialogue(character.affinityPoints, character.archetypeId)}“",
                         fontSize = 10.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
                         fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
@@ -546,6 +648,7 @@ fun CharacterCard(
             }
         }
     }
+}
 }
 
 @OptIn(ExperimentalFoundationApi::class)

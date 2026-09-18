@@ -111,61 +111,100 @@ fun HomeScreen(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(
-                        text = "Přehled Zdrojů",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        ResourceItem(
-                            icon = Icons.Default.MonetizationOn, 
-                            color = Color(0xFFFFD700),
-                            label = "Zlato",
-                            value = "${player.gold}",
-                            progress = null
+                        Text(
+                            text = "Materiální a Magické Zdroje",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
-                        ResourceItem(
-                            icon = Icons.Default.Bolt, 
-                            color = Color(0xFFE91E63),
-                            label = "Sex Energie",
-                            value = "${player.sexEnergy} / ${player.maxSexEnergy}",
-                            progress = player.sexEnergy.toFloat() / player.maxSexEnergy.toFloat().coerceAtLeast(1f)
-                        )
-                        ResourceItem(
-                            icon = Icons.Default.DarkMode, 
-                            color = Color(0xFF9C27B0),
-                            label = "Temná Síla",
-                            value = "${player.darkEnergy} / ${player.maxDarkEnergy}",
-                            progress = player.darkEnergy.toFloat() / player.maxDarkEnergy.toFloat().coerceAtLeast(1f)
-                        )
-                    }
-                    
-                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceAround
-                    ) {
-                        ResourceItem(
-                            icon = Icons.Default.Groups, 
-                            color = Color(0xFF2196F3),
-                            label = "Harém",
-                            value = "${gameState.characters.size} Dívek",
-                            progress = null
-                        )
-                        ResourceItem(
-                            icon = Icons.Default.LocationCity, 
-                            color = Color(0xFF00E5FF),
-                            label = "Území",
-                            value = "${gameState.territories.count { it.level > 0 }}/5 Zón",
-                            progress = gameState.territories.count { it.level > 0 }.toFloat() / 5f
-                        )
-                    }
+                        
+                        // First Row: Primary Resources
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            ResourceItem(
+                                icon = Icons.Default.MonetizationOn, 
+                                color = Color(0xFFFFD700),
+                                label = "Zlato",
+                                value = "${player.gold}",
+                                progress = null
+                            )
+                            ResourceItem(
+                                icon = Icons.Default.Science, 
+                                color = Color(0xFF00E676),
+                                label = "Mana Esence",
+                                value = "${player.manaEssence}",
+                                progress = null
+                            )
+                            ResourceItem(
+                                icon = Icons.Default.Handshake, 
+                                color = Color(0xFF03A9F4),
+                                label = "Vliv",
+                                value = "${player.influence} / ${player.maxInfluence}",
+                                progress = player.influence.toFloat() / player.maxInfluence.toFloat().coerceAtLeast(1f)
+                            )
+                        }
+                        
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                        
+                        // Second Row: Vital Energies
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            ResourceItem(
+                                icon = Icons.Default.Bolt, 
+                                color = Color(0xFFE91E63),
+                                label = "Sex Energie",
+                                value = "${player.sexEnergy} / ${player.maxSexEnergy}",
+                                progress = player.sexEnergy.toFloat() / player.maxSexEnergy.toFloat().coerceAtLeast(1f)
+                            )
+                            ResourceItem(
+                                icon = Icons.Default.DarkMode, 
+                                color = Color(0xFF9C27B0),
+                                label = "Temná Síla",
+                                value = "${player.darkEnergy} / ${player.maxDarkEnergy}",
+                                progress = player.darkEnergy.toFloat() / player.maxDarkEnergy.toFloat().coerceAtLeast(1f)
+                            )
+                            ResourceItem(
+                                icon = Icons.Default.WaterDrop, 
+                                color = Color(0xFF80D8FF),
+                                label = "Mana (MP)",
+                                value = "${player.mana} / ${player.maxMana}",
+                                progress = player.mana.toFloat() / player.maxMana.toFloat().coerceAtLeast(1f)
+                            )
+                        }
+                        
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                        
+                        // Third Row: Empire Stats
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            ResourceItem(
+                                icon = Icons.Default.Groups, 
+                                color = Color(0xFF2196F3),
+                                label = "Harém",
+                                value = "${gameState.characters.size} Dívek",
+                                progress = null
+                            )
+                            ResourceItem(
+                                icon = Icons.Default.LocationCity, 
+                                color = Color(0xFF00E5FF),
+                                label = "Území",
+                                value = "${gameState.territories.count { it.level > 0 }}/5 Zón",
+                                progress = gameState.territories.count { it.level > 0 }.toFloat() / 5f
+                            )
+                            ResourceItem(
+                                icon = Icons.Default.TrendingUp, 
+                                color = Color(0xFF4CAF50),
+                                label = "Prestiž",
+                                value = "${player.prestige} ⭐",
+                                progress = null
+                            )
+                        }
                 }
             }
         }
