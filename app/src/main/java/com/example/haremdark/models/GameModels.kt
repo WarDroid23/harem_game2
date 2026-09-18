@@ -1,6 +1,7 @@
 package com.example.haremdark.models
 
 import kotlinx.serialization.Serializable
+import com.example.haremdark.models.BestiaryEntry
 
 @Serializable
 enum class CombatStrategy(val displayName: String, val icon: String, val description: String) {
@@ -76,6 +77,7 @@ data class InventoryItem(
     val combatBonus: Int = 0,
     val defenseBonus: Int = 0,
     val hpBonus: Int = 0,
+    val synergyBuffValue: Float = 0f,
     val source: String = "Obchod", // "Průzkum", "Boj", "Alchymie", "Úkol", "Dar", "Obchod"
     var isStored: Boolean = false,
     var isFavorite: Boolean = false
@@ -716,7 +718,8 @@ data class GameSave(
     val activeLoadoutId: String? = null,
     val savedPartyFormations: List<PartyFormation> = emptyList(),
     val fogOfWarEnabled: Boolean = true,
-    val mapBookmarks: List<MapBookmark> = emptyList()
+    val mapBookmarks: List<MapBookmark> = emptyList(),
+    val bestiaryEntries: List<BestiaryEntry> = emptyList()
 )
 
 @Serializable

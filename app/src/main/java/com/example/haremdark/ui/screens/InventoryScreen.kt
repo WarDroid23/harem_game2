@@ -91,6 +91,7 @@ fun getItemCategoryKey(item: InventoryItem): String {
     return when {
         cat.contains("gift") || cat.contains("dar") || item.id.startsWith("gift_") || item.id == "drahy_obojek" -> "gift"
         cat.contains("quest") || cat.contains("artifact") || cat.contains("key") || cat.contains("relic") || cat.contains("document") || item.id.contains("pecet") || item.id.contains("klic") || item.id.contains("listina") -> "quest"
+        item.synergyBuffValue > 0 || cat == "synergy" -> "synergy"
         else -> "combat"
     }
 }
@@ -187,6 +188,7 @@ fun InventoryScreen(
         list = when (selectedTab) {
             0 -> list.filter { getItemCategoryKey(it) == "gift" }
             1 -> list.filter { getItemCategoryKey(it) == "combat" }
+            5 -> list.filter { getItemCategoryKey(it) == "synergy" }
             2 -> list.filter { getItemCategoryKey(it) == "quest" }
             else -> list
         }
@@ -262,6 +264,7 @@ fun InventoryScreen(
     val totalInventoryValue = remember(allCombinedItems) { allCombinedItems.sumOf { it.price * it.count } }
     val giftItemsCount = remember(allCombinedItems) { allCombinedItems.filter { getItemCategoryKey(it) == "gift" }.sumOf { it.count } }
     val combatItemsCount = remember(allCombinedItems) { allCombinedItems.filter { getItemCategoryKey(it) == "combat" }.sumOf { it.count } }
+    val synergyItemsCount = remember(allCombinedItems) { allCombinedItems.filter { getItemCategoryKey(it) == "synergy" }.sumOf { it.count } }
     val questItemsCount = remember(allCombinedItems) { allCombinedItems.filter { getItemCategoryKey(it) == "quest" }.sumOf { it.count } }
 
     Column(
@@ -460,6 +463,15 @@ fun InventoryScreen(
                 selected = selectedTab == 1,
                 accentColor = Color(0xFF4CAF50),
                 onClick = { selectedTab = 1 },
+                modifier = Modifier.weight(1f)
+            )
+            CategoryTabChip(
+                title = "Synergie",
+                count = synergyItemsCount,
+                icon = "✨",
+                selected = selectedTab == 5,
+                accentColor = Color(0xFFE91E63),
+                onClick = { selectedTab = 5 },
                 modifier = Modifier.weight(1f)
             )
             CategoryTabChip(

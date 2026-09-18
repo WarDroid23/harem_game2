@@ -20,6 +20,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import com.example.haremdark.models.InventoryItem
+import com.example.haremdark.models.BestiaryEntry
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -5350,11 +5351,36 @@ class GameEngine(private val context: Context) {
             current.copy(
                 player = updatedPlayer,
                 characters = updatedCharacters,
+                bestiaryEntries = updateBestiary(current.bestiaryEntries, session.enemies),
                 gameLog = current.gameLog + "⚔️ Vítězství v aréně [${rewards.rank}]: +${rewards.gold} Zlata, MVP: ${rewards.mvpName}"
             )
         }
         autoSave()
         return logs
+    }
+
+    private fun updateBestiary(currentEntries: List<BestiaryEntry>, defeatedEnemies: List<com.example.haremdark.models.CombatEnemy>): List<BestiaryEntry> {
+        val mutableEntries = currentEntries.toMutableList()
+        defeatedEnemies.forEach { enemy ->
+            val existingIdx = mutableEntries.indexOfFirst { it.enemyId == enemy.id }
+            if (existingIdx != -1) {
+                val entry = mutableEntries[existingIdx]
+                mutableEntries[existingIdx] = entry.copy(encounterCount = entry.encounterCount + 1, isDiscovered = true)
+            } else {
+                mutableEntries.add(
+                    BestiaryEntry(
+                        enemyId = enemy.id,
+                        name = enemy.name,
+                        icon = enemy.icon,
+                        title = enemy.title,
+                        description = enemy.loreDescription,
+                        encounterCount = 1,
+                        isDiscovered = true
+                    )
+                )
+            }
+        }
+        return mutableEntries
     }
 
     fun unlockCharacterSkillWithXp(characterId: String, nodeId: String): Pair<Boolean, String> {

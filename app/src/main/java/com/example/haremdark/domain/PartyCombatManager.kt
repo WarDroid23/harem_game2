@@ -593,17 +593,39 @@ object PartyCombatManager {
                 return@forEach
             }
 
+            // Tactic-based AI
+            val synergyLevel = session.activeSynergies.size // Using number of active synergies as a proxy
+            val hpRatio = enemy.hpPercent
+
+            // Adjust behavior based on tactic
+            val isAggressive = when (enemy.tactic) {
+                EnemyTactic.AGGRESSIVE -> hpRatio < 0.8f || synergyLevel > 1
+                EnemyTactic.BALANCED -> hpRatio < 0.5f && synergyLevel > 2
+                EnemyTactic.DEFENSIVE -> hpRatio < 0.2f
+                EnemyTactic.CAUTIOUS -> false
+            }
+            
+            // Tactic affects damage or special chance
+            val specialChanceModifier = when (enemy.tactic) {
+                EnemyTactic.AGGRESSIVE -> 1.5f
+                EnemyTactic.BALANCED -> 1.0f
+                EnemyTactic.DEFENSIVE -> 0.5f
+                EnemyTactic.CAUTIOUS -> 0.2f
+            }
+
             // Find target (Prefer taunting tanks, or lowest HP)
             val taunters = aliveParty.filter { p -> p.statusEffects.any { it.type == "TAUNT" } }
-            val target = if (taunters.isNotEmpty()) {
+            val target = if (taunters.isNotEmpty() && enemy.tactic != EnemyTactic.AGGRESSIVE) {
                 taunters.random()
             } else {
-                aliveParty.minByOrNull { it.hp } ?: aliveParty.random()
+                // Aggressive enemies prefer lowest HP, others prefer highest defense/others
+                if (isAggressive) aliveParty.minByOrNull { it.hp } ?: aliveParty.random()
+                else aliveParty.random()
             }
 
             // Calculate enemy damage
-            val isSpecial = enemy.isBoss && Random.nextInt(100) < enemy.specialAttackChance
-            val baseDmg = if (isSpecial) (enemy.attack * 1.5f).toInt() else enemy.attack + Random.nextInt(-2, 4)
+            val isSpecial = (enemy.isBoss || isAggressive) && Random.nextInt(100) < (enemy.specialAttackChance * specialChanceModifier)
+            val baseDmg = if (isSpecial) (enemy.attack * (if(isAggressive) 1.8f else 1.5f)).toInt() else enemy.attack + Random.nextInt(-2, 4)
             val defMitigation = target.defense * 0.4f
             val guardReduction = if (target.isDefending) 0.40f else 1.0f
 
@@ -645,8 +667,12 @@ object PartyCombatManager {
             // Tick status effects
             member.statusEffects.removeAll { effect ->
                 effect.durationTurns -= 1
-                if (effect.type == "POISON" || effect.type == "BLEED") {
+                if (effect.type == "POISON" || effect.type == "BLEED" || effect.type == "BURN") {
                     member.hp = (member.hp - effect.value).coerceAtLeast(0)
+                } else if (effect.type == "FREEZE") {
+                    member.isDefending = false // Frozen combatants cannot defend
+                } else if (effect.type == "SHOCK") {
+                    member.mana = (member.mana - effect.value).coerceAtLeast(0)
                 }
                 effect.durationTurns <= 0
             }
@@ -655,13 +681,13 @@ object PartyCombatManager {
         session.enemies.forEach { enemy ->
             enemy.statusEffects.removeAll { effect ->
                 effect.durationTurns -= 1
-                if (effect.type == "POISON" || effect.type == "BLEED") {
+                if (effect.type == "POISON" || effect.type == "BLEED" || effect.type == "BURN") {
                     enemy.hp = (enemy.hp - effect.value).coerceAtLeast(0)
                     enemyLogs.add(
                         CombatLogEntry(
                             turn = session.currentRound,
                             type = "system",
-                            message = "🩸 ${enemy.name} utrpěl ${effect.value} poškození krvácením / jedem!",
+                            message = "${effect.icon} ${enemy.name} utrpěl ${effect.value} poškození efektem ${effect.name}!",
                             actor = "Stavový efekt"
                         )
                     )

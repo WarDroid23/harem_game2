@@ -19,6 +19,10 @@ enum class CombatRole(
     ASSASSIN_BLADE("Stínová vražedkyně", "🗡️", "Blesková rychlost, ignorace zbroje a okamžité popravy", "Rychlost & Průraz")
 }
 
+enum class Element {
+    PHYSICAL, FIRE, ICE, LIGHTNING, DARK, HOLY
+}
+
 /**
  * Status effects active on combatants.
  */
@@ -27,10 +31,11 @@ data class CombatStatusEffect(
     val id: String,
     val name: String,
     val icon: String,
-    val type: String, // "BLEED", "POISON", "STUN", "ATK_BUFF", "DEF_BUFF", "SHIELD", "TAUNT", "REGEN", "SILENCE"
+    val type: String, // "BLEED", "POISON", "STUN", "ATK_BUFF", "DEF_BUFF", "SHIELD", "TAUNT", "REGEN", "SILENCE", "BURN", "FREEZE", "SHOCK"
     val value: Int = 0,
     var durationTurns: Int = 2,
-    val description: String = ""
+    val description: String = "",
+    val element: Element = Element.PHYSICAL
 )
 
 /**
@@ -137,11 +142,19 @@ data class CombatEnemy(
     val rewardGold: Int = 80,
     val rewardXp: Int = 40,
     val loreDescription: String = "",
-    val preferredTargetRole: CombatRole? = null
+    val preferredTargetRole: CombatRole? = null,
+    val tactic: EnemyTactic = EnemyTactic.BALANCED
 ) {
     val isAlive: Boolean get() = hp > 0
     val hpPercent: Float get() = if (maxHp > 0) (hp.toFloat() / maxHp.toFloat()).coerceIn(0f, 1f) else 0f
     val isStunned: Boolean get() = statusEffects.any { it.type == "STUN" && it.durationTurns > 0 }
+}
+
+enum class EnemyTactic {
+    BALANCED,
+    AGGRESSIVE,
+    DEFENSIVE,
+    CAUTIOUS
 }
 
 /**
