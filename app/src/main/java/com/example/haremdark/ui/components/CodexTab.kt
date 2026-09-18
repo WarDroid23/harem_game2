@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import com.airbnb.lottie.compose.*
+import com.example.haremdark.data.CharacterLoreCatalog
 import com.example.haremdark.models.GameSave
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -106,9 +107,22 @@ fun CodexTab(gameState: GameSave, modifier: Modifier = Modifier) {
     // Track "seen" ids in this session to highlight truly "newly unlocked" ones
     val seenIds = rememberSaveable { mutableStateOf(setOf<String>()) }
 
+    val unlockedLoreEntries = CharacterLoreCatalog.CONNECTIONS.filter { conn ->
+        gameState.player.unlockedLoreConnectionIds.contains(conn.id)
+    }.map { conn ->
+        CodexEntry(
+            id = conn.id,
+            title = conn.title,
+            category = "Příběhy postav",
+            icon = "💖",
+            content = "${conn.loreDescription}\n\nSynergie: ${conn.synergyBonusText}",
+            tags = listOf("postavy", "vztahy", "lore")
+        )
+    }
+
     val unlockedEntries = CODEX_ENTRIES.filter { entry ->
         gameState.player.unlockedCodexIds.contains(entry.id) || entry.id == "harem_basics" || entry.id == "dominium_history"
-    }
+    } + unlockedLoreEntries
 
     val filteredEntries = unlockedEntries.filter { entry ->
         val matchesSearch = entry.title.contains(searchQuery, ignoreCase = true) ||

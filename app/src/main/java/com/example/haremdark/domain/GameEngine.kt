@@ -2326,6 +2326,41 @@ class GameEngine(private val context: Context) {
         return Pair(true, msg)
     }
 
+    fun craftItem(recipeId: String): Pair<Boolean, String> {
+        val recipe = GameContent.ALCHEMY_RECIPES.find { it.id == recipeId }
+            ?: return Pair(false, "Recept nenalezen.")
+        val current = _gameState.value
+        val p = current.player
+
+        if (p.gold < recipe.goldCost) {
+            return Pair(false, "Nedostatek zlata pro alchymii (${p.gold}/${recipe.goldCost})!")
+        }
+        if (p.darkEnergy < recipe.darkCost) {
+            return Pair(false, "Nedostatek temné energie (${p.darkEnergy}/${recipe.darkCost})!")
+        }
+
+        val msg = "🧪 Uvařil jsi ${recipe.resultItem.name}!"
+        SoundEffectManager.playHarem(HaremSound.CRAFTING_SUCCESS)
+        updateState { state ->
+            val newItems = state.player.items.map { it.copy() }.toMutableList()
+            val existing = newItems.firstOrNull { it.id == recipe.resultItem.id }
+            if (existing != null) {
+                existing.count += 1
+            } else {
+                newItems.add(recipe.resultItem.copy())
+            }
+
+            val newP = state.player.copy(
+                gold = (state.player.gold - recipe.goldCost).coerceAtLeast(0),
+                darkEnergy = (state.player.darkEnergy - recipe.darkCost).coerceAtLeast(0),
+                items = newItems
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newP, gameLog = logs)
+        }
+        return Pair(true, msg)
+    }
+
     // --- UNDERWORLD DRUGS & CARTEL SYSTEM ---
 
     fun craftDrug(drugId: String, batchCount: Int = 1): Pair<Boolean, String> {
@@ -2992,9 +3027,32 @@ class GameEngine(private val context: Context) {
             SoundEffectManager.playHarem(HaremSound.GIFT)
             com.example.haremdark.domain.VoiceManager.speak(unlockedDialogue, character.archetypeId)
         }
+        
+        // Check for skin unlock
+        val updatedChar = _gameState.value.characters.firstOrNull { it.id == characterId }
+        if (updatedChar != null) {
+            checkAndUnlockBondSkin(updatedChar)
+        }
+        
         addPlayerXp(12)
         progressMission("GIFT", 1, characterId = characterId)
         return Pair(true, msg)
+    }
+
+    private fun checkAndUnlockBondSkin(character: Character) {
+        // Logic to unlock skin based on affinity
+        val skinName = "Bond_${character.name.take(3)}_${character.affinityLevel}"
+        if (character.affinityLevel >= 5 && !character.unlockedSkins.contains(skinName)) {
+            updateState { state ->
+                val updatedCharacters = state.characters.map { c ->
+                    if (c.id == character.id) {
+                        c.copy(unlockedSkins = (c.unlockedSkins + skinName).toMutableList())
+                    } else c
+                }
+                state.copy(characters = updatedCharacters)
+            }
+            addLog("✨ Odemčen exkluzivní 'Bond' skin pro ${character.name}!")
+        }
     }
 
     fun purchaseGiftToInventory(giftId: String, count: Int = 1): Pair<Boolean, String> {
@@ -3138,6 +3196,12 @@ class GameEngine(private val context: Context) {
         } else {
             SoundEffectManager.playHarem(HaremSound.GIFT)
             VoiceManager.speak(reactionQuote, character.archetypeId)
+        }
+
+        // Check for skin unlock
+        val updatedChar = _gameState.value.characters.firstOrNull { it.id == characterId }
+        if (updatedChar != null) {
+            checkAndUnlockBondSkin(updatedChar)
         }
 
         addPlayerXp(15 * count)
@@ -5434,6 +5498,7 @@ class GameEngine(private val context: Context) {
             val newList = current.characters.toMutableList()
             newList[charIndex] = updatedChar
             result = Pair(true, "Úspěšně odemčena schopnost '${node.name}'!")
+            SoundEffectManager.playHarem(HaremSound.SKILL_UNLOCK)
 
             current.copy(
                 characters = newList,
@@ -5495,6 +5560,7 @@ class GameEngine(private val context: Context) {
             val newList = current.characters.toMutableList()
             newList[charIndex] = updatedChar
             result = Pair(true, "Úspěšně odemčena schopnost '${node.name}' pomocí dovednostního bodu!")
+            SoundEffectManager.playHarem(HaremSound.SKILL_UNLOCK)
 
             current.copy(
                 characters = newList,

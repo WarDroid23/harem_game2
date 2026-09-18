@@ -2,6 +2,7 @@ package com.example.haremdark.models
 
 import kotlinx.serialization.Serializable
 import com.example.haremdark.models.BestiaryEntry
+import com.example.haremdark.models.InfluenceLogEntry
 
 @Serializable
 enum class CombatStrategy(val displayName: String, val icon: String, val description: String) {
@@ -247,7 +248,8 @@ data class Character(
     var favorBoostDaysRemaining: Int = 0,
     var preferredCombatRole: CombatStrategy = CombatStrategy.BALANCED,
     var moodScore: Int = 50, // 0-100 scale
-    var dailyInteractionsCount: Int = 0
+    var dailyInteractionsCount: Int = 0,
+    var unlockedSkins: MutableList<String> = mutableListOf("default")
 ) {
     var loyalty: Int
         get() = loajalita
@@ -548,6 +550,7 @@ data class Player(
     var equippedWeaponIndex: Int = 0,
     var activeTitle: String? = null,
     var unlockedGlobalMilestones: MutableSet<String> = mutableSetOf(),
+    var unlockedLoreConnectionIds: MutableSet<String> = mutableSetOf(),
     var unlockedAvatarFrames: MutableSet<String> = mutableSetOf("Bronzový rám rozkoše"),
     var unlockedTitleTags: MutableSet<String> = mutableSetOf("Neznámý vládce"),
     var selectedAvatarFrame: String = "Bronzový rám rozkoše",
@@ -719,7 +722,8 @@ data class GameSave(
     val savedPartyFormations: List<PartyFormation> = emptyList(),
     val fogOfWarEnabled: Boolean = true,
     val mapBookmarks: List<MapBookmark> = emptyList(),
-    val bestiaryEntries: List<BestiaryEntry> = emptyList()
+    val bestiaryEntries: List<BestiaryEntry> = emptyList(),
+    val influenceLog: List<InfluenceLogEntry> = emptyList()
 )
 
 @Serializable

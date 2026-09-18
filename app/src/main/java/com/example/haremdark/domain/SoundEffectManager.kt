@@ -25,7 +25,9 @@ enum class HaremSound {
     SEDUCE,
     AFFINITY_UP,
     SECRET_WHISPER,
-    FAIL
+    FAIL,
+    CRAFTING_SUCCESS,
+    SKILL_UNLOCK
 }
 
 enum class EventSound {
@@ -417,6 +419,14 @@ object SoundEffectManager {
                     HaremSound.FAIL -> {
                         // Low descending failure tone (330Hz -> 220Hz)
                         playPcmTrack(synthesizeDescending(329.6, 220.0, 0.35))
+                    }
+                    HaremSound.CRAFTING_SUCCESS -> {
+                        // Resonant success chime
+                        playPcmTrack(synthesizeArpeggio(listOf(523.25, 659.25, 783.99, 1046.5), 0.1, 0.7f))
+                    }
+                    HaremSound.SKILL_UNLOCK -> {
+                        // Triumphant chime for skill unlock
+                        playPcmTrack(synthesizeFanfare(listOf(659.25, 783.99, 1046.5, 1318.51), 0.15))
                     }
                 }
             } catch (e: Exception) {
