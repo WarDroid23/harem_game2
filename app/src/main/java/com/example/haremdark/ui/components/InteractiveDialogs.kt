@@ -105,7 +105,7 @@ fun CharacterDetailDialog(
     val portraitRes = StaticData.getPortraitForArchetype(currentActiveCharacter.archetypeId)
 
     var selectedSection by remember { mutableIntStateOf(initialTab) }
-    val sectionTabs = listOf("📖 Životopis", "📊 Profil", "🛡️ Výbava", "💖 Náklonnost", "📖 Příběhy Pouta", "🎁 Dary", "📦 Sklad & Inventář", "⚡ Akce", "✨ Dovednosti", "🎯 Výcvik", "📋 Úkoly", "🕰️ Klíčové Momenty", "🖼️ Galerie", "🏆 Milníky", "📜 Historie")
+    val sectionTabs = listOf("📖 Životopis", "📊 Profil", "🛡️ Výbava", "💖 Náklonnost", "📖 Příběhy Pouta", "🎙️ Archiv & Hlasy", "🎁 Dary", "📦 Sklad & Inventář", "⚡ Akce", "✨ Dovednosti", "🎯 Výcvik", "📋 Úkoly", "🕰️ Klíčové Momenty", "🖼️ Galerie", "🏆 Milníky", "📜 Historie")
     var activeEmote by remember { mutableStateOf<String?>(null) }
     var emoteKey by remember { mutableLongStateOf(0L) }
 
@@ -494,7 +494,13 @@ fun CharacterDetailDialog(
                             engine = engine,
                             onTriggerEmotion = triggerEmotionReaction
                         )
-                        5 -> GiftingAndItemsTab(
+                        5 -> CharacterArchiveTab(
+                            character = currentActiveCharacter,
+                            player = player,
+                            engine = engine,
+                            onTriggerEmotion = triggerEmotionReaction
+                        )
+                        6 -> GiftingAndItemsTab(
                             character = currentActiveCharacter,
                             player = player,
                             onGiveDirectGift = { gift ->
@@ -505,7 +511,7 @@ fun CharacterDetailDialog(
                             engine = engine,
                             onTriggerAffinityEffect = triggerAffinityEffect
                         )
-                        6 -> {
+                        7 -> {
                             if (engine != null) {
                                 InventoryManagementPanel(
                                     gameState = engine.gameState.value,
@@ -529,7 +535,7 @@ fun CharacterDetailDialog(
                                 )
                             }
                         }
-                        7 -> InteractionsSectionTab(
+                        8 -> InteractionsSectionTab(
                             character = currentActiveCharacter,
                             player = player,
                             onExecuteInteraction = { inter ->
@@ -549,25 +555,25 @@ fun CharacterDetailDialog(
                             onRent = onRent,
                             onUpgradeSkill = onUpgradeSkill
                         )
-                        8 -> SkillTreeTab(
+                        9 -> SkillTreeTab(
                             character = currentActiveCharacter,
                             engine = engine,
                             onUpgradeSkill = onUpgradeSkill
                         )
-                        9 -> TrainingMiniGameComponent(
+                        10 -> TrainingMiniGameComponent(
                             character = currentActiveCharacter,
                             engine = engine
                         )
-                        10 -> DailyAssignmentsTab(
+                        11 -> DailyAssignmentsTab(
                             character = currentActiveCharacter,
                             engine = engine
                         )
-                        11 -> KeyMomentsTab(
+                        12 -> KeyMomentsTab(
                             character = currentActiveCharacter
                         )
-                        12 -> MemoryGalleryTab(character = currentActiveCharacter)
-                        13 -> MilestonesTab(character = currentActiveCharacter)
-                        14 -> SlaveInteractionLogTab(
+                        13 -> MemoryGalleryTab(character = currentActiveCharacter)
+                        14 -> MilestonesTab(character = currentActiveCharacter)
+                        15 -> SlaveInteractionLogTab(
                             character = currentActiveCharacter,
                             engine = engine
                         )

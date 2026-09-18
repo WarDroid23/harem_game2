@@ -230,7 +230,9 @@ data class Character(
     var totalTrainingSessions: Int = 0,
     var completedPresets: MutableSet<String> = mutableSetOf(),
     var dailyAssignment: String? = null,
-    var completedBondStories: MutableSet<String> = mutableSetOf()
+    var completedBondStories: MutableSet<String> = mutableSetOf(),
+    var unlockedVoiceLines: MutableSet<String> = mutableSetOf(),
+    var unlockedEmotions: MutableSet<String> = mutableSetOf("BLUSH", "CHEER", "LOVE", "SHY", "SPARKLE")
 ) {
     var loyalty: Int
         get() = loajalita

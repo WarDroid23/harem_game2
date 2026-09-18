@@ -50,7 +50,12 @@ fun HaremArchiveTab(gameState: GameSave, modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         TabRow(
-            selectedTabIndex = if (currentSubTab == "Archiv") 0 else 1,
+            selectedTabIndex = when (currentSubTab) {
+                "Archiv" -> 0
+                "Hlasy" -> 1
+                "Kodex" -> 2
+                else -> 0
+            },
             containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(top = 8.dp)
@@ -58,7 +63,12 @@ fun HaremArchiveTab(gameState: GameSave, modifier: Modifier = Modifier) {
             Tab(
                 selected = currentSubTab == "Archiv",
                 onClick = { currentSubTab = "Archiv" },
-                text = { Text("Spisy Otrokyň", fontWeight = FontWeight.Bold) }
+                text = { Text("Spisy Dívek", fontWeight = FontWeight.Bold) }
+            )
+            Tab(
+                selected = currentSubTab == "Hlasy",
+                onClick = { currentSubTab = "Hlasy" },
+                text = { Text("🎙️ Hlasové Projevy", fontWeight = FontWeight.Bold) }
             )
             Tab(
                 selected = currentSubTab == "Kodex",
@@ -69,6 +79,22 @@ fun HaremArchiveTab(gameState: GameSave, modifier: Modifier = Modifier) {
 
         if (currentSubTab == "Kodex") {
             com.example.haremdark.ui.components.CodexTab(gameState = gameState)
+            return@Column
+        }
+
+        if (currentSubTab == "Hlasy") {
+            val sampleChar = recruitedGirls.firstOrNull() ?: Character(
+                id = "temp_1",
+                name = "Aria",
+                archetypeId = "subka",
+                affinityLevel = 6,
+                loajalita = 100
+            )
+            com.example.haremdark.ui.components.CharacterArchiveTab(
+                character = sampleChar,
+                player = gameState.player,
+                engine = null
+            )
             return@Column
         }
 

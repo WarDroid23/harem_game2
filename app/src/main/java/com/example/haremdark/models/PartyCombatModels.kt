@@ -101,7 +101,11 @@ data class PartyMember(
     val skills: List<PartyCombatSkill> = emptyList(),
     val loyaltyTierName: String = "Loajální",
     val affinityBonusDmg: Float = 1.0f,
-    val favoriteWeaponIcon: String = "🗡️"
+    val favoriteWeaponIcon: String = "🗡️",
+    val relationshipTierLevel: Int = 1,
+    val relationshipStageName: String = "Acquaintance",
+    val relationshipCombatDescription: String = "Základní bojové zapojení",
+    val combatRegenBonus: Int = 0
 ) {
     val isAlive: Boolean get() = hp > 0
     val hpPercent: Float get() = if (maxHp > 0) (hp.toFloat() / maxHp.toFloat()).coerceIn(0f, 1f) else 0f

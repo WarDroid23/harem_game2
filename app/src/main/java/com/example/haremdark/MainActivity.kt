@@ -476,6 +476,16 @@ class MainActivity : ComponentActivity() {
                                         navController.navigate("settings") { launchSingleTop = true }
                                     }
                                 )
+                                QuickNavDrawerItem(
+                                    icon = Icons.Default.Hub,
+                                    title = "Síť Vztahů (Graph)",
+                                    subtitle = "Konstelace harému & synergie",
+                                    isSelected = currentRoute == "network_graph",
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        navController.navigate("network_graph") { launchSingleTop = true }
+                                    }
+                                )
 
                                 Spacer(Modifier.height(16.dp))
                             }
@@ -604,6 +614,13 @@ class MainActivity : ComponentActivity() {
                             }
                             composable("inventory") {
                                 com.example.haremdark.ui.screens.InventoryScreen(gameState = gameState, engine = engine)
+                            }
+                            composable("network_graph") {
+                                com.example.haremdark.ui.screens.CharacterNetworkGraphScreen(
+                                    gameState = gameState,
+                                    engine = engine,
+                                    onMenuClick = { coroutineScope.launch { drawerState.open() } }
+                                )
                             }
                         }
 

@@ -190,7 +190,7 @@ fun HaremScreen(
         }
     }
 
-    val haremTabs = listOf("🔲 Mřížka", "🛏️ Komnaty", "👑 Hierarchie", "👶 Dynastie", "👗 Garderóba", "📚 Archiv", "🖼️ Galerie", "📈 Heatmap")
+    val haremTabs = listOf("🔲 Mřížka", "🛏️ Komnaty", "👑 Hierarchie", "👶 Dynastie", "👗 Garderóba", "📚 Archiv", "🖼️ Galerie", "📈 Heatmap", "🕸️ Síť Vztahů")
     
     var filterSheetExpanded by remember { mutableStateOf(false) }
     
@@ -723,6 +723,16 @@ fun HaremScreen(
                 }
                 7 -> {
                     RelationshipHeatmapTab(characters = gameState.characters)
+                }
+                8 -> {
+                    com.example.haremdark.ui.components.CharacterNetworkGraphComponent(
+                        characters = gameState.characters,
+                        player = gameState.player,
+                        engine = engine,
+                        onSelectCharacter = { char ->
+                            haremViewModel.openProfile(char)
+                        }
+                    )
                 }
             }
             }

@@ -765,20 +765,30 @@ fun PartySelectionDialog(
                                                     }
                                                 }
 
-                                                // Affinity level badge
+                                                // Affinity & Multi-Tier Relationship Stage badge
                                                 Surface(
                                                     shape = RoundedCornerShape(4.dp),
                                                     color = Color(affinityTier.colorHex).copy(alpha = 0.2f),
                                                     border = BorderStroke(0.5.dp, Color(affinityTier.colorHex).copy(alpha = 0.6f))
                                                 ) {
                                                     Text(
-                                                        text = "💖 Náklonnost: Lv.${char.affinityLevel} (${affinityTier.title} • ${char.affinityPoints}b)",
+                                                        text = "${affinityTier.icon} ${affinityTier.stageName} (Lv.${affinityTier.level})",
                                                         fontSize = 8.sp,
                                                         color = Color(affinityTier.colorHex),
                                                         fontWeight = FontWeight.Bold,
                                                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                                     )
                                                 }
+
+                                                // Combat Bonus derived from relationship tier
+                                                Text(
+                                                    text = affinityTier.combatBonusDescription,
+                                                    fontSize = 8.sp,
+                                                    color = Color(0xFFFFD54F),
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
 
                                                 // Base Stats Breakdown Bar
                                                 Row(

@@ -56,7 +56,8 @@ object PartyCombatManager {
                 val eqBonusHp = char.equipment.values.filterNotNull().sumOf { it.hpBonus }
 
                 val affinityTier = com.example.haremdark.data.AffinityData.getTierForPoints(char.affinityPoints)
-                val affinityDmgMult = 1.0f + (affinityTier.level * 0.05f) + (if (char.oblibena) 0.10f else 0f)
+                val combatBonuses = com.example.haremdark.data.AffinityData.getAffinityCombatBonuses(affinityTier.level)
+                val affinityDmgMult = (1.0f + (affinityTier.level * 0.05f) + (if (char.oblibena) 0.10f else 0f)) * (1.0f + combatBonuses.dmgMultiplierBonus)
                 val passiveBonuses = com.example.haremdark.data.CharacterSkillCatalog.calculatePassiveBonuses(char)
                 val unlockedActiveSkills = com.example.haremdark.data.CharacterSkillCatalog.getUnlockedActiveSkills(char)
                 val baseSkills = PartyCombatCatalog.getSkillsForCharacter(
@@ -67,24 +68,31 @@ object PartyCombatManager {
                 )
                 val allSkills = (baseSkills + unlockedActiveSkills).distinctBy { it.id }
 
+                val baseAtk = 18 + combatSkill * 2 + eqBonusAtk + char.fazeZkazenosti * 3 + passiveBonuses.attackBonus
+                val finalAtk = (baseAtk * (1.0f + combatBonuses.dmgMultiplierBonus)).toInt()
+
                 val member = PartyMember(
                     id = char.id,
                     name = char.name,
                     isPlayer = false,
                     archetypeId = char.archetype,
                     role = role,
-                    hp = char.hp + eqBonusHp + passiveBonuses.hpBonus,
-                    maxHp = char.maxHp + eqBonusHp + passiveBonuses.hpBonus,
+                    hp = char.hp + eqBonusHp + passiveBonuses.hpBonus + combatBonuses.hpBonus,
+                    maxHp = char.maxHp + eqBonusHp + passiveBonuses.hpBonus + combatBonuses.hpBonus,
                     mana = 50 + char.fazeZkazenosti * 5,
                     maxMana = 50 + char.fazeZkazenosti * 5,
-                    attack = 18 + combatSkill * 2 + eqBonusAtk + char.fazeZkazenosti * 3 + passiveBonuses.attackBonus,
-                    defense = 10 + (char.skills["defense"] ?: 3) + (if (role == CombatRole.TANK_GUARDIAN) 8 else 0) + passiveBonuses.defenseBonus,
+                    attack = finalAtk,
+                    defense = 10 + (char.skills["defense"] ?: 3) + (if (role == CombatRole.TANK_GUARDIAN) 8 else 0) + passiveBonuses.defenseBonus + combatBonuses.defenseBonus,
                     speed = 12 + (if (role == CombatRole.ASSASSIN_BLADE) 6 else 0) + passiveBonuses.speedBonus,
-                    critRatePercent = 10 + (if (role == CombatRole.PHYSICAL_DPS || role == CombatRole.ASSASSIN_BLADE) 15 else 0) + passiveBonuses.critBonus,
+                    critRatePercent = 10 + (if (role == CombatRole.PHYSICAL_DPS || role == CombatRole.ASSASSIN_BLADE) 15 else 0) + passiveBonuses.critBonus + combatBonuses.critBonus,
                     skills = allSkills,
-                    loyaltyTierName = affinityTier.title,
+                    loyaltyTierName = "${affinityTier.icon} ${affinityTier.title}",
                     affinityBonusDmg = affinityDmgMult,
-                    favoriteWeaponIcon = if (role == CombatRole.TANK_GUARDIAN) "🛡️" else if (role == CombatRole.DARK_SORCERESS) "🔮" else "🗡️"
+                    favoriteWeaponIcon = if (role == CombatRole.TANK_GUARDIAN) "🛡️" else if (role == CombatRole.DARK_SORCERESS) "🔮" else "🗡️",
+                    relationshipTierLevel = affinityTier.level,
+                    relationshipStageName = "${affinityTier.icon} ${affinityTier.stageName}",
+                    relationshipCombatDescription = affinityTier.combatBonusDescription,
+                    combatRegenBonus = combatBonuses.regenBonus
                 )
                 partyList.add(member)
             }
@@ -594,12 +602,18 @@ object PartyCombatManager {
             if (aliveParty.isEmpty()) return@forEach
         }
 
-        // Tick status effects & mana regen
+        // Tick status effects & mana / HP regen from relationship tiers
         session.party.forEach { member ->
             member.isDefending = false
             // Mana regen per round
             val manaRegen = 8 + session.activeSynergies.sumOf { it.manaRegenBonus }
             member.mana = (member.mana + manaRegen).coerceAtMost(member.maxMana)
+
+            // Relationship Tier HP Regeneration
+            if (member.isAlive && member.combatRegenBonus > 0 && member.hp < member.maxHp) {
+                val healedHp = member.combatRegenBonus
+                member.hp = (member.hp + healedHp).coerceAtMost(member.maxHp)
+            }
 
             // Tick status effects
             member.statusEffects.removeAll { effect ->
