@@ -247,6 +247,7 @@ data class Character(
     var favorBoostActive: Boolean = false,
     var favorBoostDaysRemaining: Int = 0,
     var preferredCombatRole: CombatStrategy = CombatStrategy.BALANCED,
+    var preferredFormation: String = "MID",
     var moodScore: Int = 50, // 0-100 scale
     var dailyInteractionsCount: Int = 0,
     var unlockedSkins: MutableList<String> = mutableListOf("default")
@@ -574,7 +575,10 @@ data class Player(
         InventoryItem("kralovska_listina", "Královská výsadní listina", "Listina s puncem královského rodu pro jednání s inkvizicí.", 1, 350, "quest", "⚜️", "Legendární", "+25 Reputace v metropoli")
     ),
     var storedItems: MutableList<InventoryItem> = mutableListOf(),
+    var equipmentFragments: MutableMap<String, Int> = mutableMapOf(),
+    var craftingResources: MutableMap<String, Int> = mutableMapOf(),
     var activePartyIds: MutableList<String> = mutableListOf(),
+    var partyFormationMap: MutableMap<String, String> = mutableMapOf(),
     var bankGold: Int = 0,
     var toxicity: Int = 0,
     var maxToxicity: Int = 100,
@@ -619,7 +623,10 @@ data class CombatSession(
     var isOver: Boolean = false,
     var victory: Boolean = false,
     var lootGained: String? = null,
-    var skillCooldowns: Map<String, Int> = emptyMap()
+    var skillCooldowns: Map<String, Int> = emptyMap(),
+    val environmentalHazard: EnvironmentalHazard? = null,
+    var hazardCountdown: Int = 2,
+    var lastHazardTriggerMessage: String? = null
 )
 
 @Serializable

@@ -229,6 +229,10 @@ class CombatVisualFxState {
     var activeBanner by mutableStateOf<Pair<CombatAbilityType, String>?>(null)
     var isCritBannerActive by mutableStateOf(false)
 
+    var activeTacticalType by mutableStateOf<TacticalAnimationType?>(null)
+    var activeTacticalKey by mutableLongStateOf(0L)
+    var activeTacticalTitle by mutableStateOf<String?>(null)
+
     val particles = mutableStateListOf<VisualParticle>()
     val floatingTexts = mutableStateListOf<FloatingDamageText>()
 
@@ -236,6 +240,18 @@ class CombatVisualFxState {
     var activeAttackerEnemyIndex by mutableStateOf<Int?>(-1)
     var hitTargetEnemyIndex by mutableStateOf<Int?>(-1)
     var hitTargetPartyIndex by mutableStateOf<Int?>(-1)
+
+    /**
+     * Dedicated trigger for tactical Lottie animations on skill usage or status triggers.
+     */
+    fun triggerTacticalLottie(
+        type: TacticalAnimationType,
+        title: String? = null
+    ) {
+        activeTacticalType = type
+        activeTacticalTitle = title ?: type.title
+        activeTacticalKey = System.currentTimeMillis()
+    }
 
     /**
      * Trigger a floating combat number on screen.
@@ -379,6 +395,19 @@ class CombatVisualFxState {
             activeBanner = Pair(type, title)
             isCritBannerActive = isCritical || type == CombatAbilityType.CRITICAL_SUPERNOVA
             flashColor = if (isCritical) Color(0xFFFFD700) else type.primaryColor
+
+            val tacticalType = when {
+                isCritical || type == CombatAbilityType.CRITICAL_SUPERNOVA -> TacticalAnimationType.CRITICAL_SUPERNOVA
+                type == CombatAbilityType.BLEED_STRIKE -> TacticalAnimationType.BLEED_TRIGGER
+                type == CombatAbilityType.DEFEND -> TacticalAnimationType.SHIELD_BARRIER_TRIGGER
+                type == CombatAbilityType.SHADOW_CURSE -> TacticalAnimationType.SHADOW_CURSE_TRIGGER
+                type == CombatAbilityType.DARK_BURST || type == CombatAbilityType.SOUL_DRAIN -> TacticalAnimationType.DARK_MAGIC_BURST
+                type == CombatAbilityType.ITEM_HEAL -> TacticalAnimationType.HOLY_HEAL
+                type == CombatAbilityType.HAREM_SUPPORT || type == CombatAbilityType.HAREM_ULTIMATE -> TacticalAnimationType.HAREM_DEVOTION
+                type == CombatAbilityType.HEAVY_STRIKE -> TacticalAnimationType.HEAVY_CRUSH
+                else -> TacticalAnimationType.SLASH_BLADE
+            }
+            triggerTacticalLottie(tacticalType, title)
 
             if (isCritical || type == CombatAbilityType.CRITICAL_SUPERNOVA) {
                 HapticManager.vibrateCritical()
@@ -643,7 +672,17 @@ fun CombatVisualFxOverlay(
             }
         }
 
-        // 4. Floating Damage / Heal Numbers
+        // 4. Tactical Lottie Battle Animation
+        fxState.activeTacticalType?.let { tacticalType ->
+            LottieTacticalBattleAnimation(
+                triggerKey = fxState.activeTacticalKey,
+                animationType = tacticalType,
+                customTitle = fxState.activeTacticalTitle,
+                sizeDp = 160.dp
+            )
+        }
+
+        // 5. Floating Damage / Heal Numbers
         fxState.floatingTexts.forEach { item ->
             val elapsed = (System.currentTimeMillis() - item.startTime).coerceAtLeast(0)
             val lifeRatio = (elapsed / 900f).coerceIn(0f, 1f)

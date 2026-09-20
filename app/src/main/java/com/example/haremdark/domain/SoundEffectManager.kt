@@ -41,12 +41,19 @@ enum class CombatSound {
     COMBAT_START,
     PLAYER_SLASH,
     CRITICAL_HIT,
+    CRITICAL_SUPERNOVA,
     DARK_SPELL,
     SHIELD_BLOCK,
     ENEMY_STRIKE,
     BOSS_SPECIAL,
     VICTORY,
-    DEFEAT
+    DEFEAT,
+    DODGE_EVADE,
+    SKILL_ACTIVATION,
+    STATUS_TRIGGER_BLEED,
+    STATUS_TRIGGER_POISON,
+    STATUS_TRIGGER_STUN,
+    HEAL_RESTORE
 }
 
 enum class LocationAmbientSound(
@@ -503,6 +510,34 @@ object SoundEffectManager {
                         // Descending somber minor chords
                         playPcmTrack(synthesizeDescending(392.0, 220.0, 0.6))
                     }
+                    CombatSound.DODGE_EVADE -> {
+                        // Agile wind displacement whoosh with swift pitch drop
+                        playPcmTrack(synthesizeDodgeEvade())
+                    }
+                    CombatSound.SKILL_ACTIVATION -> {
+                        // Radiant ascending power surge & celestial harmonic flare
+                        playPcmTrack(synthesizeSkillActivation())
+                    }
+                    CombatSound.STATUS_TRIGGER_BLEED -> {
+                        // Visceral blood droplet and flesh laceration squelch
+                        playPcmTrack(synthesizeBleedTrigger())
+                    }
+                    CombatSound.STATUS_TRIGGER_POISON -> {
+                        // Caustic venomous bubbling hiss
+                        playPcmTrack(synthesizePoisonTrigger())
+                    }
+                    CombatSound.STATUS_TRIGGER_STUN -> {
+                        // High voltage electric paralysis buzz
+                        playPcmTrack(synthesizeStunTrigger())
+                    }
+                    CombatSound.HEAL_RESTORE -> {
+                        // Angelic restorative bell chord ascending
+                        playPcmTrack(synthesizeHealRestore())
+                    }
+                    CombatSound.CRITICAL_SUPERNOVA -> {
+                        // Cataclysmic shockwave with sub-bass seismic impact
+                        playPcmTrack(synthesizeCriticalSupernova())
+                    }
                 }
             } catch (e: Exception) {
                 fallbackTone(ToneGenerator.TONE_CDMA_ALERT_AUTOREDIAL_LITE, 220)
@@ -761,6 +796,134 @@ object SoundEffectManager {
             val envelope = 1.0 - progress
             val alarm = sin(2.0 * PI * 440.0 * t) * 0.5 + sin(2.0 * PI * 466.16 * t) * 0.5 // minor 2nd clash
             val sample = alarm * envelope * Short.MAX_VALUE * 0.85
+            buffer[i] = sample.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeDodgeEvade(): ShortArray {
+        // Swift whoosh of displaced air with bandpass whistle drop
+        val durationSec = 0.24
+        val count = (SAMPLE_RATE * durationSec).toInt()
+        val buffer = ShortArray(count)
+        for (i in 0 until count) {
+            val progress = i.toDouble() / count
+            val t = i.toDouble() / SAMPLE_RATE
+            val envelope = sin(PI * progress) // smooth bell envelope
+            // Pitch sweeps down from 1200 Hz to 450 Hz
+            val currentFreq = 1200.0 - 750.0 * progress
+            val noise = (Math.random() * 2.0 - 1.0) * 0.4
+            val tone = sin(2.0 * PI * currentFreq * t) * 0.6 + noise
+            val sample = tone * envelope * Short.MAX_VALUE * 0.75
+            buffer[i] = sample.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeSkillActivation(): ShortArray {
+        // Radiant power surge: fast ascending harmonics (C5 -> E5 -> G5 -> C6) with celestial chime
+        val durationSec = 0.38
+        val count = (SAMPLE_RATE * durationSec).toInt()
+        val buffer = ShortArray(count)
+        val frequencies = doubleArrayOf(523.25, 659.25, 783.99, 1046.50, 1318.51)
+        for (i in 0 until count) {
+            val progress = i.toDouble() / count
+            val t = i.toDouble() / SAMPLE_RATE
+            val step = (progress * (frequencies.size - 1)).toInt().coerceIn(0, frequencies.size - 1)
+            val baseFreq = frequencies[step]
+            val shimmer = sin(2.0 * PI * (baseFreq * 2.0) * t) * 0.35
+            val mainTone = sin(2.0 * PI * baseFreq * t) * 0.65
+            val envelope = if (progress < 0.15) (progress / 0.15) else exp(-3.0 * (progress - 0.15))
+            val sample = (mainTone + shimmer) * envelope * Short.MAX_VALUE * 0.85
+            buffer[i] = sample.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeBleedTrigger(): ShortArray {
+        // Visceral laceration drip and squelch
+        val durationSec = 0.22
+        val count = (SAMPLE_RATE * durationSec).toInt()
+        val buffer = ShortArray(count)
+        for (i in 0 until count) {
+            val progress = i.toDouble() / count
+            val t = i.toDouble() / SAMPLE_RATE
+            val envelope = exp(-12.0 * progress)
+            val lowSquish = sin(2.0 * PI * (130.0 - 50.0 * progress) * t) * 0.7
+            val drip = sin(2.0 * PI * (850.0 + 200.0 * sin(40.0 * t)) * t) * 0.3
+            val sample = (lowSquish + drip) * envelope * Short.MAX_VALUE * 0.80
+            buffer[i] = sample.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizePoisonTrigger(): ShortArray {
+        // Caustic bubbling acid hiss
+        val durationSec = 0.30
+        val count = (SAMPLE_RATE * durationSec).toInt()
+        val buffer = ShortArray(count)
+        for (i in 0 until count) {
+            val progress = i.toDouble() / count
+            val t = i.toDouble() / SAMPLE_RATE
+            val bubbleFreq = 320.0 + 180.0 * sin(35.0 * PI * t)
+            val bubble = sin(2.0 * PI * bubbleFreq * t) * 0.5
+            val hissNoise = (Math.random() * 2.0 - 1.0) * 0.5
+            val envelope = if (progress < 0.1) (progress / 0.1) else exp(-4.0 * (progress - 0.1))
+            val sample = (bubble + hissNoise) * envelope * Short.MAX_VALUE * 0.70
+            buffer[i] = sample.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeStunTrigger(): ShortArray {
+        // Electric buzz paralysis shockwave
+        val durationSec = 0.28
+        val count = (SAMPLE_RATE * durationSec).toInt()
+        val buffer = ShortArray(count)
+        for (i in 0 until count) {
+            val progress = i.toDouble() / count
+            val t = i.toDouble() / SAMPLE_RATE
+            val square = if (sin(2.0 * PI * 180.0 * t) > 0) 0.6 else -0.6
+            val highBuzz = sin(2.0 * PI * 920.0 * t) * 0.4
+            val envelope = exp(-8.0 * progress)
+            val sample = (square + highBuzz) * envelope * Short.MAX_VALUE * 0.75
+            buffer[i] = sample.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeHealRestore(): ShortArray {
+        // Ascending holy arpeggio (A4 -> C#5 -> E5 -> A5)
+        val durationSec = 0.40
+        val count = (SAMPLE_RATE * durationSec).toInt()
+        val buffer = ShortArray(count)
+        val freqs = doubleArrayOf(440.0, 554.37, 659.25, 880.0)
+        for (i in 0 until count) {
+            val progress = i.toDouble() / count
+            val t = i.toDouble() / SAMPLE_RATE
+            val step = (progress * (freqs.size - 1)).toInt().coerceIn(0, freqs.size - 1)
+            val f = freqs[step]
+            val envelope = if (progress < 0.1) progress / 0.1 else exp(-3.0 * (progress - 0.1))
+            val tone = sin(2.0 * PI * f * t) * 0.7 + sin(4.0 * PI * f * t) * 0.3
+            val sample = tone * envelope * Short.MAX_VALUE * 0.8
+            buffer[i] = sample.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return buffer
+    }
+
+    private fun synthesizeCriticalSupernova(): ShortArray {
+        // Ultra heavy sub-bass earthquake rumble + crystalline explosive crunch
+        val durationSec = 0.55
+        val count = (SAMPLE_RATE * durationSec).toInt()
+        val buffer = ShortArray(count)
+        for (i in 0 until count) {
+            val progress = i.toDouble() / count
+            val t = i.toDouble() / SAMPLE_RATE
+            val subBass = sin(2.0 * PI * (65.0 - 25.0 * progress) * t) * 0.6
+            val crackle = (Math.random() * 2.0 - 1.0) * exp(-10.0 * progress) * 0.5
+            val midChime = sin(2.0 * PI * 1480.0 * t) * exp(-15.0 * progress) * 0.3
+            val envelope = exp(-3.5 * progress)
+            val sample = (subBass + crackle + midChime) * envelope * Short.MAX_VALUE * 0.95
             buffer[i] = sample.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
         }
         return buffer

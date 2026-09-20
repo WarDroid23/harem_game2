@@ -24,12 +24,15 @@ object PartyCombatManager {
             val equippedWeapon = player.weapons.getOrNull(player.equippedWeaponIndex) ?: player.weapons.firstOrNull()
             val weaponDmg = equippedWeapon?.damage ?: 15
 
+            val playerFormation = FormationPosition.fromString(player.partyFormationMap["player"] ?: "MID")
+
             val playerMember = PartyMember(
                 id = "player",
                 name = "Pán Dominia",
                 isPlayer = true,
                 archetypeId = "player",
                 role = CombatRole.PHYSICAL_DPS,
+                formationPosition = playerFormation,
                 hp = player.hp,
                 maxHp = player.maxHp,
                 mana = (player.darkEnergy + player.sexEnergy).coerceAtMost(100),
@@ -71,12 +74,26 @@ object PartyCombatManager {
                 val baseAtk = 18 + combatSkill * 2 + eqBonusAtk + char.fazeZkazenosti * 3 + passiveBonuses.attackBonus
                 val finalAtk = (baseAtk * (1.0f + combatBonuses.dmgMultiplierBonus)).toInt()
 
+                // Determine formation position
+                val chosenFormation = if (player.partyFormationMap.containsKey(char.id)) {
+                    FormationPosition.fromString(player.partyFormationMap[char.id])
+                } else if (char.preferredFormation.isNotBlank() && char.preferredFormation != "MID") {
+                    FormationPosition.fromString(char.preferredFormation)
+                } else {
+                    when (role) {
+                        CombatRole.TANK_GUARDIAN -> FormationPosition.FRONT_LINE
+                        CombatRole.DARK_SORCERESS, CombatRole.HEALER_PRIESTESS, CombatRole.SIREN_DEBUFFER -> FormationPosition.BACK_LINE
+                        else -> FormationPosition.MID_LINE
+                    }
+                }
+
                 val member = PartyMember(
                     id = char.id,
                     name = char.name,
                     isPlayer = false,
                     archetypeId = char.archetype,
                     role = role,
+                    formationPosition = chosenFormation,
                     hp = char.hp + eqBonusHp + passiveBonuses.hpBonus + combatBonuses.hpBonus,
                     maxHp = char.maxHp + eqBonusHp + passiveBonuses.hpBonus + combatBonuses.hpBonus,
                     mana = 50 + char.fazeZkazenosti * 5,
@@ -108,7 +125,6 @@ object PartyCombatManager {
                     }
                     CombatStrategy.SUPPORT -> {
                         member.attack = (member.attack * 0.80f).toInt()
-                        // Heal bonus is applied during skill execution
                     }
                     CombatStrategy.BALANCED -> {}
                 }
@@ -139,12 +155,22 @@ object PartyCombatManager {
             }
         }
 
-        // Deep copy enemies
-        val clonedEnemies = encounterDef.enemies.map { it.copy(statusEffects = mutableListOf()) }
+        // Deep copy enemies and assign enemy formations
+        val clonedEnemies = encounterDef.enemies.mapIndexed { idx, enemy ->
+            val enemyFormation = if (enemy.isBoss || idx == 0) FormationPosition.FRONT_LINE else if (idx % 2 == 1) FormationPosition.MID_LINE else FormationPosition.BACK_LINE
+            enemy.copy(
+                formationPosition = enemyFormation,
+                statusEffects = mutableListOf()
+            )
+        }
         val synergies = PartyCombatCatalog.calculateSynergies(partyList)
         val combatWeather = CombatWeather.getWeatherForLocation(encounterDef.location)
+        val environmentalHazard = EnvironmentalHazard.getHazardForLocation(encounterDef.location)
+        val teamFormationSynergy = TeamFormationSynergy.calculateFormationSynergy(partyList)
 
         SoundEffectManager.playCombat(CombatSound.COMBAT_START)
+
+        val startingCombo = if (teamFormationSynergy.name.contains("Útočný", ignoreCase = true)) 35 else 20
 
         return PartyCombatSession(
             id = "combat_${System.currentTimeMillis()}",
@@ -158,14 +184,31 @@ object PartyCombatManager {
             isEnemyPhase = false,
             selectedTargetEnemyIndex = 0,
             selectedTargetAllyIndex = 0,
-            haremComboGauge = 20,
+            haremComboGauge = startingCombo,
             activeSynergies = synergies,
             weather = combatWeather,
+            environmentalHazard = environmentalHazard,
+            hazardCountdown = environmentalHazard.triggerIntervalTurns,
+            teamFormationSynergy = teamFormationSynergy,
             combatLogs = listOf(
                 CombatLogEntry(
                     turn = 1,
                     type = "system",
-                    message = "⚔️ Střet začíná! Počasí na bojišti: ${combatWeather.icon} ${combatWeather.name} (${combatWeather.description}).",
+                    message = "🛡️ Formace týmu: ${teamFormationSynergy.icon} ${teamFormationSynergy.name} (${teamFormationSynergy.teamBuffDescription}).",
+                    actor = "Taktická formace",
+                    actionName = teamFormationSynergy.name
+                ),
+                CombatLogEntry(
+                    turn = 1,
+                    type = "system",
+                    message = "⚔️ Střet začíná! Terén: ${environmentalHazard.icon} ${environmentalHazard.name} (${environmentalHazard.terrainModifierDesc}).",
+                    actor = "Terénní prostředí",
+                    actionName = environmentalHazard.title
+                ),
+                CombatLogEntry(
+                    turn = 1,
+                    type = "system",
+                    message = "🌤️ Počasí na bojišti: ${combatWeather.icon} ${combatWeather.name} (${combatWeather.description}).",
                     actor = "Meteorologická anomálie",
                     actionName = "Klima bojiště"
                 )
@@ -187,13 +230,15 @@ object PartyCombatManager {
         val target = aliveEnemies.getOrNull(targetEnemyIndex) ?: aliveEnemies.firstOrNull()
             ?: return Pair(session, "Žádný platný cíl!")
 
-        // Calculate damage with combo chain bonus
+        // Calculate damage with combo chain bonus and formation modifiers
         val newChain = session.comboChainCount + 1
         val comboDmgMult = 1.0f + (newChain * 0.04f)
         val comboCritBonus = newChain * 2
-        val isCrit = Random.nextInt(100) < (activeMember.critRatePercent + (session.activeSynergies.sumOf { it.critBonusPercent }) + comboCritBonus)
+        val formCritBonus = activeMember.formationPosition.critModifierPercent
+        val isCrit = Random.nextInt(100) < (activeMember.critRatePercent + (session.activeSynergies.sumOf { it.critBonusPercent }) + comboCritBonus + formCritBonus)
         val critMult = if (isCrit) 1.65f else 1.0f
-        val synergyAtkBonus = 1.0f + session.activeSynergies.map { it.attackBonusPercent }.sum()
+        val formAtkBonus = 1.0f + activeMember.formationPosition.physicalAttackModifierPercent
+        val synergyAtkBonus = (1.0f + session.activeSynergies.map { it.attackBonusPercent }.sum()) * formAtkBonus
         val buffAtk = activeMember.statusEffects.filter { it.type == "ATK_BUFF" }.sumOf { it.value }
 
         val rawDmg = (activeMember.attack + buffAtk + Random.nextInt(-2, 4)) * activeMember.affinityBonusDmg * synergyAtkBonus * comboDmgMult
@@ -207,7 +252,11 @@ object PartyCombatManager {
 
         // Sound effect
         if (isCrit) {
-            SoundEffectManager.playCombat(CombatSound.CRITICAL_HIT)
+            if (newChain >= 3) {
+                SoundEffectManager.playCombat(CombatSound.CRITICAL_SUPERNOVA)
+            } else {
+                SoundEffectManager.playCombat(CombatSound.CRITICAL_HIT)
+            }
         } else {
             SoundEffectManager.playCombat(CombatSound.PLAYER_SLASH)
         }
@@ -285,9 +334,12 @@ object PartyCombatManager {
                         val healBonus = if (activeMember.strategy == CombatStrategy.SUPPORT) 1.25f else 1.0f
                         val finalHeal = (skill.healAmount * healBonus).toInt()
                         activeMember.hp = (activeMember.hp + finalHeal).coerceAtMost(activeMember.maxHp)
+                        SoundEffectManager.playCombat(CombatSound.HEAL_RESTORE)
+                    } else if (skill.category == SkillCategory.DARK_MAGIC) {
+                        SoundEffectManager.playCombat(CombatSound.DARK_SPELL)
+                    } else {
+                        SoundEffectManager.playCombat(CombatSound.SKILL_ACTIVATION)
                     }
-
-                    SoundEffectManager.playCombat(if (skill.category == SkillCategory.DARK_MAGIC) CombatSound.DARK_SPELL else CombatSound.PLAYER_SLASH)
 
                     newLogs.add(
                         CombatLogEntry(
@@ -529,7 +581,7 @@ object PartyCombatManager {
             target.hp = (target.hp + healVal).coerceAtMost(target.maxHp)
         }
 
-        SoundEffectManager.playCombat(CombatSound.SHIELD_BLOCK)
+        SoundEffectManager.playCombat(CombatSound.HEAL_RESTORE)
 
         val log = CombatLogEntry(
             turn = session.currentRound,
@@ -683,6 +735,11 @@ object PartyCombatManager {
                 effect.durationTurns -= 1
                 if (effect.type == "POISON" || effect.type == "BLEED" || effect.type == "BURN") {
                     enemy.hp = (enemy.hp - effect.value).coerceAtLeast(0)
+                    if (effect.type == "BLEED") {
+                        SoundEffectManager.playCombat(CombatSound.STATUS_TRIGGER_BLEED)
+                    } else if (effect.type == "POISON") {
+                        SoundEffectManager.playCombat(CombatSound.STATUS_TRIGGER_POISON)
+                    }
                     enemyLogs.add(
                         CombatLogEntry(
                             turn = session.currentRound,
@@ -696,14 +753,147 @@ object PartyCombatManager {
             }
         }
 
-        val allLogs = enemyLogs + session.combatLogs
+        val hazardLogs = mutableListOf<CombatLogEntry>()
+        var newHazardCountdown = session.hazardCountdown - 1
+        var hazardTriggerMsg: String? = null
+
+        val hazard = session.environmentalHazard
+        if (hazard != null && newHazardCountdown <= 0) {
+            newHazardCountdown = hazard.triggerIntervalTurns
+            val livingParty = session.party.filter { it.isAlive }
+            val livingEnemies = session.enemies.filter { it.isAlive }
+
+            when (hazard.targetRule) {
+                HazardTargetRule.RANDOM_ANY_COMBATANT -> {
+                    val chooseParty = if (livingParty.isNotEmpty() && livingEnemies.isNotEmpty()) {
+                        Random.nextBoolean()
+                    } else livingParty.isNotEmpty()
+
+                    if (chooseParty && livingParty.isNotEmpty()) {
+                        val victim = livingParty.random()
+                        val dmg = (hazard.baseDamage + Random.nextInt(-2, 4)).coerceAtLeast(6)
+                        victim.hp = (victim.hp - dmg).coerceAtLeast(0)
+                        hazard.statusEffectToApply?.let { effect ->
+                            victim.statusEffects.removeAll { it.id == effect.id }
+                            victim.statusEffects.add(effect.copy())
+                        }
+                        hazardTriggerMsg = "⚠️ ${hazard.icon} ${hazard.name} zasáhl ${victim.name} za $dmg DMG!"
+                        hazardLogs.add(
+                            CombatLogEntry(
+                                turn = session.currentRound,
+                                type = "system",
+                                message = "${hazard.icon} [TERÉNNÍ HAZARD] ${hazard.title} zasáhl ${victim.name} za $dmg poškození! Aplikován stav '${hazard.statusEffectToApply?.name ?: "Zranění"}'.",
+                                actor = hazard.name,
+                                actionName = hazard.title,
+                                damageDealt = dmg
+                            )
+                        )
+                    } else if (livingEnemies.isNotEmpty()) {
+                        val victim = livingEnemies.random()
+                        val dmg = (hazard.baseDamage + Random.nextInt(-2, 4)).coerceAtLeast(6)
+                        victim.hp = (victim.hp - dmg).coerceAtLeast(0)
+                        hazard.statusEffectToApply?.let { effect ->
+                            victim.statusEffects.removeAll { it.id == effect.id }
+                            victim.statusEffects.add(effect.copy())
+                        }
+                        hazardTriggerMsg = "💥 ${hazard.icon} ${hazard.name} zasáhl ${victim.name} za $dmg DMG!"
+                        hazardLogs.add(
+                            CombatLogEntry(
+                                turn = session.currentRound,
+                                type = "system",
+                                message = "${hazard.icon} [TERÉNNÍ HAZARD] ${hazard.title} udeřil do ${victim.name} za $dmg poškození! Utrpěn stav '${hazard.statusEffectToApply?.name ?: "Zranění"}'.",
+                                actor = hazard.name,
+                                actionName = hazard.title,
+                                damageDealt = dmg
+                            )
+                        )
+                    }
+                }
+                HazardTargetRule.RANDOM_ALLY_ONLY -> {
+                    if (livingParty.isNotEmpty()) {
+                        val ally = livingParty.random()
+                        if (hazard.baseDamage <= 0) {
+                            val healAmt = 24
+                            ally.hp = (ally.hp + healAmt).coerceAtMost(ally.maxHp)
+                            hazard.statusEffectToApply?.let { effect ->
+                                ally.statusEffects.removeAll { it.id == effect.id }
+                                ally.statusEffects.add(effect.copy())
+                            }
+                            hazardTriggerMsg = "✨ ${hazard.icon} ${hazard.name} požehnal ${ally.name} (+${healAmt} HP)!"
+                            hazardLogs.add(
+                                CombatLogEntry(
+                                    turn = session.currentRound,
+                                    type = "system",
+                                    message = "${hazard.icon} [POSVÁTNÝ TERÉN] ${hazard.title} požehnal ${ally.name} (obnoveno +$healAmt HP a aktivována regenerace).",
+                                    actor = hazard.name,
+                                    actionName = hazard.title
+                                )
+                            )
+                        } else {
+                            val dmg = (hazard.baseDamage + Random.nextInt(-2, 4)).coerceAtLeast(6)
+                            ally.hp = (ally.hp - dmg).coerceAtLeast(0)
+                            hazard.statusEffectToApply?.let { effect ->
+                                ally.statusEffects.removeAll { it.id == effect.id }
+                                ally.statusEffects.add(effect.copy())
+                            }
+                            hazardTriggerMsg = "⚠️ ${hazard.icon} ${hazard.name} zasáhl ${ally.name} za $dmg DMG!"
+                            hazardLogs.add(
+                                CombatLogEntry(
+                                    turn = session.currentRound,
+                                    type = "system",
+                                    message = "${hazard.icon} [TERÉNNÍ HAZARD] ${hazard.title} zasáhl ${ally.name} za $dmg poškození!",
+                                    actor = hazard.name,
+                                    actionName = hazard.title,
+                                    damageDealt = dmg
+                                )
+                            )
+                        }
+                    }
+                }
+                HazardTargetRule.RANDOM_ENEMY_ONLY -> {
+                    if (livingEnemies.isNotEmpty()) {
+                        val enemy = livingEnemies.random()
+                        val dmg = (hazard.baseDamage + Random.nextInt(-2, 4)).coerceAtLeast(6)
+                        enemy.hp = (enemy.hp - dmg).coerceAtLeast(0)
+                        hazard.statusEffectToApply?.let { effect ->
+                            enemy.statusEffects.removeAll { it.id == effect.id }
+                            enemy.statusEffects.add(effect.copy())
+                        }
+                        hazardTriggerMsg = "💥 ${hazard.icon} ${hazard.name} udeřil do ${enemy.name} za $dmg DMG!"
+                        hazardLogs.add(
+                            CombatLogEntry(
+                                turn = session.currentRound,
+                                type = "system",
+                                message = "${hazard.icon} [TERÉNNÍ HAZARD] ${hazard.title} zasáhl ${enemy.name} za $dmg poškození!",
+                                actor = hazard.name,
+                                actionName = hazard.title,
+                                damageDealt = dmg
+                            )
+                        )
+                    }
+                }
+                else -> {}
+            }
+
+            // Sound cue for hazard
+            when (hazard.hazardType) {
+                HazardType.LAVA_ERUPTION -> SoundEffectManager.playCombat(CombatSound.ENEMY_STRIKE)
+                HazardType.TOXIC_MIASMA -> SoundEffectManager.playCombat(CombatSound.STATUS_TRIGGER_POISON)
+                HazardType.THUNDER_SURGE -> SoundEffectManager.playCombat(CombatSound.CRITICAL_SUPERNOVA)
+                HazardType.FROSTBITE_TEMPEST -> SoundEffectManager.playCombat(CombatSound.DARK_SPELL)
+                HazardType.HOLY_RADIANCE -> SoundEffectManager.playCombat(CombatSound.HEAL_RESTORE)
+                HazardType.SHADOW_ABYSS -> SoundEffectManager.playCombat(CombatSound.STATUS_TRIGGER_BLEED)
+            }
+        }
+
+        val allLogs = hazardLogs + enemyLogs + session.combatLogs
 
         // Check if party wiped
         if (session.party.none { it.isAlive }) {
             return handleDefeat(session.copy(combatLogs = allLogs))
         }
 
-        // Check if enemies died from DoT
+        // Check if enemies died from DoT or hazard
         if (session.enemies.none { it.isAlive }) {
             return handleVictory(session.copy(combatLogs = allLogs))
         }
@@ -713,6 +903,8 @@ object PartyCombatManager {
             currentTurnIndex = 0,
             currentRound = session.currentRound + 1,
             isEnemyPhase = false,
+            hazardCountdown = newHazardCountdown,
+            lastHazardTriggerMessage = hazardTriggerMsg,
             combatLogs = allLogs
         )
 
@@ -731,44 +923,50 @@ object PartyCombatManager {
         val roundsTaken = session.currentRound
         val totalPartyCount = session.party.size.coerceAtLeast(1)
         val aliveCount = session.aliveParty.size
-        val flawless = (aliveCount == totalPartyCount)
-        val comboUsed = (session.haremComboGauge >= 25)
+        val combosUsedCount = session.comboChainCount.coerceAtLeast(if (session.haremComboGauge >= 25) 1 else 0)
+        val statusCount = session.enemies.sumOf { it.statusEffects.size }
 
-        // Performance Score
-        var score = 500
-        score += ((10 - roundsTaken) * 70).coerceAtLeast(0)
-        score += ((aliveCount.toFloat() / totalPartyCount) * 250).toInt()
-        if (flawless) score += 200
-        if (isBossFight) score += 150
+        // Combat Efficiency Score Calculation
+        val efficiency = LootDistributionCatalog.calculateEfficiencyScore(
+            roundsTaken = roundsTaken,
+            alivePartyCount = aliveCount,
+            totalPartyCount = totalPartyCount,
+            combosExecuted = combosUsedCount,
+            statusEffectsInflicted = statusCount,
+            isBoss = isBossFight,
+            hazardSurvived = true
+        )
 
-        // Rank determination
-        val (rank, rankTitle, multiplier) = when {
-            score >= 1050 -> Triple("S+", "Absolutní dominance", 1.8f)
-            score >= 900 -> Triple("S", "Dominantní triumf", 1.5f)
-            score >= 700 -> Triple("A", "Slavné vítězství", 1.25f)
-            score >= 500 -> Triple("B", "Taktické vítězství", 1.1f)
-            else -> Triple("C", "Těsný únik", 1.0f)
-        }
-
-        val finalGold = (totalGoldBase * multiplier).toInt()
-        val finalPrestige = (basePrestige * multiplier).toInt()
-        val bloodRubies = if (isBossFight) (15 * multiplier).toInt() else (5 * multiplier).toInt()
+        val rank = efficiency.rank
+        val rankTitle = efficiency.rankTitle
+        val multiplier = efficiency.lootRollMultiplier
+        val score = efficiency.totalScore
+        val flawless = efficiency.flawlessVictory
+        val comboUsed = combosUsedCount > 0
 
         // MVP Determination: Highest attack or living companion
         val mvpMember = session.aliveParty.maxByOrNull { it.attack + (if (!it.isPlayer) 10 else 0) } ?: session.party.firstOrNull()
         val mvpName = mvpMember?.name ?: "Pán"
         val mvpId = mvpMember?.id
 
-        // Distribute Combat XP per character
-        val charXpMap = mutableMapOf<String, Int>()
-        val baseCharXp = (totalXpBase * multiplier).toInt().coerceAtLeast(25)
-        session.party.filter { !it.isPlayer }.forEach { member ->
-            val isMvp = (member.id == mvpId)
-            val xpAward = if (isMvp) (baseCharXp * 1.5f).toInt() else baseCharXp
-            charXpMap[member.id] = xpAward
-        }
+        val companionIds = session.party.filter { !it.isPlayer }.map { it.id }
 
-        // Generate dynamic rare loot items based on rank and boss
+        // Generate randomized equipment fragments and crafting resources based on efficiency
+        val lootDistribution = LootDistributionCatalog.rollPostBattleLoot(
+            efficiency = efficiency,
+            baseGold = totalGoldBase,
+            baseXp = totalXpBase,
+            isBoss = isBossFight,
+            mvpName = mvpName,
+            mvpId = mvpId,
+            companionIds = companionIds
+        )
+
+        val finalGold = lootDistribution.goldRewarded
+        val finalPrestige = (basePrestige * multiplier).toInt()
+        val bloodRubies = lootDistribution.bloodRubiesRewarded
+
+        // Generate dynamic rare loot items
         val droppedItemDetails = mutableListOf<InventoryItem>()
         val droppedItemIds = mutableListOf<String>()
 
@@ -799,7 +997,7 @@ object PartyCombatManager {
         val rewards = PartyCombatRewards(
             gold = finalGold,
             bloodRubies = bloodRubies,
-            playerXp = (totalXpBase * multiplier).toInt(),
+            playerXp = lootDistribution.playerXpRewarded,
             haremAffinityGain = (40 * multiplier).toInt(),
             haremLoyaltyGain = (8 * multiplier).toInt(),
             prestigeGain = finalPrestige,
@@ -807,21 +1005,22 @@ object PartyCombatManager {
             itemDropDetails = droppedItemDetails,
             mvpName = mvpName,
             mvpCharacterId = mvpId,
-            mvpBonusXp = if (mvpId != null) (baseCharXp * 0.5f).toInt() else 0,
+            mvpBonusXp = lootDistribution.mvpBonusXp,
             rank = rank,
             rankTitle = rankTitle,
             score = score,
             roundsTaken = roundsTaken,
             flawlessVictory = flawless,
             comboExecuted = comboUsed,
-            characterXpGains = charXpMap,
-            bonusMultiplier = multiplier
+            characterXpGains = lootDistribution.companionXpGains,
+            bonusMultiplier = multiplier,
+            lootDistribution = lootDistribution
         )
 
         val victoryLog = CombatLogEntry(
             turn = session.currentRound,
             type = "victory",
-            message = "🏆 HODNOCENÍ [$rank] $rankTitle! Družina získala $finalGold zlata, $bloodRubies rubínů a MVP $mvpName získává bonusové ZK!",
+            message = "🏆 HODNOCENÍ EFEKTIVITY [$rank] $rankTitle (${efficiency.efficiencyPercent}%)! Získáno $finalGold zlata, ${lootDistribution.fragmentsRewarded.size} úlomků výbavy a ${lootDistribution.resourcesRewarded.size} druhů surovin!",
             actor = "Systém",
             actionName = "Triumf"
         )

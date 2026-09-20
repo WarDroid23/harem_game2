@@ -26,6 +26,7 @@ import com.example.haremdark.domain.GameEngine
 import com.example.haremdark.domain.PartyCombatManager
 import com.example.haremdark.domain.SoundEffectManager
 import com.example.haremdark.models.CombatLogEntry
+import com.example.haremdark.models.CombatStatusEffect
 import com.example.haremdark.models.GameSave
 import com.example.haremdark.models.PartyCombatSession
 import com.example.haremdark.models.SkillCategory
@@ -47,6 +48,7 @@ fun PartyCombatScreen(
     val isMuted by SoundEffectManager.isMuted.collectAsState()
 
     var showLogsModal by remember { mutableStateOf(false) }
+    var selectedStatusEffectForDetail by remember { mutableStateOf<CombatStatusEffect?>(null) }
 
     val aliveEnemies = session.enemies.filter { it.isAlive }
     val aliveParty = session.party.filter { it.isAlive }
@@ -106,6 +108,13 @@ fun PartyCombatScreen(
             fxState = fxState,
             modifier = Modifier.fillMaxSize()
         )
+
+        session.environmentalHazard?.let { haz ->
+            EnvironmentalHazardParticles(
+                hazardType = haz.hazardType,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
         // Main Combat Layout with Screen Shake and Camera Impact Scale
         Column(
@@ -261,6 +270,13 @@ fun PartyCombatScreen(
                 }
             }
 
+            // --- ENVIRONMENTAL HAZARDS & TERRAIN MODIFIERS BANNER ---
+            EnvironmentalHazardBanner(
+                hazard = session.environmentalHazard,
+                countdown = session.hazardCountdown,
+                lastTriggerMessage = session.lastHazardTriggerMessage
+            )
+
             // --- ENEMY BATTLE LINE ---
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
@@ -275,6 +291,7 @@ fun PartyCombatScreen(
                     selectedTargetIndex = session.selectedTargetEnemyIndex,
                     attackerEnemyIndex = fxState.activeAttackerEnemyIndex,
                     hitTargetEnemyIndex = fxState.hitTargetEnemyIndex,
+                    onSelectStatusEffect = { eff -> selectedStatusEffectForDetail = eff },
                     onSelectTarget = { idx ->
                         onSessionUpdated(session.copy(selectedTargetEnemyIndex = idx))
                     }
@@ -343,6 +360,7 @@ fun PartyCombatScreen(
                     selectedTargetAllyIndex = session.selectedTargetAllyIndex,
                     attackerPartyIndex = fxState.activeAttackerPartyIndex,
                     hitTargetPartyIndex = fxState.hitTargetPartyIndex,
+                    onSelectStatusEffect = { eff -> selectedStatusEffectForDetail = eff },
                     onSelectAlly = { idx ->
                         onSessionUpdated(session.copy(selectedTargetAllyIndex = idx))
                     }
@@ -445,6 +463,15 @@ fun PartyCombatScreen(
         }
     }
 
+    // --- STATUS EFFECT COUNTDOWN & DETAIL MODAL ---
+    val currentSelectedStatus = selectedStatusEffectForDetail
+    if (currentSelectedStatus != null) {
+        CombatStatusEffectDetailDialog(
+            effect = currentSelectedStatus,
+            onDismiss = { selectedStatusEffectForDetail = null }
+        )
+    }
+
     // --- FULL LOGS MODAL ---
     if (showLogsModal) {
         PartyCombatLogModal(
@@ -458,6 +485,9 @@ fun PartyCombatScreen(
     if (session.isFinished && session.isVictory) {
         PartyCombatVictoryDialog(
             session = session,
+            onForgeFragment = { fragId ->
+                engine.forgeEquipmentFromFragments(fragId)
+            },
             onDismiss = {
                 // Apply victory rewards to gameState via engine with rich item drops and companion XP
                 val rew = session.rewards

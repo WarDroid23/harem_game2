@@ -24,6 +24,150 @@ enum class Element {
 }
 
 /**
+ * Character combat line positioning for tactical formation bonuses and targeting modifiers.
+ */
+@Serializable
+enum class FormationPosition(
+    val title: String,
+    val icon: String,
+    val shortTag: String,
+    val description: String,
+    val statSummary: String,
+    val targetingWeight: Float, // Higher means enemies attack this line first
+    val defenseModifierPercent: Float, // +0.25f means +25% defense
+    val physicalAttackModifierPercent: Float, // +0.15f means +15% attack
+    val magicHealModifierPercent: Float, // +0.25f means +25% magic & healing
+    val critModifierPercent: Int, // +12% crit
+    val manaRegenBonus: Int, // +8 mana per round
+    val speedModifierPercent: Float,
+    val damageMitigationPercent: Float // Flat % incoming damage reduction
+) {
+    FRONT_LINE(
+        title = "Přední linie (Vanguard)",
+        icon = "🛡️",
+        shortTag = "PŘEDNÍ",
+        description = "První linie obrany absorbující primární údery. Poskytuje robustní obranu a redukci zranění, stahuje na sebe pozornost nepřátel.",
+        statSummary = "+25% Obrana • +15% Redukce DMG • +70% Cílení nepřátel",
+        targetingWeight = 2.0f,
+        defenseModifierPercent = 0.25f,
+        physicalAttackModifierPercent = 0.05f,
+        magicHealModifierPercent = -0.10f,
+        critModifierPercent = 0,
+        manaRegenBonus = 0,
+        speedModifierPercent = -0.05f,
+        damageMitigationPercent = 0.15f
+    ),
+    MID_LINE(
+        title = "Střední linie (Bojová linie)",
+        icon = "⚔️",
+        shortTag = "STŘED",
+        description = "Útočná flexibilní pozice pro fyzické bojovnice a duelantky. Zvyšuje útočnou sílu, rychlost a kritické zásahy.",
+        statSummary = "+15% Útok • +10% Rychlost • +12% Krit • Vyvážené cílení",
+        targetingWeight = 1.0f,
+        defenseModifierPercent = 0.0f,
+        physicalAttackModifierPercent = 0.15f,
+        magicHealModifierPercent = 0.05f,
+        critModifierPercent = 12,
+        manaRegenBonus = 2,
+        speedModifierPercent = 0.10f,
+        damageMitigationPercent = 0.0f
+    ),
+    BACK_LINE(
+        title = "Zadní linie (Kouzelnické křídlo)",
+        icon = "🔮",
+        shortTag = "ZADNÍ",
+        description = "Chráněné křídlo pro kouzelnice, sirény a léčitelky. Poskytuje vysoký bonus k magii a léčení s minimálním rizikem zásahu.",
+        statSummary = "+25% Magie & Léčení • +8 MP/kolo • -60% Cílení nepřátel • -15% Obrana",
+        targetingWeight = 0.35f,
+        defenseModifierPercent = -0.15f,
+        physicalAttackModifierPercent = -0.10f,
+        magicHealModifierPercent = 0.25f,
+        critModifierPercent = 5,
+        manaRegenBonus = 8,
+        speedModifierPercent = 0.0f,
+        damageMitigationPercent = 0.0f
+    );
+
+    companion object {
+        fun fromString(value: String?): FormationPosition = when (value?.uppercase()) {
+            "FRONT", "FRONT_LINE", "VANGUARD", "PŘEDNÍ" -> FRONT_LINE
+            "BACK", "BACK_LINE", "REARGUARD", "SANCTUARY", "ZADNÍ" -> BACK_LINE
+            else -> MID_LINE
+        }
+    }
+}
+
+/**
+ * Team formation synergy calculated from the composition of lines.
+ */
+@Serializable
+data class TeamFormationSynergy(
+    val name: String,
+    val icon: String,
+    val description: String,
+    val frontCount: Int,
+    val midCount: Int,
+    val backCount: Int,
+    val teamBuffDescription: String
+) {
+    companion object {
+        fun calculateFormationSynergy(party: List<PartyMember>): TeamFormationSynergy {
+            val front = party.count { it.formationPosition == FormationPosition.FRONT_LINE }
+            val mid = party.count { it.formationPosition == FormationPosition.MID_LINE }
+            val back = party.count { it.formationPosition == FormationPosition.BACK_LINE }
+
+            return when {
+                front >= 2 && back >= 1 -> TeamFormationSynergy(
+                    name = "Nedobytná bašta (Aegis Wall)",
+                    icon = "🏰",
+                    description = "Vyvážená pevná formace s těžkým předním štítem a chráněným kouzelnickým křídlem.",
+                    frontCount = front,
+                    midCount = mid,
+                    backCount = back,
+                    teamBuffDescription = "+15% Týmová obrana & +10% Regenerace many"
+                )
+                mid >= 2 && front >= 1 -> TeamFormationSynergy(
+                    name = "Útočný hrot (Spearhead Strike)",
+                    icon = "🔱",
+                    description = "Agresivní klínová formace zaměřená na bleskové proražení a drtivé kritické zásahy.",
+                    frontCount = front,
+                    midCount = mid,
+                    backCount = back,
+                    teamBuffDescription = "+15% Kritické poškození & +15 Kombo při startu"
+                )
+                back >= 2 -> TeamFormationSynergy(
+                    name = "Mystické arkánum (Arcane Sanctuary)",
+                    icon = "🌌",
+                    description = "Dominance kouzelnic v bezpečném zázemí umožňující masivní plošná kouzla a nepřetržité léčení.",
+                    frontCount = front,
+                    midCount = mid,
+                    backCount = back,
+                    teamBuffDescription = "+20% Účinnost kouzel & léčení celého týmu"
+                )
+                front >= 3 -> TeamFormationSynergy(
+                    name = "Železná falanga (Iron Phalanx)",
+                    icon = "🛡️",
+                    description = "Trojitý obranný val zcela znemožňující nepřátelům ohrozit slabší spojence.",
+                    frontCount = front,
+                    midCount = mid,
+                    backCount = back,
+                    teamBuffDescription = "+25% Redukce plošného poškození týmu"
+                )
+                else -> TeamFormationSynergy(
+                    name = "Taktická flexibilita (Adaptive Flow)",
+                    icon = "⚖️",
+                    description = "Rovnoměrné rozmístění jednotek pro plynulou reakci na jakéhokoliv nepřítele.",
+                    frontCount = front,
+                    midCount = mid,
+                    backCount = back,
+                    teamBuffDescription = "+5% ke všem bojovým atributům"
+                )
+            }
+        }
+    }
+}
+
+/**
  * Status effects active on combatants.
  */
 @Serializable
@@ -31,12 +175,25 @@ data class CombatStatusEffect(
     val id: String,
     val name: String,
     val icon: String,
-    val type: String, // "BLEED", "POISON", "STUN", "ATK_BUFF", "DEF_BUFF", "SHIELD", "TAUNT", "REGEN", "SILENCE", "BURN", "FREEZE", "SHOCK"
+    val type: String, // "BLEED", "POISON", "STUN", "ATK_BUFF", "DEF_BUFF", "SHIELD", "TAUNT", "REGEN", "SILENCE", "BURN", "FREEZE", "SHOCK", "HAREM_BLESSING", "CRIT_BUFF", "MANA_SURGE", "RESONANCE"
     val value: Int = 0,
     var durationTurns: Int = 2,
+    val maxDuration: Int = 2,
     val description: String = "",
     val element: Element = Element.PHYSICAL
-)
+) {
+    val isBuff: Boolean get() = when (type.uppercase()) {
+        "ATK_BUFF", "DEF_BUFF", "SHIELD", "REGEN", "HAREM_BLESSING", "CRIT_BUFF", "MANA_SURGE", "HOLY_WARD", "SPEED_BUFF", "HEAL", "DEVOTION", "RESONANCE", "BLESSING" -> true
+        else -> false
+    }
+    val isDebuff: Boolean get() = !isBuff
+    
+    val countdownProgress: Float get() = if (maxDuration > 0) {
+        (durationTurns.toFloat() / maxDuration.toFloat()).coerceIn(0f, 1f)
+    } else 1f
+
+    val isExpiringSoon: Boolean get() = durationTurns <= 1
+}
 
 /**
  * Target type for combat skills.
@@ -94,6 +251,7 @@ data class PartyMember(
     val isPlayer: Boolean = false,
     val archetypeId: String = "odvazna",
     val role: CombatRole = CombatRole.PHYSICAL_DPS,
+    var formationPosition: FormationPosition = FormationPosition.MID_LINE,
     var hp: Int = 100,
     val maxHp: Int = 100,
     var mana: Int = 50,
@@ -119,6 +277,11 @@ data class PartyMember(
     val manaPercent: Float get() = if (maxMana > 0) (mana.toFloat() / maxMana.toFloat()).coerceIn(0f, 1f) else 0f
     val isStunned: Boolean get() = statusEffects.any { it.type == "STUN" && it.durationTurns > 0 }
     val totalShield: Int get() = statusEffects.filter { it.type == "SHIELD" }.sumOf { it.value }
+
+    // Effective stats with formation modifiers applied
+    val effectiveDefenseModifier: Float get() = formationPosition.defenseModifierPercent
+    val effectiveAttackModifier: Float get() = formationPosition.physicalAttackModifierPercent
+    val effectiveCritRate: Int get() = critRatePercent + formationPosition.critModifierPercent
 }
 
 /**
@@ -131,6 +294,7 @@ data class CombatEnemy(
     val icon: String = "👹",
     val title: String = "Nepřítel",
     val archetype: String = "Běžný",
+    var formationPosition: FormationPosition = FormationPosition.FRONT_LINE,
     var hp: Int = 120,
     val maxHp: Int = 120,
     val attack: Int = 18,
@@ -195,7 +359,8 @@ data class PartyCombatRewards(
     val flawlessVictory: Boolean = true,
     val comboExecuted: Boolean = false,
     val characterXpGains: Map<String, Int> = emptyMap(),
-    val bonusMultiplier: Float = 1.0f
+    val bonusMultiplier: Float = 1.0f,
+    val lootDistribution: LootDistributionResult? = null
 )
 
 /**
@@ -249,7 +414,11 @@ data class PartyCombatSession(
     var comboChainCount: Int = 0,
     val activeSynergies: List<PartySynergy> = emptyList(),
     val weather: CombatWeather = CombatWeather.getWeatherForLocation("Arena"),
+    val environmentalHazard: EnvironmentalHazard? = null,
+    var hazardCountdown: Int = 2,
+    var lastHazardTriggerMessage: String? = null,
     val combatLogs: List<CombatLogEntry> = emptyList(),
+    var teamFormationSynergy: TeamFormationSynergy? = null,
     var isFinished: Boolean = false,
     var isVictory: Boolean = false,
     var rewards: PartyCombatRewards? = null,
@@ -259,4 +428,9 @@ data class PartyCombatSession(
     val aliveEnemies: List<CombatEnemy> get() = enemies.filter { it.isAlive }
     val currentActiveMember: PartyMember? get() = aliveParty.getOrNull(currentTurnIndex.coerceIn(0, (aliveParty.size - 1).coerceAtLeast(0)))
     val isComboReady: Boolean get() = haremComboGauge >= maxHaremComboGauge
+
+    // Formation line breakdowns
+    val frontLineParty: List<PartyMember> get() = aliveParty.filter { it.formationPosition == FormationPosition.FRONT_LINE }
+    val midLineParty: List<PartyMember> get() = aliveParty.filter { it.formationPosition == FormationPosition.MID_LINE }
+    val backLineParty: List<PartyMember> get() = aliveParty.filter { it.formationPosition == FormationPosition.BACK_LINE }
 }

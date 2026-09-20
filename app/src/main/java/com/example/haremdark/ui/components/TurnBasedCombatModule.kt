@@ -39,6 +39,7 @@ import com.example.haremdark.domain.VoiceTriggerType
 import com.example.haremdark.models.Boss
 import com.example.haremdark.models.CombatLogEntry
 import com.example.haremdark.models.CombatSession
+import com.example.haremdark.models.CombatStatusEffect
 import com.example.haremdark.models.GameSave
 import com.example.haremdark.domain.SoundEffectManager
 import androidx.compose.foundation.BorderStroke
@@ -85,6 +86,7 @@ fun ActiveCombatView(
     var selectedActionCategory by remember { mutableIntStateOf(0) }
     var showFullHistoryModal by remember { mutableStateOf(false) }
     var selectedStatusTooltip by remember { mutableStateOf<String?>(null) }
+    var selectedStatusForDetailDialog by remember { mutableStateOf<CombatStatusEffect?>(null) }
 
     val player = gameState.player
     val weapon = player.weapons.getOrNull(player.equippedWeaponIndex) ?: player.weapons.firstOrNull()
@@ -262,6 +264,13 @@ fun ActiveCombatView(
             }
         }
 
+        // Environmental Hazard Banner in 1v1 Arena
+        EnvironmentalHazardBanner(
+            hazard = session.environmentalHazard,
+            countdown = session.hazardCountdown,
+            lastTriggerMessage = session.lastHazardTriggerMessage
+        )
+
         // Duel Showcase: Enemy Card vs Player Card with STATUS EFFECT BADGES NEXT TO HP BARS
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -312,47 +321,19 @@ fun ActiveCombatView(
                         )
                     }
 
-                    // --- ENEMY STATUS EFFECT ICONS NEXT TO HEALTH ---
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (session.enemyBleedTurns > 0) {
-                            StatusEffectBadge(
-                                icon = "🩸",
-                                label = "Krvácení (${session.enemyBleedTurns})",
-                                color = Color(0xFFB71C1C),
-                                onClick = { selectedStatusTooltip = "🩸 Krvácení: Způsobuje zranění na začátku každého kola (zbývá ${session.enemyBleedTurns} kol)." }
-                            )
-                        }
-                        if (session.enemyStunned) {
-                            StatusEffectBadge(
-                                icon = "💫",
-                                label = "Omráčen",
-                                color = Color(0xFFF57F17),
-                                onClick = { selectedStatusTooltip = "💫 Omráčení: Protivník vynechává své další kolo útoků." }
-                            )
-                        }
-                        if (session.activeBuff?.contains("Prokletí") == true) {
-                            StatusEffectBadge(
-                                icon = "👁️",
-                                label = "Prokletí",
-                                color = Color(0xFF4A148C),
-                                onClick = { selectedStatusTooltip = "👁️ Prokletí stínů: Protivník je oslaben a uděluje o 25% menší poškození." }
-                            )
-                        }
-                        if (session.turnCount % 3 == 0) {
-                            StatusEffectBadge(
-                                icon = "⚡",
-                                label = "Zuřivost",
-                                color = Color(0xFFFF6F00),
-                                onClick = { selectedStatusTooltip = "⚡ Speciální technika: Protivník nyní připravuje zničující fázový útok!" }
-                            )
-                        }
-                        if (session.enemyBleedTurns == 0 && !session.enemyStunned && session.activeBuff?.contains("Prokletí") != true && session.turnCount % 3 != 0) {
-                            Text("Normální stav", fontSize = 9.sp, color = Color.Gray)
-                        }
+                    // --- ENEMY STATUS EFFECT ICONS NEXT TO HEALTH WITH COUNTDOWNS ---
+                    val bossStatusEffects = remember(session.enemyBleedTurns, session.enemyStunned, session.activeBuff, session.turnCount) {
+                        buildStatusEffectsFor1v1Boss(session)
+                    }
+                    if (bossStatusEffects.isNotEmpty()) {
+                        CharacterStatusEffectsRow(
+                            statusEffects = bossStatusEffects,
+                            onSelectEffect = { selectedStatusForDetailDialog = it },
+                            maxVisible = 3,
+                            compact = true
+                        )
+                    } else {
+                        Text("Normální stav", fontSize = 9.sp, color = Color.Gray)
                     }
                 }
             }
@@ -402,50 +383,31 @@ fun ActiveCombatView(
                         )
                     }
 
-                    // --- PLAYER STATUS EFFECT ICONS NEXT TO HEALTH ---
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (session.isDefending) {
-                            StatusEffectBadge(
-                                icon = "🛡️",
-                                label = "Štít -65%",
-                                color = Color(0xFF1565C0),
-                                onClick = { selectedStatusTooltip = "🛡️ Obranný postoj: Utržené poškození je v tomto kole sníženo o 65% a regeneruje se TE." }
-                            )
-                        }
-                        if (session.activeBuff?.contains("Požehnání") == true) {
-                            StatusEffectBadge(
-                                icon = "💖",
-                                label = "Požehnání",
-                                color = Color(0xFFAD1457),
-                                onClick = { selectedStatusTooltip = "💖 Požehnání harému: Oblíbenkyně z harému ti poskytuje psychickou sílu a regeneraci." }
-                            )
-                        }
-                        if (player.darkEnergy >= 20) {
-                            StatusEffectBadge(
-                                icon = "🔮",
-                                label = "Rezonance",
-                                color = Color(0xFF7B1FA2),
-                                onClick = { selectedStatusTooltip = "🔮 Temná rezonance: Tvá stínová magie je plně nabitá pro sesílání mocných kouzel." }
-                            )
-                        }
-                        if (session.playerHp <= (session.playerMaxHp * 0.3f)) {
-                            StatusEffectBadge(
-                                icon = "⚠️",
-                                label = "Kritický",
-                                color = Color(0xFFC62828),
-                                onClick = { selectedStatusTooltip = "⚠️ Kritický stav: Tvé HP kleslo pod 30%! Použij balzám nebo vysátí duše." }
-                            )
-                        }
-                        if (!session.isDefending && session.activeBuff?.contains("Požehnání") != true && player.darkEnergy < 20 && session.playerHp > (session.playerMaxHp * 0.3f)) {
-                            Text("Bojová připravenost", fontSize = 9.sp, color = Color(0xFF81C784))
-                        }
+                    // --- PLAYER STATUS EFFECT ICONS NEXT TO HEALTH WITH COUNTDOWNS ---
+                    val playerStatusEffects = remember(session.isDefending, session.activeBuff, player.darkEnergy, session.playerHp, session.playerMaxHp) {
+                        buildStatusEffectsFor1v1Player(session, player, deployedChar)
+                    }
+                    if (playerStatusEffects.isNotEmpty()) {
+                        CharacterStatusEffectsRow(
+                            statusEffects = playerStatusEffects,
+                            onSelectEffect = { selectedStatusForDetailDialog = it },
+                            maxVisible = 3,
+                            compact = true
+                        )
+                    } else {
+                        Text("Bojová připravenost", fontSize = 9.sp, color = Color(0xFF81C784))
                     }
                 }
             }
+        }
+
+        // Status effect detail dialog with countdown timer
+        val activeSelectedStatus = selectedStatusForDetailDialog
+        if (activeSelectedStatus != null) {
+            CombatStatusEffectDetailDialog(
+                effect = activeSelectedStatus,
+                onDismiss = { selectedStatusForDetailDialog = null }
+            )
         }
 
         // Status tooltip dialog
@@ -1057,6 +1019,10 @@ fun ScrollableCombatLogComponent(
 
 @Composable
 fun DetailedCombatLogCard(entry: CombatLogEntry) {
+    val tacticalType = remember(entry.type, entry.message, entry.actionName) {
+        TacticalAnimationType.fromLogEntry(entry.type, entry.message, entry.actionName)
+    }
+
     val bgColor = when (entry.type) {
         "player_attack" -> Color(0xFF131F2E)
         "player_special" -> Color(0xFF1B2338)
@@ -1094,122 +1060,137 @@ fun DetailedCombatLogCard(entry: CombatLogEntry) {
     Card(
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = bgColor),
-        border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.25f)),
+        border = BorderStroke(1.dp, tacticalType.accentColor.copy(alpha = 0.35f)),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(
-            modifier = Modifier.padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Top
         ) {
-            // Header line: Turn pill, Actor & Action, Damage tag
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // Tactical Micro Lottie Animation Icon
+            TacticalLottieMicroBadge(
+                animationType = tacticalType,
+                sizeDp = 28.dp,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                // Header line: Turn pill, Actor & Action, Damage tag
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.weight(1f, fill = false)
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = badgeColor.copy(alpha = 0.22f)
-                    ) {
-                        Text(
-                            text = "KOLO ${entry.turn}",
-                            color = badgeColor,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                        )
-                    }
-
-                    if (!entry.actor.isNullOrBlank()) {
-                        Text(
-                            text = entry.actor,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = actorColor
-                        )
-                    }
-
-                    if (!entry.actionName.isNullOrBlank()) {
-                        Text(
-                            text = "• ${entry.actionName}",
-                            fontSize = 10.sp,
-                            color = Color.White.copy(alpha = 0.75f)
-                        )
-                    }
-                }
-
-                if (entry.damageDealt != null && entry.damageDealt > 0) {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = if (entry.type.startsWith("enemy")) Color(0xFFD32F2F).copy(alpha = 0.3f) else Color(0xFF1976D2).copy(alpha = 0.3f)
-                    ) {
-                        Text(
-                            text = "${if (entry.type.startsWith("enemy")) "-" else ""}${entry.damageDealt} DMG",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = if (entry.type.startsWith("enemy")) Color(0xFFFF8A80) else Color(0xFF90CAF9),
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                        )
-                    }
-                }
-            }
-
-            // Narrative Story Description Box
-            if (!entry.narrativeText.isNullOrBlank()) {
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color.Black.copy(alpha = 0.28f),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Text("📜", fontSize = 11.sp)
-                        Text(
-                            text = entry.narrativeText,
-                            fontSize = 11.sp,
-                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                            lineHeight = 15.sp,
-                            color = Color(0xFFE0E0E0)
-                        )
-                    }
-                }
-            } else {
-                Text(
-                    text = entry.message,
-                    fontSize = 11.sp,
-                    color = Color.White.copy(alpha = 0.9f)
-                )
-            }
-
-            // Damage Calculation Formula Chip
-            if (!entry.damageCalculation.isNullOrBlank()) {
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = Color(0xFF101622),
-                    border = BorderStroke(0.5.dp, Color(0xFF64B5F6).copy(alpha = 0.35f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.weight(1f, fill = false)
                     ) {
-                        Text("📐", fontSize = 9.sp)
-                        Text(
-                            text = entry.damageCalculation,
-                            fontSize = 9.sp,
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                            fontWeight = FontWeight.Medium,
-                            color = Color(0xFF81D4FA)
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = badgeColor.copy(alpha = 0.22f)
+                        ) {
+                            Text(
+                                text = "KOLO ${entry.turn}",
+                                color = badgeColor,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+
+                        if (!entry.actor.isNullOrBlank()) {
+                            Text(
+                                text = entry.actor,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = actorColor
+                            )
+                        }
+
+                        if (!entry.actionName.isNullOrBlank()) {
+                            Text(
+                                text = "• ${entry.actionName}",
+                                fontSize = 10.sp,
+                                color = Color.White.copy(alpha = 0.75f)
+                            )
+                        }
+                    }
+
+                    if (entry.damageDealt != null && entry.damageDealt > 0) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = if (entry.type.startsWith("enemy")) Color(0xFFD32F2F).copy(alpha = 0.3f) else Color(0xFF1976D2).copy(alpha = 0.3f)
+                        ) {
+                            Text(
+                                text = "${if (entry.type.startsWith("enemy")) "-" else ""}${entry.damageDealt} DMG",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = if (entry.type.startsWith("enemy")) Color(0xFFFF8A80) else Color(0xFF90CAF9),
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Narrative Story Description Box
+                if (!entry.narrativeText.isNullOrBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color.Black.copy(alpha = 0.28f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Text("📜", fontSize = 11.sp)
+                            Text(
+                                text = entry.narrativeText,
+                                fontSize = 11.sp,
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                lineHeight = 15.sp,
+                                color = Color(0xFFE0E0E0)
+                            )
+                        }
+                    }
+                } else {
+                    Text(
+                        text = entry.message,
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.9f)
+                    )
+                }
+
+                // Damage Calculation Formula Chip
+                if (!entry.damageCalculation.isNullOrBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xFF101622),
+                        border = BorderStroke(0.5.dp, Color(0xFF64B5F6).copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text("📐", fontSize = 9.sp)
+                            Text(
+                                text = entry.damageCalculation,
+                                fontSize = 9.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF81D4FA)
+                            )
+                        }
                     }
                 }
             }
@@ -1219,6 +1200,10 @@ fun DetailedCombatLogCard(entry: CombatLogEntry) {
 
 @Composable
 fun CombatLogItem(entry: CombatLogEntry) {
+    val tacticalType = remember(entry.type, entry.message, entry.actionName) {
+        TacticalAnimationType.fromLogEntry(entry.type, entry.message, entry.actionName)
+    }
+
     val bgColor = when (entry.type) {
         "player_attack" -> Color(0xFF1E2833)
         "player_spell" -> Color(0xFF281E33)
@@ -1250,26 +1235,25 @@ fun CombatLogItem(entry: CombatLogEntry) {
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(badgeColor)
+            TacticalLottieMicroBadge(
+                animationType = tacticalType,
+                sizeDp = 20.dp,
+                showBorder = false
             )
-            Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = "Kolo ${entry.turn}:",
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 color = badgeColor
             )
-            Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = entry.message,
                 fontSize = 11.sp,
-                color = Color.White.copy(alpha = 0.9f)
+                color = Color.White.copy(alpha = 0.9f),
+                modifier = Modifier.weight(1f)
             )
         }
     }

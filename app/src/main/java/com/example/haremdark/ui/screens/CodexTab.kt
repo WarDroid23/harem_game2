@@ -45,6 +45,11 @@ fun CodexTab(gameState: GameSave, engine: GameEngine) {
         allEntries.filter { it.category == selectedCategory }
     }
     
+    if (selectedCategory == "Bestiář") {
+        BestiaryScreen(gameState = gameState, onBack = { selectedCategory = "Vše" })
+        return
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         // Category filters
         ScrollableTabRow(

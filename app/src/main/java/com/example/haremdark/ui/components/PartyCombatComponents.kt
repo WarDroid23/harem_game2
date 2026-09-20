@@ -45,6 +45,7 @@ fun EnemyBattleLine(
     onSelectTarget: (Int) -> Unit,
     attackerEnemyIndex: Int? = -1,
     hitTargetEnemyIndex: Int? = -1,
+    onSelectStatusEffect: (CombatStatusEffect) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     LazyRow(
@@ -160,13 +161,14 @@ fun EnemyBattleLine(
                         }
                     }
 
-                    // Status Effects row
+                    // Status Effects with countdown timers
                     if (enemy.statusEffects.isNotEmpty()) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                            enemy.statusEffects.take(3).forEach { eff ->
-                                Text(eff.icon, fontSize = 10.sp)
-                            }
-                        }
+                        CharacterStatusEffectsRow(
+                            statusEffects = enemy.statusEffects,
+                            onSelectEffect = onSelectStatusEffect,
+                            maxVisible = 3,
+                            compact = true
+                        )
                     }
                 }
             }
@@ -185,6 +187,7 @@ fun PartyFormationRow(
     onSelectAlly: (Int) -> Unit,
     attackerPartyIndex: Int? = -1,
     hitTargetPartyIndex: Int? = -1,
+    onSelectStatusEffect: (CombatStatusEffect) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     LazyRow(
@@ -345,13 +348,14 @@ fun PartyFormationRow(
                         Text("💀 Zraněna / V bezvědomí", fontSize = 9.sp, color = Color.Red, fontWeight = FontWeight.Bold)
                     }
 
-                    // Status Icons
+                    // Status Effects with countdown timers
                     if (member.statusEffects.isNotEmpty()) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                            member.statusEffects.take(3).forEach { eff ->
-                                Text(eff.icon, fontSize = 10.sp)
-                            }
-                        }
+                        CharacterStatusEffectsRow(
+                            statusEffects = member.statusEffects,
+                            onSelectEffect = onSelectStatusEffect,
+                            maxVisible = 3,
+                            compact = true
+                        )
                     }
                 }
             }
@@ -656,9 +660,13 @@ fun PartyCommandConsole(
 @Composable
 fun PartyCombatVictoryDialog(
     session: PartyCombatSession,
+    onForgeFragment: (String) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val rewards = session.rewards
+    val loot = rewards?.lootDistribution
+    val efficiency = loot?.efficiencyScore
+
     val rankColor = when (rewards?.rank) {
         "S+" -> Color(0xFFFFD700)
         "S" -> Color(0xFFFF4081)
@@ -667,6 +675,10 @@ fun PartyCombatVictoryDialog(
         else -> Color(0xFFB0BEC5)
     }
 
+    var showEfficiencyBreakdown by remember { mutableStateOf(false) }
+    var selectedResourceDetail by remember { mutableStateOf<CraftingResource?>(null) }
+    var forgedFragmentIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(20.dp),
@@ -674,8 +686,8 @@ fun PartyCombatVictoryDialog(
             border = BorderStroke(2.dp, rankColor),
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 620.dp)
-                .padding(8.dp)
+                .heightIn(max = 660.dp)
+                .padding(4.dp)
         ) {
             LazyColumn(
                 modifier = Modifier
@@ -691,7 +703,7 @@ fun PartyCombatVictoryDialog(
                             shape = CircleShape,
                             color = rankColor.copy(alpha = 0.2f),
                             border = BorderStroke(2.dp, rankColor),
-                            modifier = Modifier.size(54.dp)
+                            modifier = Modifier.size(56.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Text(
@@ -711,15 +723,121 @@ fun PartyCombatVictoryDialog(
                             textAlign = TextAlign.Center
                         )
                         Text(
-                            text = "Střet: ${session.encounterTitle} • Skóre: ${rewards?.score ?: 1000} bodů",
-                            fontSize = 11.sp,
+                            text = "Bojová efektivita: ${efficiency?.efficiencyPercent ?: 85}% • Skóre: ${rewards?.score ?: 1000} b.",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
                             color = Color(0xFFE1BEE7),
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "Střet: ${session.encounterTitle}",
+                            fontSize = 10.sp,
+                            color = Color.Gray,
                             textAlign = TextAlign.Center
                         )
                     }
                 }
 
-                // 2. MVP Showcase Banner
+                // 2. Efficiency Score Breakdown
+                if (efficiency != null) {
+                    item {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFF220E2F),
+                            border = BorderStroke(1.dp, Color(0xFF9C27B0).copy(alpha = 0.4f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showEfficiencyBreakdown = !showEfficiencyBreakdown }
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text("📊", fontSize = 13.sp)
+                                        Text(
+                                            text = "Rozpad efektivity v boji",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFFE1BEE7)
+                                        )
+                                    }
+                                    Text(
+                                        text = if (showEfficiencyBreakdown) "Skrýt ▲" else "Zobrazit ▼",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFFFF80AB),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                AnimatedVisibility(visible = showEfficiencyBreakdown) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        efficiency.breakdown.forEach { metric ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .background(Color(0xFF14081E), RoundedCornerShape(6.dp))
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    Text(metric.icon, fontSize = 11.sp)
+                                                    Text(metric.label, fontSize = 10.sp, color = Color.White)
+                                                }
+                                                Text(
+                                                    metric.valueDisplay,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color(0xFFFFD700)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 3. Jackpot Reroll Banner
+                if (loot?.jackpotRerollTriggered == true) {
+                    item {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFF3B1800),
+                            border = BorderStroke(1.dp, Color(0xFFFFD700)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text("🎰", fontSize = 20.sp)
+                                Column {
+                                    Text("JACKPOT EFEKTIVITY!", fontSize = 10.sp, fontWeight = FontWeight.Black, color = Color(0xFFFFD700))
+                                    Text("Bonusový roll za hodnocení S+ udělil legendární suroviny.", fontSize = 9.sp, color = Color(0xFFFFE082))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 4. MVP Showcase Banner
                 if (rewards?.mvpName != null && rewards.mvpName.isNotBlank()) {
                     item {
                         Surface(
@@ -733,17 +851,17 @@ fun PartyCombatVictoryDialog(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Text("👑", fontSize = 24.sp)
+                                Text("👑", fontSize = 22.sp)
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = "MVP BOJE: ${rewards.mvpName}",
                                         fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 12.sp,
+                                        fontSize = 11.sp,
                                         color = Color(0xFFFFD700)
                                     )
                                     Text(
-                                        text = "Získává bonus +50% ZK a dodatečnou náklonnost",
-                                        fontSize = 10.sp,
+                                        text = "Získává bonus +${rewards.mvpBonusXp} ZK a náklonnost",
+                                        fontSize = 9.sp,
                                         color = Color(0xFFFF80AB)
                                     )
                                 }
@@ -752,7 +870,7 @@ fun PartyCombatVictoryDialog(
                     }
                 }
 
-                // 3. Currencies & Master Gains Grid
+                // 5. Currencies & Master Gains Grid
                 item {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
@@ -773,7 +891,73 @@ fun PartyCombatVictoryDialog(
                     }
                 }
 
-                // 4. Companions Combat XP Gains
+                // 6. Equipment Fragments Section
+                if (loot != null && loot.fragmentsRewarded.isNotEmpty()) {
+                    item {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "🧩 Úlomky vzácné výbavy (${loot.fragmentsRewarded.size}):",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFFD700)
+                            )
+                            loot.fragmentsRewarded.forEach { frag ->
+                                val isForged = forgedFragmentIds.contains(frag.id)
+                                EquipmentFragmentCard(
+                                    fragment = frag,
+                                    isForged = isForged,
+                                    onForge = {
+                                        forgedFragmentIds = forgedFragmentIds + frag.id
+                                        onForgeFragment(frag.id)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 7. Crafting Resources Section
+                if (loot != null && loot.resourcesRewarded.isNotEmpty()) {
+                    item {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "💎 Řemeslné suroviny (${loot.resourcesRewarded.sumOf { it.count }} ks):",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF80D8FF)
+                            )
+                            val resourceChunks = remember(loot.resourcesRewarded) { loot.resourcesRewarded.chunked(2) }
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                for (rowItems in resourceChunks) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        for (res in rowItems) {
+                                            Box(modifier = Modifier.weight(1f)) {
+                                                CraftingResourcePill(
+                                                    resource = res,
+                                                    onClick = { selectedResourceDetail = res }
+                                                )
+                                            }
+                                        }
+                                        if (rowItems.size == 1) {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 8. Companions Combat XP Gains
                 item {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
@@ -813,7 +997,7 @@ fun PartyCombatVictoryDialog(
                     }
                 }
 
-                // 5. Item Drops / Loot Box
+                // 9. Standard Item Drops / Loot Box
                 if (rewards != null && rewards.itemDropDetails.isNotEmpty()) {
                     item {
                         Surface(
@@ -827,7 +1011,7 @@ fun PartyCombatVictoryDialog(
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
-                                    text = "🎁 Kořist z bojiště (${rewards.itemDropDetails.size} předmětů):",
+                                    text = "🎁 Dodatečné předměty (${rewards.itemDropDetails.size}):",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFFFFD700)
@@ -863,7 +1047,7 @@ fun PartyCombatVictoryDialog(
                     }
                 }
 
-                // 6. Action Button
+                // 10. Action Button
                 item {
                     Button(
                         onClick = onDismiss,
@@ -873,11 +1057,18 @@ fun PartyCombatVictoryDialog(
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = rankColor)
                     ) {
-                        Text("🏆 PŘEVZÍT ODMĚNY A ZK", color = Color.Black, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+                        Text("🏆 PŘEVZÍT VŠECHNY ODMĚNY A ZK", color = Color.Black, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
                     }
                 }
             }
         }
+    }
+
+    selectedResourceDetail?.let { res ->
+        CraftingResourceDetailModal(
+            resource = res,
+            onDismiss = { selectedResourceDetail = null }
+        )
     }
 }
 
@@ -1026,6 +1217,7 @@ fun PartyCombatLogModal(
                 ) {
                     val reversedLogs = logs.reversed()
                     items(reversedLogs) { entry ->
+                        val tacticalType = TacticalAnimationType.fromLogEntry(entry.type, entry.message, entry.actionName)
                         val logColor = when (entry.type) {
                             "player_attack", "player_spell" -> Color(0xFFFFCC80)
                             "enemy_attack", "enemy_special" -> Color(0xFFFF8A80)
@@ -1035,12 +1227,24 @@ fun PartyCombatLogModal(
                             "defeat" -> Color(0xFFE53935)
                             else -> Color(0xFFE0E0E0)
                         }
-                        Text(
-                            text = "[Kolo ${entry.turn}] ${entry.message}",
-                            color = logColor,
-                            fontSize = 11.sp,
-                            lineHeight = 15.sp
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            TacticalLottieMicroBadge(
+                                animationType = tacticalType,
+                                sizeDp = 18.dp,
+                                showBorder = false
+                            )
+                            Text(
+                                text = "[Kolo ${entry.turn}] ${entry.message}",
+                                color = logColor,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
                 }
 

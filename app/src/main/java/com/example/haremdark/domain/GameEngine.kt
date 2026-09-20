@@ -2361,6 +2361,72 @@ class GameEngine(private val context: Context) {
         return Pair(true, msg)
     }
 
+    // --- EQUIPMENT FRAGMENTS & FORGE SYSTEM ---
+
+    fun getAvailableFragmentsWithProgress(): List<com.example.haremdark.models.EquipmentFragment> {
+        val playerFragments = _gameState.value.player.equipmentFragments
+        return com.example.haremdark.models.LootDistributionCatalog.ALL_EQUIPMENT_FRAGMENTS.map { template ->
+            val count = playerFragments[template.id] ?: 0
+            template.copy(currentCount = count)
+        }
+    }
+
+    fun getPlayerCraftingResourcesList(): List<com.example.haremdark.models.CraftingResource> {
+        val playerResources = _gameState.value.player.craftingResources
+        return com.example.haremdark.models.LootDistributionCatalog.ALL_CRAFTING_RESOURCES.mapNotNull { template ->
+            val count = playerResources[template.id] ?: 0
+            if (count > 0) template.copy(count = count) else null
+        }
+    }
+
+    fun forgeEquipmentFromFragments(fragmentId: String): Pair<Boolean, String> {
+        val fragmentTemplate = com.example.haremdark.models.LootDistributionCatalog.ALL_EQUIPMENT_FRAGMENTS.find { it.id == fragmentId }
+            ?: return Pair(false, "Neznámý úlomek výbavy.")
+
+        val current = _gameState.value
+        val player = current.player
+        val count = player.equipmentFragments[fragmentId] ?: 0
+
+        if (count < fragmentTemplate.requiredCount) {
+            return Pair(false, "Nedostatek úlomků pro ukování ($count/${fragmentTemplate.requiredCount})!")
+        }
+
+        val forgedItem = fragmentTemplate.forgeResultItem.copy()
+        val msg = "⚡ Úspěšně jsi ukoval ${forgedItem.name} z ${fragmentTemplate.requiredCount} úlomků!"
+        SoundEffectManager.playCombat(com.example.haremdark.domain.CombatSound.CRITICAL_SUPERNOVA)
+
+        updateState { state ->
+            val newFragments = state.player.equipmentFragments.toMutableMap()
+            val remaining = (count - fragmentTemplate.requiredCount).coerceAtLeast(0)
+            if (remaining > 0) {
+                newFragments[fragmentId] = remaining
+            } else {
+                newFragments.remove(fragmentId)
+            }
+
+            val newItems = state.player.items.map { it.copy() }.toMutableList()
+            val existingIdx = newItems.indexOfFirst { it.id == forgedItem.id }
+            if (existingIdx != -1) {
+                val existing = newItems[existingIdx]
+                newItems[existingIdx] = existing.copy(count = existing.count + 1)
+            } else {
+                newItems.add(forgedItem)
+            }
+
+            val newPlayer = state.player.copy(
+                equipmentFragments = newFragments,
+                items = newItems,
+                prestige = state.player.prestige + 15,
+                xp = state.player.xp + 50
+            )
+
+            val newLogs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newPlayer, gameLog = newLogs)
+        }
+        autoSave()
+        return Pair(true, msg)
+    }
+
     // --- UNDERWORLD DRUGS & CARTEL SYSTEM ---
 
     fun craftDrug(drugId: String, batchCount: Int = 1): Pair<Boolean, String> {
@@ -3807,6 +3873,13 @@ class GameEngine(private val context: Context) {
             }
         }
         
+        val environmentalHazard = com.example.haremdark.models.EnvironmentalHazard.getHazardForLocation(boss.name)
+        initialEntries.add(CombatLogEntry(
+            turn = 1,
+            type = "system",
+            message = "🌋 Terén arény: ${environmentalHazard.icon} ${environmentalHazard.name} (${environmentalHazard.terrainModifierDesc})."
+        ))
+
         _combatState.value = CombatSession(
             boss = boss,
             bossHp = boss.hp,
@@ -3823,7 +3896,9 @@ class GameEngine(private val context: Context) {
             log = initialEntries.map { it.message },
             isOver = false,
             victory = false,
-            lootGained = null
+            lootGained = null,
+            environmentalHazard = environmentalHazard,
+            hazardCountdown = environmentalHazard.triggerIntervalTurns
         )
         SoundEffectManager.playCombat(CombatSound.COMBAT_START)
     }
@@ -4230,7 +4305,15 @@ class GameEngine(private val context: Context) {
                             }
                         }
 
-                        SoundEffectManager.playCombat(if (skill.category == com.example.haremdark.models.SkillCategory.DARK_MAGIC) CombatSound.DARK_SPELL else CombatSound.CRITICAL_HIT)
+                        if (isCrit) {
+                            SoundEffectManager.playCombat(CombatSound.CRITICAL_SUPERNOVA)
+                        } else if (skill.healAmount > 0) {
+                            SoundEffectManager.playCombat(CombatSound.HEAL_RESTORE)
+                        } else if (skill.category == com.example.haremdark.models.SkillCategory.DARK_MAGIC) {
+                            SoundEffectManager.playCombat(CombatSound.DARK_SPELL)
+                        } else {
+                            SoundEffectManager.playCombat(CombatSound.SKILL_ACTIVATION)
+                        }
 
                         val costText = mutableListOf<String>()
                         if (skill.manaCost > 0) costText.add("-${skill.manaCost} MP")
@@ -4350,6 +4433,7 @@ class GameEngine(private val context: Context) {
             val bleedDmg = Random.nextInt(8, 14)
             newBossHp = (newBossHp - bleedDmg).coerceAtLeast(0)
             newBleedTurns -= 1
+            SoundEffectManager.playCombat(CombatSound.STATUS_TRIGGER_BLEED)
             newLogEntries.add(0, CombatLogEntry(
                 turn = currentTurn,
                 type = "player_spell",
@@ -4421,50 +4505,65 @@ class GameEngine(private val context: Context) {
                     narrativeText = "Protivník vrávorá a s omámeným zrakem se snaží znovu nabrat rovnováhu. Jeho tah propadá!"
                 ))
             } else {
-                val isSpecialAttack = (currentTurn % 3 == 0)
-                val baseEnemyAtk = session.boss.attack
-                val defenseReduction = ((defenseSkill * 2.5f) + haremDefenseBonus) * breakthroughDefMultiplier
-
-                val rawBossDmg = if (isSpecialAttack) {
-                    (baseEnemyAtk * 1.45f).toInt() + Random.nextInt(1, 6)
+                val isDodged = Random.nextInt(100) < 14
+                if (isDodged && !isDefending) {
+                    SoundEffectManager.playCombat(CombatSound.DODGE_EVADE)
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "player_special",
+                        message = "💨 Bleskový úskok! Útok protivníka ${session.boss.name} byl zcela vyhnut!",
+                        actor = combatHeroName,
+                        actionName = "Úskok z dosahu",
+                        damageDealt = 0,
+                        damageCalculation = "Reflexní vyhnutí: 100% redukce poškození",
+                        narrativeText = "S bleskovým postřehem ses vyhnul smrtícímu výpadu. Čepel protivníka proťala pouze prázdný vzduch!"
+                    ))
                 } else {
-                    baseEnemyAtk + Random.nextInt(-2, 4)
-                }
+                    val isSpecialAttack = (currentTurn % 3 == 0)
+                    val baseEnemyAtk = session.boss.attack
+                    val defenseReduction = ((defenseSkill * 2.5f) + haremDefenseBonus) * breakthroughDefMultiplier
 
-                var finalEnemyDmg = (rawBossDmg - defenseReduction).coerceAtLeast(3f).toInt()
-                finalEnemyDmg = (finalEnemyDmg * (1.0f / totalAffinityMultiplier)).toInt()
-                if (isDefending) {
-                    finalEnemyDmg = (finalEnemyDmg * 0.35f).toInt().coerceAtLeast(2)
-                }
-                if (activeBuff?.contains("Prokletí") == true) {
-                    finalEnemyDmg = (finalEnemyDmg * 0.75f).toInt().coerceAtLeast(2)
-                }
-
-                newPlayerHp = (newPlayerHp - finalEnemyDmg).coerceAtLeast(0)
-
-                val attackTitle = if (isSpecialAttack) "💥 ${session.boss.name} provedl speciální techniku [${session.boss.phaseName}]" else "⚔️ ${session.boss.name} zaútočil"
-                val defenseNotice = if (isDefending) " (útok odražen štítem!)" else ""
-
-                if (isSpecialAttack) {
-                    SoundEffectManager.playCombat(CombatSound.BOSS_SPECIAL)
-                } else {
-                    SoundEffectManager.playCombat(CombatSound.ENEMY_STRIKE)
-                }
-
-                newLogEntries.add(0, CombatLogEntry(
-                    turn = currentTurn,
-                    type = if (isSpecialAttack) "enemy_special" else "enemy_attack",
-                    message = "$attackTitle za $finalEnemyDmg poškození!$defenseNotice",
-                    actor = session.boss.name,
-                    actionName = if (isSpecialAttack) "Boss technika: ${session.boss.phaseName}" else "Zuřivý protiútok",
-                    damageDealt = finalEnemyDmg,
-                    damageCalculation = "[Útok bosse: $rawBossDmg] - [Obrana a harém: ${defenseReduction.toInt()}] * [Kryt: ${if (isDefending) "x0.35" else "x1.0"}] = $finalEnemyDmg DMG",
-                    narrativeText = if (isSpecialAttack) {
-                        "Aréna potemněla! ${session.boss.name} rozpoutal svou zhoubnou schopnost [${session.boss.phaseName}], jež zasáhla celou linii drtivou silou!"
+                    val rawBossDmg = if (isSpecialAttack) {
+                        (baseEnemyAtk * 1.45f).toInt() + Random.nextInt(1, 6)
                     } else {
-                        "${session.boss.name} bleskově zaútočil zuřivým výpadem. Rána dopadla s brutální silou."
+                        baseEnemyAtk + Random.nextInt(-2, 4)
                     }
-                ))
+
+                    var finalEnemyDmg = (rawBossDmg - defenseReduction).coerceAtLeast(3f).toInt()
+                    finalEnemyDmg = (finalEnemyDmg * (1.0f / totalAffinityMultiplier)).toInt()
+                    if (isDefending) {
+                        finalEnemyDmg = (finalEnemyDmg * 0.35f).toInt().coerceAtLeast(2)
+                    }
+                    if (activeBuff?.contains("Prokletí") == true) {
+                        finalEnemyDmg = (finalEnemyDmg * 0.75f).toInt().coerceAtLeast(2)
+                    }
+
+                    newPlayerHp = (newPlayerHp - finalEnemyDmg).coerceAtLeast(0)
+
+                    val attackTitle = if (isSpecialAttack) "💥 ${session.boss.name} provedl speciální techniku [${session.boss.phaseName}]" else "⚔️ ${session.boss.name} zaútočil"
+                    val defenseNotice = if (isDefending) " (útok odražen štítem!)" else ""
+
+                    if (isSpecialAttack) {
+                        SoundEffectManager.playCombat(CombatSound.BOSS_SPECIAL)
+                    } else {
+                        SoundEffectManager.playCombat(CombatSound.ENEMY_STRIKE)
+                    }
+
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = if (isSpecialAttack) "enemy_special" else "enemy_attack",
+                        message = "$attackTitle za $finalEnemyDmg poškození!$defenseNotice",
+                        actor = session.boss.name,
+                        actionName = if (isSpecialAttack) "Boss technika: ${session.boss.phaseName}" else "Zuřivý protiútok",
+                        damageDealt = finalEnemyDmg,
+                        damageCalculation = "[Útok bosse: $rawBossDmg] - [Obrana a harém: ${defenseReduction.toInt()}] * [Kryt: ${if (isDefending) "x0.35" else "x1.0"}] = $finalEnemyDmg DMG",
+                        narrativeText = if (isSpecialAttack) {
+                            "Aréna potemněla! ${session.boss.name} rozpoutal svou zhoubnou schopnost [${session.boss.phaseName}], jež zasáhla celou linii drtivou silou!"
+                        } else {
+                            "${session.boss.name} bleskově zaútočil zuřivým výpadem. Rána dopadla s brutální silou."
+                        }
+                    ))
+                }
 
                 if (newPlayerHp <= 0) {
                     isOver = true
@@ -4488,7 +4587,86 @@ class GameEngine(private val context: Context) {
             }
         }
 
-        // 5. End of Turn Affinity Passives (Regen & Dark Energy)
+        // 5. Environmental Hazard Periodic Trigger (1v1 Arena)
+        var newHazardCountdown = session.hazardCountdown - 1
+        var hazardTriggerMsg: String? = null
+        val hazard = session.environmentalHazard
+
+        if (!isOver && hazard != null && newHazardCountdown <= 0) {
+            newHazardCountdown = hazard.triggerIntervalTurns
+            val strikeBoss = Random.nextBoolean()
+
+            if (strikeBoss && newBossHp > 0) {
+                val hazardDmg = (hazard.baseDamage + Random.nextInt(-2, 4)).coerceAtLeast(6)
+                newBossHp = (newBossHp - hazardDmg).coerceAtLeast(0)
+                if (hazard.statusEffectToApply?.type == "BURN" || hazard.statusEffectToApply?.type == "BLEED" || hazard.statusEffectToApply?.type == "POISON") {
+                    newBleedTurns = (newBleedTurns + 2).coerceAtMost(4)
+                } else if (hazard.statusEffectToApply?.type == "FREEZE" || hazard.statusEffectToApply?.type == "STUN") {
+                    newStunned = true
+                }
+                hazardTriggerMsg = "💥 ${hazard.icon} ${hazard.name} zasáhl ${session.boss.name} za $hazardDmg DMG!"
+                newLogEntries.add(0, CombatLogEntry(
+                    turn = currentTurn,
+                    type = "system",
+                    message = "${hazard.icon} [TERÉNNÍ HAZARD] ${hazard.title} udeřil do ${session.boss.name} za $hazardDmg poškození!",
+                    actor = hazard.name,
+                    actionName = hazard.title,
+                    damageDealt = hazardDmg
+                ))
+            } else if (newPlayerHp > 0) {
+                if (hazard.baseDamage <= 0) {
+                    val healAmt = 22
+                    newPlayerHp = (newPlayerHp + healAmt).coerceAtMost(session.playerMaxHp)
+                    hazardTriggerMsg = "✨ ${hazard.icon} ${hazard.name} požehnal $combatHeroName (+${healAmt} HP)!"
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "system",
+                        message = "${hazard.icon} [POSVÁTNÝ TERÉN] ${hazard.title} požehnal $combatHeroName (+${healAmt} HP).",
+                        actor = hazard.name,
+                        actionName = hazard.title
+                    ))
+                } else {
+                    val hazardDmg = (hazard.baseDamage + Random.nextInt(-3, 3)).coerceAtLeast(4)
+                    newPlayerHp = (newPlayerHp - hazardDmg).coerceAtLeast(0)
+                    hazardTriggerMsg = "⚠️ ${hazard.icon} ${hazard.name} zasáhl $combatHeroName za $hazardDmg DMG!"
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "system",
+                        message = "${hazard.icon} [TERÉNNÍ HAZARD] ${hazard.title} zasáhl $combatHeroName za $hazardDmg poškození!",
+                        actor = hazard.name,
+                        actionName = hazard.title,
+                        damageDealt = hazardDmg
+                    ))
+                }
+            }
+
+            // Sound cue
+            when (hazard.hazardType) {
+                com.example.haremdark.models.HazardType.LAVA_ERUPTION -> SoundEffectManager.playCombat(CombatSound.ENEMY_STRIKE)
+                com.example.haremdark.models.HazardType.TOXIC_MIASMA -> SoundEffectManager.playCombat(CombatSound.STATUS_TRIGGER_POISON)
+                com.example.haremdark.models.HazardType.THUNDER_SURGE -> SoundEffectManager.playCombat(CombatSound.CRITICAL_SUPERNOVA)
+                com.example.haremdark.models.HazardType.FROSTBITE_TEMPEST -> SoundEffectManager.playCombat(CombatSound.DARK_SPELL)
+                com.example.haremdark.models.HazardType.HOLY_RADIANCE -> SoundEffectManager.playCombat(CombatSound.HEAL_RESTORE)
+                com.example.haremdark.models.HazardType.SHADOW_ABYSS -> SoundEffectManager.playCombat(CombatSound.STATUS_TRIGGER_BLEED)
+            }
+
+            // Check if boss died from hazard
+            if (newBossHp <= 0) {
+                isOver = true
+                victory = true
+                player.gold += session.boss.rewardGold
+                addPlayerXp(session.boss.rewardXp)
+                lootInfo = "+${session.boss.rewardGold} zlatých • +${session.boss.rewardXp} XP"
+                newLogEntries.add(0, CombatLogEntry(
+                    turn = currentTurn,
+                    type = "victory",
+                    message = "🏆 VÍTĚZSTVÍ! ${session.boss.name} byl zničen terénním hazardem!",
+                    actor = hazard.name
+                ))
+            }
+        }
+
+        // 6. End of Turn Affinity Passives (Regen & Dark Energy)
         if (!isOver && newPlayerHp > 0) {
             val haremRegen = currentGameState.characters.sumOf { com.example.haremdark.data.AffinityData.getAffinityCombatBonuses(it.affinityLevel).regenBonus }
             val totalRegen = haremRegen + deployedAffinityBonus.regenBonus
@@ -4553,6 +4731,8 @@ class GameEngine(private val context: Context) {
             enemyBleedTurns = newBleedTurns,
             enemyStunned = newStunned,
             activeBuff = activeBuff,
+            hazardCountdown = newHazardCountdown,
+            lastHazardTriggerMessage = hazardTriggerMsg,
             logEntries = newLogEntries.take(40),
             log = newLogEntries.take(40).map { it.message },
             isOver = isOver,
@@ -5371,6 +5551,26 @@ class GameEngine(private val context: Context) {
                 logs.add("🎁 Získán předmět: ${drop.icon} ${drop.name} (${drop.rarity})")
             }
 
+            // Add equipment fragments and crafting resources from Loot Distribution
+            val newFragments = player.equipmentFragments.toMutableMap()
+            val newResources = player.craftingResources.toMutableMap()
+
+            rewards.lootDistribution?.let { loot ->
+                loot.fragmentsRewarded.forEach { frag ->
+                    val currentCount = newFragments[frag.id] ?: 0
+                    val updatedCount = currentCount + frag.currentCount
+                    newFragments[frag.id] = updatedCount
+                    logs.add("🧩 Získán úlomek: ${frag.targetEquipmentIcon} ${frag.targetEquipmentName} (Celkem: $updatedCount/${frag.requiredCount})")
+                }
+
+                loot.resourcesRewarded.forEach { res ->
+                    val currentCount = newResources[res.id] ?: 0
+                    val updatedCount = currentCount + res.count
+                    newResources[res.id] = updatedCount
+                    logs.add("💎 Získána surovina: ${res.icon} ${res.name} x${res.count}")
+                }
+            }
+
             // Update characters with XP, levels, SP, loyalty and affinity
             val participatingIds = session.party.filter { !it.isPlayer }.map { it.id }.toSet()
             val updatedCharacters = current.characters.map { girl ->
@@ -5409,7 +5609,9 @@ class GameEngine(private val context: Context) {
                 prestige = player.prestige + rewards.prestigeGain,
                 xp = player.xp + rewards.playerXp,
                 battlesWon = player.battlesWon + 1,
-                items = newItems
+                items = newItems,
+                equipmentFragments = newFragments,
+                craftingResources = newResources
             )
 
             current.copy(
