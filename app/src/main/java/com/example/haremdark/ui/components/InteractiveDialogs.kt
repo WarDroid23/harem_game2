@@ -108,6 +108,7 @@ fun CharacterDetailDialog(
     initialTab: Int = 0
 ) {
     val context = LocalContext.current
+    val currentGameState by engine?.gameState?.collectAsState() ?: remember { mutableStateOf(null) }
     var currentActiveCharacter by remember(character.id) { mutableStateOf(character) }
 
     val loyalty = StaticData.getLoyaltyTier(currentActiveCharacter.loajalita)
@@ -570,7 +571,7 @@ fun CharacterDetailDialog(
                         7 -> {
                             if (engine != null) {
                                 InventoryManagementPanel(
-                                    gameState = engine.gameState.value,
+                                    gameState = currentGameState ?: engine.gameState.value,
                                     engine = engine,
                                     activeCharacter = currentActiveCharacter,
                                     onUseItemOnCharacter = { item ->

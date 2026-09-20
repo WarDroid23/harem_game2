@@ -25,6 +25,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -35,6 +37,8 @@ import com.example.haremdark.domain.MoodNotification
 import com.example.haremdark.ui.components.GameTopBar
 import com.example.haremdark.ui.screens.*
 import com.example.haremdark.ui.components.DailyAttendanceDialog
+import com.example.haremdark.domain.SoundEffectManager
+import com.example.haremdark.domain.NavSound
 import kotlinx.coroutines.launch
 
 import com.example.haremdark.ui.theme.HaremDarkTheme
@@ -362,6 +366,7 @@ class MainActivity : ComponentActivity() {
                                     isSelected = currentRoute == "home",
                                     onClick = {
                                         coroutineScope.launch { drawerState.close() }
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
                                         navController.navigate("home") { launchSingleTop = true }
                                     }
                                 )
@@ -373,6 +378,7 @@ class MainActivity : ComponentActivity() {
                                     isSelected = currentRoute == "harem",
                                     onClick = {
                                         coroutineScope.launch { drawerState.close() }
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
                                         navController.navigate("harem") { launchSingleTop = true }
                                     }
                                 )
@@ -383,6 +389,7 @@ class MainActivity : ComponentActivity() {
                                     isSelected = currentRoute == "inventory",
                                     onClick = {
                                         coroutineScope.launch { drawerState.close() }
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
                                         navController.navigate("inventory") { launchSingleTop = true }
                                     }
                                 )
@@ -393,6 +400,7 @@ class MainActivity : ComponentActivity() {
                                     isSelected = currentRoute == "empire",
                                     onClick = {
                                         coroutineScope.launch { drawerState.close() }
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
                                         navController.navigate("empire") { launchSingleTop = true }
                                     }
                                 )
@@ -419,6 +427,7 @@ class MainActivity : ComponentActivity() {
                                     isSelected = currentRoute == "map",
                                     onClick = {
                                         coroutineScope.launch { drawerState.close() }
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
                                         navController.navigate("map") { launchSingleTop = true }
                                     }
                                 )
@@ -429,6 +438,7 @@ class MainActivity : ComponentActivity() {
                                     isSelected = currentRoute == "activities",
                                     onClick = {
                                         coroutineScope.launch { drawerState.close() }
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
                                         navController.navigate("activities") { launchSingleTop = true }
                                     }
                                 )
@@ -439,6 +449,7 @@ class MainActivity : ComponentActivity() {
                                     isSelected = currentRoute == "arena",
                                     onClick = {
                                         coroutineScope.launch { drawerState.close() }
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
                                         navController.navigate("arena") { launchSingleTop = true }
                                     }
                                 )
@@ -465,19 +476,32 @@ class MainActivity : ComponentActivity() {
                                     isSelected = currentRoute == "progression",
                                     onClick = {
                                         coroutineScope.launch { drawerState.close() }
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
                                         navController.navigate("progression") { launchSingleTop = true }
                                     }
                                 )
-                                QuickNavDrawerItem(
-                                    icon = Icons.Default.EmojiEvents,
-                                    title = "Úspěchy & Kodex",
-                                    subtitle = "Trofeje, milníky & lore",
-                                    isSelected = currentRoute == "achievements",
-                                    onClick = {
-                                        coroutineScope.launch { drawerState.close() }
-                                        navController.navigate("achievements") { launchSingleTop = true }
-                                    }
-                                )
+                                 QuickNavDrawerItem(
+                                     icon = Icons.Default.EmojiEvents,
+                                     title = "Úspěchy & Trofeje",
+                                     subtitle = "Tvé dosažené milníky",
+                                     isSelected = currentRoute == "achievements",
+                                     onClick = {
+                                         coroutineScope.launch { drawerState.close() }
+                                         SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
+                                         navController.navigate("achievements") { launchSingleTop = true }
+                                     }
+                                 )
+                                 QuickNavDrawerItem(
+                                     icon = Icons.Default.MenuBook,
+                                     title = "Kodex Dominia",
+                                     subtitle = "Lore, bestiář & historie",
+                                     isSelected = currentRoute == "codex",
+                                     onClick = {
+                                         coroutineScope.launch { drawerState.close() }
+                                         SoundEffectManager.playNavigation(NavSound.CODEX_OPEN)
+                                         navController.navigate("codex") { launchSingleTop = true }
+                                     }
+                                 )
                                 QuickNavDrawerItem(
                                     icon = Icons.Default.Settings,
                                     title = "Nastavení & Uložení",
@@ -485,6 +509,7 @@ class MainActivity : ComponentActivity() {
                                     isSelected = currentRoute == "settings",
                                     onClick = {
                                         coroutineScope.launch { drawerState.close() }
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
                                         navController.navigate("settings") { launchSingleTop = true }
                                     }
                                 )
@@ -495,6 +520,7 @@ class MainActivity : ComponentActivity() {
                                     isSelected = currentRoute == "network_graph",
                                     onClick = {
                                         coroutineScope.launch { drawerState.close() }
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
                                         navController.navigate("network_graph") { launchSingleTop = true }
                                     }
                                 )
@@ -544,6 +570,7 @@ class MainActivity : ComponentActivity() {
                                 NavigationBarItem(
                                     selected = isSelected,
                                     onClick = {
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
                                         navController.navigate(dest.route) {
                                             popUpTo(navController.graph.findStartDestination().id) {
                                                 saveState = true
@@ -584,7 +611,34 @@ class MainActivity : ComponentActivity() {
                             .fillMaxSize()
                             .padding(innerPadding)
                     ) {
-                        NavHost(navController = navController, startDestination = "home") {
+                        NavHost(
+                            navController = navController,
+                            startDestination = "home",
+                            enterTransition = {
+                                slideInHorizontally(
+                                    initialOffsetX = { 700 },
+                                    animationSpec = tween(400, easing = LinearOutSlowInEasing)
+                                ) + fadeIn(animationSpec = tween(400))
+                            },
+                            exitTransition = {
+                                slideOutHorizontally(
+                                    targetOffsetX = { -700 },
+                                    animationSpec = tween(400, easing = FastOutLinearInEasing)
+                                ) + fadeOut(animationSpec = tween(400))
+                            },
+                            popEnterTransition = {
+                                slideInHorizontally(
+                                    initialOffsetX = { -700 },
+                                    animationSpec = tween(400, easing = LinearOutSlowInEasing)
+                                ) + fadeIn(animationSpec = tween(400))
+                            },
+                            popExitTransition = {
+                                slideOutHorizontally(
+                                    targetOffsetX = { 700 },
+                                    animationSpec = tween(400, easing = FastOutLinearInEasing)
+                                ) + fadeOut(animationSpec = tween(400))
+                            }
+                        ) {
                             composable("home") {
                                 HomeScreen(
                                     gameState = gameState,
@@ -623,6 +677,9 @@ class MainActivity : ComponentActivity() {
                             }
                             composable("achievements") {
                                 com.example.haremdark.ui.screens.AchievementScreen(gameState = gameState, engine = engine, onMenuClick = { coroutineScope.launch { drawerState.open() } })
+                            }
+                            composable("codex") {
+                                CodexScreen(player = gameState.player, onBack = { navController.popBackStack() })
                             }
                             composable("inventory") {
                                 com.example.haremdark.ui.screens.InventoryScreen(gameState = gameState, engine = engine)

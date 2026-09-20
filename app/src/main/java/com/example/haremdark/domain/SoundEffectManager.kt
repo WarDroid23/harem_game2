@@ -56,6 +56,13 @@ enum class CombatSound {
     HEAL_RESTORE
 }
 
+enum class NavSound {
+    MENU_CLICK,
+    CODEX_OPEN,
+    SAVE_SLOT_SELECT,
+    SCREEN_ENTER
+}
+
 enum class LocationAmbientSound(
     val domainId: String,
     val title: String,
@@ -465,6 +472,46 @@ object SoundEffectManager {
                 }
             } catch (e: Exception) {
                 fallbackTone(ToneGenerator.TONE_PROP_PROMPT, 180)
+            }
+        }
+    }
+
+    fun playNavigation(sound: NavSound) {
+        if (_isMuted.value) return
+        
+        // Trigger subtle haptic feedback for all navigation events
+        HapticManager.vibrateClick()
+        
+        scope.launch {
+            try {
+                when (sound) {
+                    NavSound.MENU_CLICK -> {
+                        // Very short, subtle mechanical click (high frequency pulse)
+                        playPcmTrack(synthesizeTone(2200.0, 0.04, 0.4f))
+                    }
+                    NavSound.CODEX_OPEN -> {
+                        // Paper rustle / book turn sound (white noise burst)
+                        val count = (SAMPLE_RATE * 0.25).toInt()
+                        val buffer = ShortArray(count)
+                        for (i in 0 until count) {
+                            val progress = i.toDouble() / count
+                            val env = sin(PI * progress) * exp(-4.0 * progress)
+                            val noise = (Math.random() * 2.0 - 1.0) * 0.3
+                            buffer[i] = (noise * env * Short.MAX_VALUE).toInt().toShort()
+                        }
+                        playPcmTrack(buffer)
+                    }
+                    NavSound.SAVE_SLOT_SELECT -> {
+                        // Crystalline magic chime (ascending minor 3rd)
+                        playPcmTrack(synthesizeArpeggio(listOf(1046.5, 1244.5), 0.08, 0.5f))
+                    }
+                    NavSound.SCREEN_ENTER -> {
+                        // Smooth transition whoosh (low to mid sweep)
+                        playPcmTrack(synthesizeDescending(220.0, 440.0, 0.15))
+                    }
+                }
+            } catch (e: Exception) {
+                fallbackTone(ToneGenerator.TONE_PROP_ACK, 50)
             }
         }
     }

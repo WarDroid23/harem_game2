@@ -462,20 +462,40 @@ data class AffinityPointRecord(
 )
 
 fun Character.getSafeAffinityTrend(currentDay: Int = 1): List<AffinityPointRecord> {
-    if (affinityHistory.size >= 2) {
-        return affinityHistory
+    if (affinityHistory.isNotEmpty()) {
+        return affinityHistory.toList()
     }
     // Provide realistic baseline affinity progression curve up to current points
     val baseline = (affinityPoints * 0.25f).toInt().coerceAtLeast(5)
     val step1 = (affinityPoints * 0.50f).toInt().coerceAtLeast(baseline + 2)
     val step2 = (affinityPoints * 0.78f).toInt().coerceAtLeast(step1 + 2)
     val startDay = (currentDay - 3).coerceAtLeast(1)
-    return listOf(
+    
+    val generated = mutableListOf(
         AffinityPointRecord(startDay, baseline, "Příchod do komnat"),
         AffinityPointRecord(startDay + 1, step1, "Pozornost & Dary"),
         AffinityPointRecord(startDay + 2, step2, "Důvěrný rozhovor"),
         AffinityPointRecord(currentDay.coerceAtLeast(startDay + 3), affinityPoints, "Aktuální pouto")
     )
+    
+    // Save generated baseline to history so it persists
+    affinityHistory.clear()
+    affinityHistory.addAll(generated)
+    
+    return generated
+}
+
+fun Character.addAffinityHistory(day: Int, source: String = "Interakce") {
+    // Avoid adding duplicate records for the same day if points haven't changed much
+    val lastRecord = affinityHistory.lastOrNull()
+    if (lastRecord != null && lastRecord.day == day && lastRecord.points == affinityPoints) {
+        return
+    }
+    affinityHistory.add(AffinityPointRecord(day, affinityPoints, source))
+    // Keep only last 20 records in memory
+    if (affinityHistory.size > 20) {
+        affinityHistory.removeAt(0)
+    }
 }
 
 

@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -26,6 +27,10 @@ import com.patrykandpatrick.vico.compose.axis.horizontal.rememberBottomAxis
 import com.patrykandpatrick.vico.compose.axis.vertical.rememberStartAxis
 import com.patrykandpatrick.vico.compose.chart.Chart
 import com.patrykandpatrick.vico.compose.chart.line.lineChart
+import com.patrykandpatrick.vico.compose.chart.scroll.rememberChartScrollSpec
+import com.patrykandpatrick.vico.compose.component.shape.shader.verticalGradient
+import com.patrykandpatrick.vico.core.chart.line.LineChart
+import com.patrykandpatrick.vico.core.component.shape.shader.DynamicShaders
 import com.patrykandpatrick.vico.core.entry.FloatEntry
 import com.patrykandpatrick.vico.core.entry.entryModelOf
 
@@ -41,14 +46,17 @@ fun AffinityTrendChart(
     val nextTier = remember(character.affinityPoints) {
         AffinityData.TIERS.firstOrNull { it.level == tier.level + 1 }
     }
+    
+    val accentColor = Color(tier.colorHex)
 
     val trendRecords = remember(character.affinityPoints, character.affinityHistory.size, currentDay) {
-        character.getSafeAffinityTrend(currentDay)
+        val fullTrend = character.getSafeAffinityTrend(currentDay)
+        if (fullTrend.size > 10) fullTrend.takeLast(10) else fullTrend
     }
 
     val chartEntries = remember(trendRecords) {
         trendRecords.mapIndexed { index, record ->
-            FloatEntry(x = (index + 1).toFloat(), y = record.points.toFloat())
+            FloatEntry(x = index.toFloat(), y = record.points.toFloat())
         }
     }
 
@@ -63,7 +71,7 @@ fun AffinityTrendChart(
         ),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            Color(tier.colorHex).copy(alpha = 0.45f)
+            accentColor.copy(alpha = 0.45f)
         )
     ) {
         Column(
@@ -85,11 +93,11 @@ fun AffinityTrendChart(
                     Icon(
                         imageVector = Icons.Default.TrendingUp,
                         contentDescription = null,
-                        tint = Color(tier.colorHex),
+                        tint = accentColor,
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
-                        text = "Křivka růstu náklonnosti",
+                        text = "Trend náklonnosti (Posledních 10)",
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
@@ -98,8 +106,8 @@ fun AffinityTrendChart(
 
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = Color(tier.colorHex).copy(alpha = 0.2f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(tier.colorHex).copy(alpha = 0.6f))
+                    color = accentColor.copy(alpha = 0.2f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, accentColor.copy(alpha = 0.6f))
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
@@ -108,17 +116,17 @@ fun AffinityTrendChart(
                     ) {
                         Text(tier.icon, fontSize = 11.sp)
                         Text(
-                            text = "+$growthPoints bodů",
+                            text = if (growthPoints > 0) "+$growthPoints bodů" else "Stabilní",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = Color(tier.colorHex)
+                            color = accentColor
                         )
                     }
                 }
             }
 
             Text(
-                text = "Vývoj vztahu a oddanosti k Pánu dominia v čase.",
+                text = "Vizualizace růstu pouta založená na posledních interakcích a událostech.",
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
@@ -127,27 +135,63 @@ fun AffinityTrendChart(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(175.dp)
+                    .height(180.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(Color(0xFF140D1E).copy(alpha = 0.7f))
-                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
-                Chart(
-                    chart = lineChart(),
-                    model = entryModelOf(chartEntries),
-                    startAxis = rememberStartAxis(),
-                    bottomAxis = rememberBottomAxis(),
-                    modifier = Modifier.fillMaxSize()
-                )
+                if (chartEntries.isNotEmpty()) {
+                    Chart(
+                        chart = lineChart(
+                            lines = listOf(
+                                LineChart.LineSpec(
+                                    lineColor = accentColor.toArgb(),
+                                    lineBackgroundShader = verticalGradient(
+                                        arrayOf(accentColor.copy(alpha = 0.4f), accentColor.copy(alpha = 0f)),
+                                    ),
+                                )
+                            )
+                        ),
+                        model = entryModelOf(chartEntries),
+                        startAxis = rememberStartAxis(
+                            label = null,
+                            tick = null,
+                            guideline = null,
+                        ),
+                        bottomAxis = rememberBottomAxis(
+                            label = null,
+                            tick = null,
+                            guideline = null,
+                        ),
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Nedostatek dat pro graf", color = Color.Gray, fontSize = 12.sp)
+                    }
+                }
             }
 
             // Milestone History Timeline
-            Text(
-                text = "Zaznamenané milníky (${trendRecords.size}):",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Poslední záznamy:",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                )
+                
+                Text(
+                    text = "Total: ${character.affinityPoints} pts",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(tier.colorHex)
+                )
+            }
 
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

@@ -77,8 +77,15 @@ fun ArenaScreen(
                 border = BorderStroke(1.dp, Color(0xFFFF4081).copy(alpha = 0.3f))
             ) {
                 Box(modifier = Modifier.height(150.dp).fillMaxWidth()) {
+                    val arenaBg = when (gameState.haremLevel) {
+                        1 -> R.drawable.img_arena_battle
+                        2 -> R.drawable.img_arena_domain_2
+                        3 -> R.drawable.img_arena_domain_3
+                        4 -> R.drawable.img_arena_domain_4
+                        else -> R.drawable.img_arena_domain_5
+                    }
                     Image(
-                        painter = painterResource(id = R.drawable.img_arena_battle),
+                        painter = painterResource(id = arenaBg),
                         contentDescription = "Krvavá Aréna Dominia",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -112,6 +119,18 @@ fun ArenaScreen(
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.Black,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFF6200EE)
+                            ) {
+                                Text(
+                                    "🌌 Domain Expansion: Lv ${gameState.haremLevel}",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }

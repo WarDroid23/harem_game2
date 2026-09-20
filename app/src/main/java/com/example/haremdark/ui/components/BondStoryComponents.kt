@@ -37,8 +37,17 @@ import com.example.haremdark.data.BondStoryChoice
 import com.example.haremdark.data.BondStoryEpisode
 import com.example.haremdark.data.BondStoryPage
 import com.example.haremdark.domain.GameEngine
+import com.example.haremdark.domain.VoiceManager
+import com.example.haremdark.domain.VoiceAssetManager
 import com.example.haremdark.models.Character
 import com.example.haremdark.models.Player
+import com.example.haremdark.models.addAffinityHistory
+
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import com.example.haremdark.ui.components.LoreCatalog
+import com.example.haremdark.ui.components.LoreTooltip
+import com.example.haremdark.ui.components.LoreEntry
 
 /**
  * Main Bond Story tab component integrated into character detail modal.
@@ -57,132 +66,140 @@ fun BondStoryTab(
     }
 
     var selectedActiveEpisode by remember { mutableStateOf<BondStoryEpisode?>(null) }
+    var activeLoreEntry by remember { mutableStateOf<LoreEntry?>(null) }
 
     val completedIds = character.completedBondStories
     val currentAffinityLevel = character.affinityLevel
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        // Banner Overview Header
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = Color(0xFF2A1B3D)
-            ),
-            shape = RoundedCornerShape(12.dp),
-            border = BorderStroke(1.dp, Color(0xFFFF4081).copy(alpha = 0.4f))
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            // Banner Overview Header
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFF2A1B3D)
+                ),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, Color(0xFFFF4081).copy(alpha = 0.4f))
             ) {
-                Box(
+                Row(
                     modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.radialGradient(
-                                colors = listOf(Color(0xFFFF4081), Color(0xFF880E4F))
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("📖", fontSize = 24.sp)
-                }
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Příběhy Pouta a Vzpomínky",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Text(
-                        text = "Odemkni intímní kapitoly příběhu zvyšováním Affinity s dívkou ${character.name}.",
-                        fontSize = 11.sp,
-                        color = Color.White.copy(alpha = 0.75f)
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    val unlockedCount = allEpisodes.count { it.requiredAffinityLevel <= currentAffinityLevel && character.loajalita >= it.requiredLoyalty }
-                    val completedCount = allEpisodes.count { completedIds.contains(it.id) }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(Color(0xFFFF4081), Color(0xFF880E4F))
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
                     ) {
-                        LinearProgressIndicator(
-                            progress = { if (allEpisodes.isNotEmpty()) completedCount.toFloat() / allEpisodes.size else 0f },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(6.dp)
-                                .clip(RoundedCornerShape(3.dp)),
-                            color = Color(0xFFFF4081),
-                            trackColor = Color.White.copy(alpha = 0.15f)
+                        Text("📖", fontSize = 24.sp)
+                    }
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Příběhy Pouta a Vzpomínky",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
                         )
                         Text(
-                            text = "$completedCount/${allEpisodes.size} Dokončeno",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFFF80AB)
+                            text = "Odemkni intímní kapitoly příběhu zvyšováním Affinity s dívkou ${character.name}.",
+                            fontSize = 11.sp,
+                            color = Color.White.copy(alpha = 0.75f)
                         )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        val unlockedCount = allEpisodes.count { it.requiredAffinityLevel <= currentAffinityLevel && character.loajalita >= it.requiredLoyalty }
+                        val completedCount = allEpisodes.count { completedIds.contains(it.id) }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            LinearProgressIndicator(
+                                progress = { if (allEpisodes.isNotEmpty()) completedCount.toFloat() / allEpisodes.size else 0f },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                color = Color(0xFFFF4081),
+                                trackColor = Color.White.copy(alpha = 0.15f)
+                            )
+                            Text(
+                                text = "$completedCount/${allEpisodes.size} Dokončeno",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFF80AB)
+                            )
+                        }
                     }
+                }
+            }
+
+            // List of Episodes
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(allEpisodes, key = { it.id }) { ep ->
+                    val isUnlocked = ep.requiredAffinityLevel <= currentAffinityLevel && character.loajalita >= ep.requiredLoyalty
+                    val isCompleted = completedIds.contains(ep.id)
+
+                    BondStoryEpisodeCard(
+                        episode = ep,
+                        isUnlocked = isUnlocked,
+                        isCompleted = isCompleted,
+                        onClick = {
+                            if (isUnlocked) {
+                                selectedActiveEpisode = ep
+                            } else {
+                                val reqTier = AffinityData.TIERS.find { it.level == ep.requiredAffinityLevel } ?: AffinityData.TIERS.first()
+                                Toast.makeText(
+                                    context,
+                                    "🔒 Vyžaduje Affinity Úroveň ${ep.requiredAffinityLevel} (${reqTier.title}) & Loajalita ${ep.requiredLoyalty}!",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    )
                 }
             }
         }
 
-        // List of Episodes
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(allEpisodes, key = { it.id }) { ep ->
-                val isUnlocked = ep.requiredAffinityLevel <= currentAffinityLevel && character.loajalita >= ep.requiredLoyalty
-                val isCompleted = completedIds.contains(ep.id)
-
-                BondStoryEpisodeCard(
-                    episode = ep,
-                    isUnlocked = isUnlocked,
-                    isCompleted = isCompleted,
-                    onClick = {
-                        if (isUnlocked) {
-                            selectedActiveEpisode = ep
-                        } else {
-                            val reqTier = AffinityData.TIERS.find { it.level == ep.requiredAffinityLevel } ?: AffinityData.TIERS.first()
-                            Toast.makeText(
-                                context,
-                                "🔒 Vyžaduje Affinity Úroveň ${ep.requiredAffinityLevel} (${reqTier.title}) & Loajalita ${ep.requiredLoyalty}!",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    }
-                )
-            }
+        // Interactive Reader Modal Dialog
+        selectedActiveEpisode?.let { episode ->
+            BondStoryReaderModal(
+                character = character,
+                player = player,
+                episode = episode,
+                engine = engine,
+                onTriggerEmotion = onTriggerEmotion,
+                onShowLore = { lore -> activeLoreEntry = lore },
+                onDismiss = { selectedActiveEpisode = null },
+                onCompleted = {
+                    character.completedBondStories.add(episode.id)
+                    selectedActiveEpisode = null
+                }
+            )
         }
-    }
 
-    // Interactive Reader Modal Dialog
-    selectedActiveEpisode?.let { episode ->
-        BondStoryReaderModal(
-            character = character,
-            player = player,
-            episode = episode,
-            engine = engine,
-            onTriggerEmotion = onTriggerEmotion,
-            onDismiss = { selectedActiveEpisode = null },
-            onCompleted = {
-                character.completedBondStories.add(episode.id)
-                selectedActiveEpisode = null
-            }
-        )
+        activeLoreEntry?.let { lore ->
+            LoreTooltip(lore = lore, onDismiss = { activeLoreEntry = null })
+        }
     }
 }
 
@@ -334,6 +351,7 @@ fun BondStoryReaderModal(
     episode: BondStoryEpisode,
     engine: GameEngine?,
     onTriggerEmotion: ((CharacterEmotionType) -> Unit)?,
+    onShowLore: (LoreEntry) -> Unit,
     onDismiss: () -> Unit,
     onCompleted: () -> Unit
 ) {
@@ -353,6 +371,34 @@ fun BondStoryReaderModal(
         onTriggerEmotion?.invoke(currentPage.speakerEmotion)
     }
 
+    LaunchedEffect(currentPageIdx, activeEmotion) {
+        // Stop current TTS or Asset when moving to next page
+        VoiceAssetManager.stopPlayback()
+        VoiceManager.stop()
+
+        val currentPage = pages[currentPageIdx]
+        
+        // Check for High Quality Audio Asset first
+        if (VoiceAssetManager.hasAssetFor(episode.id, currentPageIdx, activeEmotion)) {
+            VoiceAssetManager.playVoiceAsset(
+                context = context,
+                episodeId = episode.id,
+                pageIndex = currentPageIdx,
+                mood = activeEmotion,
+                customVoiceId = currentPage.voiceLineId
+            )
+        } else {
+            // Fallback to TTS Voice Bark if it's a character speaking
+            if (currentPage.speakerName != "Vypravěč" && currentPage.speakerName != "Ty (Pán)") {
+                VoiceManager.speakDialogue(
+                    speakerName = currentPage.speakerName,
+                    dialogueText = currentPage.text.replace("{NAME}", character.name),
+                    archetype = character.archetypeId
+                )
+            }
+        }
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -370,7 +416,7 @@ fun BondStoryReaderModal(
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Header Bar
+                    // Header Bar (Static)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -407,192 +453,246 @@ fun BondStoryReaderModal(
                         }
                     }
 
-                    // Character Portrait with Lottie Emotion Reaction Overlay
-                    Box(
-                        modifier = Modifier
-                            .weight(0.42f)
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .border(BorderStroke(1.5.dp, Brush.linearGradient(listOf(Color(0xFFFF4081), Color(0xFF7C4DFF)))))
-                            .background(Color(0xFF1E142B)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        val avatarUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80"
-
-                        AsyncImage(
-                            model = avatarUrl,
-                            contentDescription = character.name,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                        )
-
-                        // Vignette Shading Overlay
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            Color.Transparent,
-                                            Color(0xFF0F0B18).copy(alpha = 0.85f)
-                                        )
-                                    )
-                                )
-                        )
-
-                        // Active Lottie Animation Overlay
-                        LottieEmotionOverlay(
-                            triggerKey = emotionKey,
-                            emotionType = activeEmotion,
-                            sizeDp = 180.dp,
-                            modifier = Modifier.fillMaxSize()
-                        )
-
-                        // Speaker Badge Name Tag
-                        Surface(
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(12.dp),
-                            color = Color(0xFF7C4DFF).copy(alpha = 0.9f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(activeEmotion.emoji, fontSize = 14.sp)
-                                Text(
-                                    text = currentPage.speakerName.replace("{NAME}", character.name),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Story Narrative Dialogue Box
-                    Card(
-                        modifier = Modifier
-                            .weight(0.42f)
-                            .fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1D162A)),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
-                    ) {
+                    // Animated content for page switching
+                    AnimatedContent(
+                        targetState = currentPageIdx,
+                        transitionSpec = {
+                            if (targetState > initialState) {
+                                (slideInHorizontally { width -> width / 3 } + fadeIn(animationSpec = tween(400)))
+                                    .togetherWith(slideOutHorizontally { width -> -width / 3 } + fadeOut(animationSpec = tween(400)))
+                            } else {
+                                (slideInHorizontally { width -> -width / 3 } + fadeIn(animationSpec = tween(400)))
+                                    .togetherWith(slideOutHorizontally { width -> width / 3 } + fadeOut(animationSpec = tween(400)))
+                            }.using(SizeTransform(clip = false))
+                        },
+                        label = "PageTransition",
+                        modifier = Modifier.weight(1f)
+                    ) { targetIdx ->
+                        val targetPage = pages.getOrNull(targetIdx) ?: pages.last()
                         Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.SpaceBetween
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text(
-                                text = currentPage.text.replace("{NAME}", character.name),
-                                fontSize = 14.sp,
-                                lineHeight = 20.sp,
-                                color = Color.White.copy(alpha = 0.95f)
-                            )
+                            // Character Portrait with Lottie Emotion Reaction Overlay
+                            Box(
+                                modifier = Modifier
+                                    .weight(0.42f)
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .border(BorderStroke(1.5.dp, Brush.linearGradient(listOf(Color(0xFFFF4081), Color(0xFF7C4DFF)))))
+                                    .background(Color(0xFF1E142B)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                val avatarUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80"
 
-                            choiceMadeFeedback?.let { feedback ->
-                                Surface(
-                                    color = Color(0xFF2E7D32).copy(alpha = 0.85f),
-                                    shape = RoundedCornerShape(8.dp),
+                                AsyncImage(
+                                    model = avatarUrl,
+                                    contentDescription = character.name,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                )
+
+                                // Vignette Shading Overlay
+                                Box(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp)
+                                        .fillMaxSize()
+                                        .background(
+                                            Brush.verticalGradient(
+                                                colors = listOf(
+                                                    Color.Transparent,
+                                                    Color(0xFF0F0B18).copy(alpha = 0.85f)
+                                                )
+                                            )
+                                        )
+                                )
+
+                                // Active Lottie Animation Overlay
+                                LottieEmotionOverlay(
+                                    triggerKey = emotionKey,
+                                    emotionType = activeEmotion,
+                                    sizeDp = 180.dp,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+
+                                // Speaker Badge Name Tag
+                                Surface(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomStart)
+                                        .padding(12.dp),
+                                    color = Color(0xFF7C4DFF).copy(alpha = 0.9f),
+                                    shape = RoundedCornerShape(8.dp)
                                 ) {
-                                    Text(
-                                        text = feedback,
-                                        fontSize = 11.sp,
-                                        color = Color.White,
-                                        modifier = Modifier.padding(8.dp)
-                                    )
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(activeEmotion.emoji, fontSize = 14.sp)
+                                        Text(
+                                            text = targetPage.speakerName.replace("{NAME}", character.name),
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
                                 }
                             }
 
-                            // Interactive Choices or Navigation Buttons
-                            if (currentPage.choices.isNotEmpty() && choiceMadeFeedback == null) {
-                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    currentPage.choices.forEach { choice ->
-                                        Button(
-                                            onClick = {
-                                                choiceMadeFeedback = choice.responseText
-                                                activeEmotion = choice.emotionTrigger
-                                                emotionKey = System.currentTimeMillis()
-                                                onTriggerEmotion?.invoke(choice.emotionTrigger)
+                            Spacer(modifier = Modifier.height(12.dp))
 
-                                                // Grant Extra Affinity
-                                                character.affinityPoints += choice.extraAffinity
-                                            },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3F1D56)),
-                                            shape = RoundedCornerShape(10.dp),
-                                            border = BorderStroke(1.dp, Color(0xFFFF4081).copy(alpha = 0.5f))
+                            // Story Narrative Dialogue Box
+                            Card(
+                                modifier = Modifier
+                                    .weight(0.42f)
+                                    .fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1D162A)),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(16.dp),
+                                    verticalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = targetPage.text.replace("{NAME}", character.name),
+                                        fontSize = 14.sp,
+                                        lineHeight = 20.sp,
+                                        color = Color.White.copy(alpha = 0.95f),
+                                        modifier = Modifier.pointerInput(targetPage.text) {
+                                            detectTapGestures(
+                                                onLongPress = {
+                                                    val lore = LoreCatalog.findRelevantLore(targetPage.text)
+                                                    if (lore != null) {
+                                                        onShowLore(lore)
+                                                    } else {
+                                                        onShowLore(
+                                                            LoreEntry(
+                                                                "Příběh",
+                                                                "Ozvěny minulosti",
+                                                                "Tento dialog odhaluje střípky z minulosti postavy ${character.name}. Pozorně naslouchej a sleduj její reakce.",
+                                                                "🕯️"
+                                                            )
+                                                        )
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    )
+
+                                    choiceMadeFeedback?.let { feedback ->
+                                        Surface(
+                                            color = Color(0xFF2E7D32).copy(alpha = 0.85f),
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp)
                                         ) {
                                             Text(
-                                                text = choice.optionText,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.SemiBold,
+                                                text = feedback,
+                                                fontSize = 11.sp,
                                                 color = Color.White,
-                                                textAlign = TextAlign.Center
+                                                modifier = Modifier.padding(8.dp)
                                             )
                                         }
                                     }
-                                }
-                            } else {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (currentPageIdx > 0) {
-                                        OutlinedButton(
-                                            onClick = {
-                                                choiceMadeFeedback = null
-                                                currentPageIdx--
-                                            },
-                                            shape = RoundedCornerShape(8.dp)
-                                        ) {
-                                            Text("⬅ Zpět", fontSize = 12.sp, color = Color.White)
+
+                                    // Interactive Choices or Navigation Buttons
+                                    if (targetPage.choices.isNotEmpty() && choiceMadeFeedback == null) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            targetPage.choices.forEach { choice ->
+                                                Button(
+                                                    onClick = {
+                                                        choiceMadeFeedback = choice.responseText
+                                                        activeEmotion = choice.emotionTrigger
+                                                        emotionKey = System.currentTimeMillis()
+                                                        onTriggerEmotion?.invoke(choice.emotionTrigger)
+
+                                                        // Grant Extra Affinity
+                                                        character.affinityPoints += choice.extraAffinity
+                                                        if (choice.extraAffinity > 0) {
+                                                            character.addAffinityHistory(player.day, "Volba v příběhu: ${choice.optionText}")
+                                                            com.example.haremdark.domain.VoiceManager.playTriggerVoice(
+                                                                com.example.haremdark.domain.VoiceTriggerType.STORY_MILESTONE,
+                                                                character
+                                                            )
+                                                        }
+                                                    },
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3F1D56)),
+                                                    shape = RoundedCornerShape(10.dp),
+                                                    border = BorderStroke(1.dp, Color(0xFFFF4081).copy(alpha = 0.5f))
+                                                ) {
+                                                    Text(
+                                                        text = choice.optionText,
+                                                        fontSize = 12.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color.White,
+                                                        textAlign = TextAlign.Center
+                                                    )
+                                                }
+                                            }
                                         }
                                     } else {
-                                        Spacer(modifier = Modifier.width(1.dp))
-                                    }
-
-                                    if (currentPageIdx < pages.size - 1) {
-                                        Button(
-                                            onClick = {
-                                                choiceMadeFeedback = null
-                                                currentPageIdx++
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF4081)),
-                                            shape = RoundedCornerShape(8.dp)
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text("Pokračovat ➔", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                        }
-                                    } else {
-                                        // Claim Final Story Completion Reward
-                                        Button(
-                                            onClick = {
-                                                player.gold += episode.goldReward
-                                                player.darkEnergy += episode.darkPowerReward
-                                                character.affinityPoints += episode.affinityBonusReward
+                                            if (currentPageIdx > 0) {
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        choiceMadeFeedback = null
+                                                        currentPageIdx--
+                                                    },
+                                                    shape = RoundedCornerShape(8.dp)
+                                                ) {
+                                                    Text("⬅ Zpět", fontSize = 12.sp, color = Color.White)
+                                                }
+                                            } else {
+                                                Spacer(modifier = Modifier.width(1.dp))
+                                            }
 
-                                                Toast.makeText(
-                                                    context,
-                                                    "🎉 Příběh dokončen! +${episode.goldReward} Gold, +${episode.affinityBonusReward} Affinity!",
-                                                    Toast.LENGTH_LONG
-                                                ).show()
+                                            if (currentPageIdx < pages.size - 1) {
+                                                Button(
+                                                    onClick = {
+                                                        choiceMadeFeedback = null
+                                                        currentPageIdx++
+                                                    },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF4081)),
+                                                    shape = RoundedCornerShape(8.dp)
+                                                ) {
+                                                    Text("Pokračovat ➔", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                                }
+                                            } else {
+                                                // Claim Final Story Completion Reward
+                                                Button(
+                                                    onClick = {
+                                                        player.gold += episode.goldReward
+                                                        player.darkEnergy += episode.darkPowerReward
+                                                        character.affinityPoints += episode.affinityBonusReward
+                                                        character.addAffinityHistory(player.day, "Příběh dokončen: ${episode.title}")
 
-                                                onCompleted()
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                                            shape = RoundedCornerShape(8.dp)
-                                        ) {
-                                            Text("🎁 Vybrat Odměnu & Dokončit", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                                        com.example.haremdark.domain.VoiceManager.playTriggerVoice(
+                                                            com.example.haremdark.domain.VoiceTriggerType.AFFINITY_LEVEL_UP,
+                                                            character
+                                                        )
+
+                                                        Toast.makeText(
+                                                            context,
+                                                            "🎉 Příběh dokončen! +${episode.goldReward} Gold, +${episode.affinityBonusReward} Affinity!",
+                                                            Toast.LENGTH_LONG
+                                                        ).show()
+
+                                                        onCompleted()
+                                                    },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                                                    shape = RoundedCornerShape(8.dp)
+                                                ) {
+                                                    Text("🎁 Vybrat Odměnu & Dokončit", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                                }
+                                            }
                                         }
                                     }
                                 }

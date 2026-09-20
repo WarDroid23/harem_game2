@@ -209,7 +209,7 @@ class GameEngine(private val context: Context) {
         _currentTheme.value = _gameState.value.currentTheme
         _isLightMode.value = _gameState.value.isLightMode
         
-                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             val savedState = loadStateSuspend("save_slot_autosave") 
                 ?: loadStateSuspend("save_slot_1")
             
@@ -1039,6 +1039,7 @@ class GameEngine(private val context: Context) {
                     if (mission.targetCharacterId != null && c.id == mission.targetCharacterId) {
                         c.affinityPoints += mission.rewardAffinity
                         c.moodScore = (c.moodScore + 5).coerceAtMost(100)
+                        c.addAffinityHistory(p.day, "Denní mise: ${mission.description}")
                         c
                     } else c
                 }
@@ -1172,7 +1173,7 @@ class GameEngine(private val context: Context) {
         character.affinityPoints += affinityGain
         val newAffinityLevel = com.example.haremdark.data.AffinityData.getLevelForPoints(character.affinityPoints)
         character.affinityLevel = newAffinityLevel
-        character.affinityHistory.add(AffinityPointRecord(_gameState.value.player.day, character.affinityPoints, "${interaction.name} (+$affinityGain pts)"))
+        character.addAffinityHistory(_gameState.value.player.day, "${interaction.name} (+$affinityGain pts)")
 
         character.interactionLogs.add(
             com.example.haremdark.models.InteractionLogEntry(
@@ -4762,6 +4763,7 @@ class GameEngine(private val context: Context) {
             selectedCharacterIds = selectedGirlIds,
             allCharacters = state.characters,
             player = state.player,
+            haremLevel = state.haremLevel,
             includePlayerAsLeader = includePlayer,
             encounterDef = encounter
         )
@@ -4862,7 +4864,6 @@ class GameEngine(private val context: Context) {
 
     // --- SAVE / LOAD SYSTEM ---
     fun saveToSlot(slot: Int): Boolean {
-        it_slot_number = slot
         val state = _gameState.value
         val current = state.copy(
             slotNumber = slot,
@@ -4884,7 +4885,19 @@ class GameEngine(private val context: Context) {
         return true
     }
 
+    fun checkCodexUnlocks() {
+        updateState { state ->
+            val unlocked = com.example.haremdark.data.CodexData.checkUnlocks(state)
+            if (unlocked.size > state.player.unlockedCodexIds.size) {
+                state.copy(player = state.player.copy(unlockedCodexIds = unlocked))
+            } else {
+                state
+            }
+        }
+    }
+
     fun autoSave(reason: String = "Automatické uložení") {
+        checkCodexUnlocks()
         if (!_isAutoSaveEnabled.value) return
         val state = _gameState.value
         val timeFormatted = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
@@ -4937,7 +4950,10 @@ class GameEngine(private val context: Context) {
     suspend fun getSlotSummary(slot: Int): String {
         val key = when(slot) { 0 -> "save_slot_autosave"; 99 -> "save_slot_quicksave"; else -> "save_slot_$slot" }
         val save = loadStateSuspend(key) ?: return "Prázdný slot"
-        return "Den ${save.player.day} | ${save.player.gold} zlata | Harém: ${save.characters.size} dívek"
+        val codexCount = save.player.unlockedCodexIds.size
+        val avgAffinity = if (save.characters.isNotEmpty()) save.characters.map { it.affinityPoints }.average().toInt() else 0
+        val synergiesCount = save.activeBuffs.size + save.activeDrugBuffs.size
+        return "Den ${save.player.day} | Náklonnost: $avgAffinity | Kodex: $codexCount | Synergie: $synergiesCount"
     }
     fun runArenaExpedition(girlIds: List<String>): List<String> {
         val current = _gameState.value

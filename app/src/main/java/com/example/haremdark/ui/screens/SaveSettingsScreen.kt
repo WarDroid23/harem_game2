@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.haremdark.domain.GameEngine
 import com.example.haremdark.domain.SoundEffectManager
+import com.example.haremdark.domain.NavSound
 import com.example.haremdark.domain.VoiceManager
 import com.example.haremdark.models.GameSave
 
@@ -56,7 +57,7 @@ fun SaveSettingsScreen(
     LaunchedEffect(Unit) {
         summaries[99] = summaries[99] ?: "Načítání..."
         summaries[0] = summaries[0] ?: "Načítání..."
-        for (i in 1..5) summaries[i] = engine.getSlotSummary(i)
+        for (i in 1..3) summaries[i] = engine.getSlotSummary(i)
     }
 
     val themes = listOf(
@@ -463,6 +464,7 @@ fun SaveSettingsScreen(
                     }
                     OutlinedButton(
                         onClick = {
+                            SoundEffectManager.playNavigation(NavSound.SAVE_SLOT_SELECT)
                             coroutineScope.launch {
                                 val ok = engine.loadFromSlotSuspend(99)
                                 Toast.makeText(context, if (ok) "Slot 99 načten!" else "Slot je prázdný!", Toast.LENGTH_SHORT).show()
@@ -494,6 +496,7 @@ fun SaveSettingsScreen(
                     }
                     OutlinedButton(
                         onClick = {
+                            SoundEffectManager.playNavigation(NavSound.SAVE_SLOT_SELECT)
                             coroutineScope.launch {
                                 val ok = engine.loadFromSlotSuspend(0)
                                 Toast.makeText(context, if (ok) "Slot 0 načten!" else "Slot je prázdný!", Toast.LENGTH_SHORT).show()
@@ -507,8 +510,8 @@ fun SaveSettingsScreen(
             }
         }
 
-        // Slots 1 to 5
-        items((1..5).toList()) { slot ->
+        // Slots 1 to 3
+        items((1..3).toList()) { slot ->
             Card(
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f))
@@ -526,6 +529,7 @@ fun SaveSettingsScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Button(
                             onClick = {
+                                SoundEffectManager.playNavigation(NavSound.SAVE_SLOT_SELECT)
                                 engine.saveToSlot(slot)
                                 coroutineScope.launch {
                                     summaries[slot] = engine.getSlotSummary(slot)
@@ -540,6 +544,7 @@ fun SaveSettingsScreen(
 
                         OutlinedButton(
                             onClick = {
+                                SoundEffectManager.playNavigation(NavSound.SAVE_SLOT_SELECT)
                                 coroutineScope.launch {
                                     val ok = engine.loadFromSlotSuspend(slot)
                                     Toast.makeText(context, if (ok) "Slot $slot načten!" else "Slot je prázdný!", Toast.LENGTH_SHORT).show()

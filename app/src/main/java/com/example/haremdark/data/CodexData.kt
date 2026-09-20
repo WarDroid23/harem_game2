@@ -67,6 +67,42 @@ object CodexData {
             "Vede Inkviziční legii. Je neúprosná a trestá každý projev slabosti. Mnoho dívek z tvého harému pochází z jejích 'očistných' tažení.",
             "⚔️",
             "Pronajmi dívku Inkviziční legii"
+        ),
+        CodexEntry(
+            "item_elixir",
+            "Předměty",
+            "Elixír touhy",
+            "Alchymistické afrodiziakum",
+            "Tento fialově světélkující roztok dokáže probudit touhu i v tom nejchladnějším srdci. Je klíčovým nástrojem pro prohlubování pouta s dívkami.",
+            "🔮",
+            "Získej první Elixír touhy"
+        ),
+        CodexEntry(
+            "item_collar",
+            "Předměty",
+            "Zlatý obojek",
+            "Symbol vlastnictví",
+            "Obojek vytepaný z ryzího zlata a posázený rubíny. Pro dívku, která jej nosí, znamená absolutní odevzdání se svému pánu.",
+            "👑",
+            "Získej Legendární zlatý obojek"
+        ),
+        CodexEntry(
+            "event_eclipse",
+            "Události",
+            "Zatmění věčnosti",
+            "Den, kdy Slunce zemřelo",
+            "Před sto lety nastalo úplné zatmění, které nikdy neskončilo. Od té doby vládne světu Temnota a monstra z podsvětí.",
+            "🌑",
+            "Přečti si o historii světa"
+        ),
+        CodexEntry(
+            "event_harem_open",
+            "Události",
+            "Otevření komnat",
+            "Počátek tvého vzestupu",
+            "Den, kdy jsi poprvé vstoupil do svého sídla a přijal první dívku. Byl to první krok k vybudování tvého Temného Dominia.",
+            "🗝️",
+            "Odemkni svou první postavu"
         )
     )
 
@@ -76,6 +112,7 @@ object CodexData {
         
         // Initial unlocks
         newUnlocks.add("lore_world")
+        newUnlocks.add("event_eclipse")
         
         // Conditions
         if (player.killCount > 0) newUnlocks.add("bestiary_goblin")
@@ -84,6 +121,11 @@ object CodexData {
         if (state.characters.any { it.klient == "Inkviziční legie" } || state.player.unlockedCodexIds.contains("npc_inquisitor")) {
             newUnlocks.add("npc_inquisitor")
         }
+        
+        // New conditions
+        if (player.items.any { it.id == "elixir_touhy" }) newUnlocks.add("item_elixir")
+        if (player.items.any { it.id == "drahy_obojek" }) newUnlocks.add("item_collar")
+        if (state.characters.isNotEmpty()) newUnlocks.add("event_harem_open")
         
         return newUnlocks
     }

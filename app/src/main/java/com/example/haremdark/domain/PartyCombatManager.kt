@@ -13,6 +13,7 @@ object PartyCombatManager {
         selectedCharacterIds: List<String>,
         allCharacters: List<Character>,
         player: Player,
+        haremLevel: Int,
         includePlayerAsLeader: Boolean,
         encounterDef: PartyCombatCatalog.PartyEncounterDefinition
     ): PartyCombatSession {
@@ -172,11 +173,24 @@ object PartyCombatManager {
 
         val startingCombo = if (teamFormationSynergy.name.contains("Útočný", ignoreCase = true)) 35 else 20
 
+        val startsWithArena = encounterDef.id.startsWith("arena")
+        val backgroundRes = if (startsWithArena) {
+            when (haremLevel) {
+                1 -> com.example.haremdark.R.drawable.img_arena_battle
+                2 -> com.example.haremdark.R.drawable.img_arena_domain_2
+                3 -> com.example.haremdark.R.drawable.img_arena_domain_3
+                4 -> com.example.haremdark.R.drawable.img_arena_domain_4
+                else -> com.example.haremdark.R.drawable.img_arena_domain_5
+            }
+        } else {
+            encounterDef.backgroundRes
+        }
+
         return PartyCombatSession(
             id = "combat_${System.currentTimeMillis()}",
             encounterTitle = encounterDef.title,
             encounterLocation = encounterDef.location,
-            backgroundDrawableRes = encounterDef.backgroundRes,
+            backgroundDrawableRes = backgroundRes,
             party = partyList,
             enemies = clonedEnemies,
             currentTurnIndex = 0,

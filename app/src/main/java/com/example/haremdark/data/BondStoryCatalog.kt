@@ -17,7 +17,8 @@ data class BondStoryPage(
     val speakerName: String,
     val speakerEmotion: CharacterEmotionType = CharacterEmotionType.BLUSH,
     val text: String,
-    val choices: List<BondStoryChoice> = emptyList()
+    val choices: List<BondStoryChoice> = emptyList(),
+    val voiceLineId: String? = null
 )
 
 @Serializable

@@ -16,7 +16,8 @@ enum class VoiceTriggerType {
     AFFINITY_LEVEL_UP,
     COMBAT_START,
     COMBAT_SPECIAL,
-    VICTORY
+    VICTORY,
+    STORY_MILESTONE
 }
 
 object VoiceManager : TextToSpeech.OnInitListener {
@@ -260,6 +261,31 @@ object VoiceManager : TextToSpeech.OnInitListener {
         playAudioClip(isCombat)
 
         val voiceLine = when (trigger) {
+            VoiceTriggerType.STORY_MILESTONE -> {
+                when (character?.archetypeId) {
+                    "subka" -> listOf(
+                        "Ach, můj pane... tato chvíle je pro mě tak vzácná.",
+                        "Cítím se k tobě blíž než kdy dřív. Jsem tak ráda, že jsme spolu.",
+                        "Děkuji, že mi věnuješ svůj čas. Mé srdce patří jen tobě."
+                    ).random()
+                    "slechta" -> listOf(
+                        "Toto je okamžik, který si budu pamatovat. Naše cesty se spojily v jednu.",
+                        "Tvá přítomnost mi dodává klid, který jsem dlouho nepoznala.",
+                        "Věřím, že náš osud je společný. Tato chvíle to jen potvrzuje."
+                    ).random()
+                    "bojovnice" -> listOf(
+                        "Po tvém boku se cítím neporazitelná. Tato chvíle nás posílila!",
+                        "Naše pouto je pevnější než kalená ocel. Jsem hrdá, že jsem s tebou.",
+                        "Zápasíme společně, vítězíme společně. Tohle je naše cesta!"
+                    ).random()
+                    "intrikanka" -> listOf(
+                        "Mmm, tohle byl velmi zajímavý obrat událostí. Líbíš se mi čím dál víc.",
+                        "Znáš mě lépe, než kdokoliv jiný. To je nebezpečné... a vzrušující.",
+                        "Naše intriky se proplétají. Společně jsme neodolatelní."
+                    ).random()
+                    else -> "Tato chvíle mezi námi... je to začátek něčeho velkého."
+                }
+            }
             VoiceTriggerType.AFFINITY_LEVEL_UP -> {
                 when (character?.archetypeId) {
                     "subka" -> listOf(
