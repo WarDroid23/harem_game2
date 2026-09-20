@@ -1380,7 +1380,12 @@ class GameEngine(private val context: Context) {
         addLog("✨ Udělena královská přízeň pro ${character.name} (-$cost 💰, +15 Náklonnost, Boost na 3 dny)!")
         progressMission("GRANT_FAVOR", 1, characterId = characterId)
         updateState { it.copy(player = it.player.copy(influence = (it.player.influence + 10).coerceAtMost(it.player.maxInfluence))) }
-        SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
+        if (newAffinityLevel > prevAffinityLevel) {
+            SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
+            VoiceManager.playTriggerVoice(VoiceTriggerType.AFFINITY_LEVEL_UP, character)
+        } else {
+            SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
+        }
         autoSave("Královská přízeň (${character.name})")
 
         return Pair(true, "Královská přízeň úspěšně udělena pro ${character.name}!")

@@ -49,6 +49,7 @@ fun PartyCombatScreen(
 
     var showLogsModal by remember { mutableStateOf(false) }
     var selectedStatusEffectForDetail by remember { mutableStateOf<CombatStatusEffect?>(null) }
+    var isAutoBattle by remember { mutableStateOf(false) }
 
     val aliveEnemies = session.enemies.filter { it.isAlive }
     val aliveParty = session.party.filter { it.isAlive }
@@ -61,6 +62,32 @@ fun PartyCombatScreen(
     val shakeY = fxState.shakeOffsetY.value
     val shakeRot = fxState.shakeRotation.value
     val camScale = fxState.cameraScale.value
+
+    // Auto-Battle AI loop
+    LaunchedEffect(isAutoBattle, session.currentTurnIndex, session.isFinished) {
+        if (isAutoBattle && !session.isFinished && session.currentActiveMember != null) {
+            kotlinx.coroutines.delay(700)
+            if (!session.isFinished && session.currentActiveMember != null) {
+                val member = session.currentActiveMember!!
+                val targetIdx = session.selectedTargetEnemyIndex.coerceIn(0, session.enemies.size - 1)
+                val bestSkill = member.skills.firstOrNull { skill ->
+                    member.mana >= skill.manaCost
+                }
+                if (bestSkill != null) {
+                    val targetId = if (bestSkill.targetType == SkillTargetType.SINGLE_ALLY || bestSkill.targetType == SkillTargetType.ALL_ALLIES) {
+                        session.selectedTargetAllyIndex
+                    } else {
+                        targetIdx
+                    }
+                    val (next, _) = PartyCombatManager.executeSkill(session, bestSkill.id, targetId)
+                    onSessionUpdated(next)
+                } else {
+                    val (next, _) = PartyCombatManager.executeBasicAttack(session, targetIdx)
+                    onSessionUpdated(next)
+                }
+            }
+        }
+    }
 
     // Auto feedback for incoming enemy actions
     LaunchedEffect(session.combatLogs.firstOrNull()?.turn, session.combatLogs.firstOrNull()?.message) {
@@ -182,6 +209,18 @@ fun PartyCombatScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
+                        IconButton(
+                            onClick = { isAutoBattle = !isAutoBattle },
+                            modifier = Modifier.size(30.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isAutoBattle) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                contentDescription = "Auto-Battle",
+                                tint = if (isAutoBattle) Color(0xFF69F0AE) else Color.Gray,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
                         IconButton(
                             onClick = { SoundEffectManager.toggleMute() },
                             modifier = Modifier.size(30.dp)

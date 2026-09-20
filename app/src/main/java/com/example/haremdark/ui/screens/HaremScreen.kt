@@ -301,16 +301,31 @@ fun HaremScreen(
         ) {
             
             var showGlobalMilestonesDialog by remember { mutableStateOf(false) }
+            var showSynergyDashboardDialog by remember { mutableStateOf(false) }
 
             if (gameState.characters.isNotEmpty()) {
                 MilestoneTrackerBanner(characters = gameState.characters)
-                Button(
-                    onClick = { showGlobalMilestonesDialog = true },
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700).copy(alpha = 0.85f)),
-                    shape = RoundedCornerShape(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("👑 Síň slávy globálních milníků & avatarů", fontWeight = FontWeight.Bold, color = Color.Black, fontSize = 12.sp)
+                    Button(
+                        onClick = { showGlobalMilestonesDialog = true },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700).copy(alpha = 0.85f)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("👑 Síň slávy milníků", fontWeight = FontWeight.Bold, color = Color.Black, fontSize = 11.sp, maxLines = 1)
+                    }
+
+                    Button(
+                        onClick = { showSynergyDashboardDialog = true },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32).copy(alpha = 0.9f)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("⚡ Synergický Dashboard", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 11.sp, maxLines = 1)
+                    }
                 }
             }
 
@@ -320,6 +335,13 @@ fun HaremScreen(
                     characters = gameState.characters,
                     engine = engine,
                     onDismiss = { showGlobalMilestonesDialog = false }
+                )
+            }
+
+            if (showSynergyDashboardDialog) {
+                com.example.haremdark.ui.components.SynergyDashboardDialog(
+                    characters = gameState.characters,
+                    onDismiss = { showSynergyDashboardDialog = false }
                 )
             }
 

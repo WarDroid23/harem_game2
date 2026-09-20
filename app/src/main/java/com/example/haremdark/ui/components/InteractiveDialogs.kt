@@ -43,6 +43,8 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -69,6 +71,7 @@ import com.example.haremdark.models.MoraleRecord
 import com.patrykandpatrick.vico.compose.axis.horizontal.rememberBottomAxis
 import com.patrykandpatrick.vico.compose.axis.vertical.rememberStartAxis
 import com.patrykandpatrick.vico.compose.chart.Chart
+import com.patrykandpatrick.vico.compose.chart.column.columnChart
 import com.patrykandpatrick.vico.compose.chart.line.lineChart
 import com.patrykandpatrick.vico.core.entry.FloatEntry
 import com.patrykandpatrick.vico.core.entry.entryModelOf
@@ -1120,19 +1123,73 @@ data class CharacterBio(
     val goals: List<String>
 )
 
+data class RadarTraitInfo(
+    val name: String,
+    val icon: String,
+    val value: Int,
+    val max: Int = 100,
+    val description: String
+)
+
+data class AffinitySynergyPerk(
+    val title: String,
+    val icon: String,
+    val requirementText: String,
+    val bonusText: String,
+    val isUnlocked: Boolean
+)
+
 @Composable
 fun CharacterRadarChart(character: Character, modifier: Modifier = Modifier) {
     val tier = AffinityData.getTierForPoints(character.affinityPoints)
     val color = Color(tier.colorHex)
 
-    val stats = listOf(
-        Pair("Loajalita", (character.loajalita / 100f).coerceIn(0f, 1f)),
-        Pair("Morálka", (character.morale / 100f).coerceIn(0f, 1f)),
-        Pair("Poslušnost", (character.poslusnost / 100f).coerceIn(0f, 1f)),
-        Pair("Síla", (character.strength / 100f).coerceIn(0f, 1f)),
-        Pair("Submise", (character.submisivita / 100f).coerceIn(0f, 1f)),
-        Pair("Důvěra", (character.duvera / 100f).coerceIn(0f, 1f))
-    )
+    val traits = remember(character) {
+        listOf(
+            RadarTraitInfo("Důvěra", "🤝", character.duvera, 100, "Vzájemné bezpečí, otevřenost a citová vazba s pánem."),
+            RadarTraitInfo("Loajalita", "🛡️", character.loajalita, 100, "Ochota bránit svého pána a obětovat se v boji."),
+            RadarTraitInfo("Poslušnost", "⚡", character.poslusnost, 100, "Míra ukázněnosti, respektu a plnění rozkazů bez váhání."),
+            RadarTraitInfo("Touha", "🔥", character.touha, 100, "Fyzická a romantická přitažlivost k pánovi."),
+            RadarTraitInfo("Submise", "⛓️", character.submisivita, 100, "Přijetí podřízené role a přirozené odevzdání."),
+            RadarTraitInfo("Morálka", "✨", character.morale, 100, "Psychická síla, optimismus a vyrovnanost otrokyně.")
+        )
+    }
+
+    val synergyPerks = remember(character) {
+        listOf(
+            AffinitySynergyPerk(
+                title = "Pouto Věrnosti & Důvěry",
+                icon = "🤝🛡️",
+                requirementText = "Důvěra ≥ 60 & Loajalita ≥ 60",
+                bonusText = "+15% Odolnost celé družiny & pasivní obnova zdraví v boji",
+                isUnlocked = character.duvera >= 60 && character.loajalita >= 60
+            ),
+            AffinitySynergyPerk(
+                title = "Železná Ukázněnost",
+                icon = "⚡⛓️",
+                requirementText = "Poslušnost ≥ 60 & Submise ≥ 60",
+                bonusText = "+20% Poškození kritickým zásahem v boji & -10% cena akcí",
+                isUnlocked = character.poslusnost >= 60 && character.submisivita >= 60
+            ),
+            AffinitySynergyPerk(
+                title = "Plamen Vášně",
+                icon = "🔥✨",
+                requirementText = "Touha ≥ 60 & Morálka ≥ 60",
+                bonusText = "+15 Sexuální energie po každém boji & +10% šance na unikátní dialogy",
+                isUnlocked = character.touha >= 60 && character.morale >= 60
+            ),
+            AffinitySynergyPerk(
+                title = "Harémová Harmonie",
+                icon = "👑",
+                requirementText = "Všechny vlastnosti ≥ 50",
+                bonusText = "+10% K všem základním statistikám celé družiny",
+                isUnlocked = traits.all { it.value >= 50 }
+            )
+        )
+    }
+
+    var selectedIndex by remember { mutableIntStateOf(0) }
+    val selectedTrait = traits.getOrNull(selectedIndex) ?: traits.first()
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -1143,29 +1200,76 @@ fun CharacterRadarChart(character: Character, modifier: Modifier = Modifier) {
         Column(
             modifier = Modifier.padding(14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("🕸️ Radarový graf schopností & pouta", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = color)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("🕸️", fontSize = 16.sp)
+                    Text("Radarový graf vlastností (Klepni na bod)", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = color)
+                }
                 Text("Stupeň ${tier.level} (${tier.stageName})", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
             }
 
             Box(
                 modifier = Modifier
-                    .size(200.dp)
+                    .size(220.dp)
                     .padding(8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 val onSurfaceColor = MaterialTheme.colorScheme.onSurface
-                Canvas(modifier = Modifier.fillMaxSize()) {
+                val count = traits.size
+
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(traits) {
+                            detectTapGestures { tapOffset ->
+                                val w = size.width.toFloat()
+                                val h = size.height.toFloat()
+                                val center = Offset(w / 2f, h / 2f)
+                                val radius = min(w, h) / 2f * 0.75f
+
+                                var closestIdx = 0
+                                var minDistance = Float.MAX_VALUE
+
+                                traits.forEachIndexed { j, trait ->
+                                    val angle = (Math.PI * 2 / count) * j - (Math.PI / 2)
+                                    val fraction = (trait.value.toFloat() / trait.max).coerceIn(0.15f, 1f)
+                                    val scaledRadius = radius * fraction
+                                    val px = center.x + scaledRadius * cos(angle).toFloat()
+                                    val py = center.y + scaledRadius * sin(angle).toFloat()
+                                    val dx = tapOffset.x - px
+                                    val dy = tapOffset.y - py
+                                    val dist = sqrt(dx * dx + dy * dy)
+
+                                    if (dist < minDistance) {
+                                        minDistance = dist
+                                        closestIdx = j
+                                    }
+                                }
+
+                                // Fallback angle check if tap is not directly on a vertex
+                                if (minDistance > 80f) {
+                                    val dx = tapOffset.x - center.x
+                                    val dy = tapOffset.y - center.y
+                                    var tapAngle = atan2(dy, dx) + (Math.PI / 2)
+                                    if (tapAngle < 0) tapAngle += Math.PI * 2
+                                    val sliceAngle = (Math.PI * 2 / count)
+                                    closestIdx = ((tapAngle + sliceAngle / 2) / sliceAngle).toInt() % count
+                                }
+
+                                selectedIndex = closestIdx
+                            }
+                        }
+                ) {
                     val center = Offset(size.width / 2f, size.height / 2f)
                     val radius = size.minDimension / 2f * 0.75f
-                    val count = stats.size
 
+                    // Concentric Web Rings
                     for (i in 1..4) {
                         val ringRadius = radius * (i / 4f)
                         val path = Path()
@@ -1183,23 +1287,26 @@ fun CharacterRadarChart(character: Character, modifier: Modifier = Modifier) {
                         )
                     }
 
+                    // Radial Axes Lines
                     for (j in 0 until count) {
                         val angle = (Math.PI * 2 / count) * j - (Math.PI / 2)
                         val x = center.x + (radius * cos(angle)).toFloat()
                         val y = center.y + (radius * sin(angle)).toFloat()
                         drawLine(
-                            color = onSurfaceColor.copy(alpha = 0.2f),
+                            color = onSurfaceColor.copy(alpha = if (j == selectedIndex) 0.5f else 0.2f),
                             start = center,
                             end = Offset(x, y),
-                            strokeWidth = 1.dp.toPx()
+                            strokeWidth = if (j == selectedIndex) 2.dp.toPx() else 1.dp.toPx()
                         )
                     }
 
+                    // Stat Polygon
                     val statPath = Path()
                     val points = mutableListOf<Offset>()
-                    stats.forEachIndexed { j, (_, value) ->
+                    traits.forEachIndexed { j, trait ->
                         val angle = (Math.PI * 2 / count) * j - (Math.PI / 2)
-                        val scaledRadius = radius * value.coerceIn(0.15f, 1f)
+                        val fraction = (trait.value.toFloat() / trait.max).coerceIn(0.15f, 1f)
+                        val scaledRadius = radius * fraction
                         val x = center.x + (scaledRadius * cos(angle)).toFloat()
                         val y = center.y + (scaledRadius * sin(angle)).toFloat()
                         points.add(Offset(x, y))
@@ -1209,7 +1316,7 @@ fun CharacterRadarChart(character: Character, modifier: Modifier = Modifier) {
 
                     drawPath(
                         path = statPath,
-                        color = color.copy(alpha = 0.4f)
+                        color = color.copy(alpha = 0.35f)
                     )
                     drawPath(
                         path = statPath,
@@ -1217,24 +1324,225 @@ fun CharacterRadarChart(character: Character, modifier: Modifier = Modifier) {
                         style = Stroke(width = 2.5f.dp.toPx())
                     )
 
-                    points.forEach { pt ->
-                        drawCircle(color = Color.White, radius = 3.5.dp.toPx(), center = pt)
-                        drawCircle(color = color, radius = 2.dp.toPx(), center = pt)
+                    // Draw Data Points
+                    points.forEachIndexed { j, pt ->
+                        if (j == selectedIndex) {
+                            // Selected Glowing Outer Ring & Pulse Effect
+                            drawCircle(color = Color.Yellow.copy(alpha = 0.4f), radius = 10.dp.toPx(), center = pt)
+                            drawCircle(color = color, radius = 7.dp.toPx(), center = pt)
+                            drawCircle(color = Color.White, radius = 3.dp.toPx(), center = pt)
+                        } else {
+                            drawCircle(color = Color.White, radius = 4.dp.toPx(), center = pt)
+                            drawCircle(color = color, radius = 2.5.dp.toPx(), center = pt)
+                        }
                     }
                 }
             }
 
+            // Interactive Trait Filter Chips
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                stats.forEach { (label, value) ->
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(label, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-                        Text("${(value * 100).toInt()}%", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = color)
+                traits.forEachIndexed { idx, tr ->
+                    val isSelected = idx == selectedIndex
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isSelected) color.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                        border = BorderStroke(1.dp, if (isSelected) color else Color.Transparent),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { selectedIndex = idx }
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(vertical = 4.dp, horizontal = 2.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("${tr.icon} ${tr.name}", fontSize = 9.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, color = if (isSelected) color else MaterialTheme.colorScheme.onSurface)
+                            Text("${tr.value}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (isSelected) color else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                        }
                     }
                 }
             }
+
+            // Selected Trait Detail Card
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                border = BorderStroke(1.dp, color.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(selectedTrait.icon, fontSize = 18.sp)
+                            Text(selectedTrait.name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = color)
+                        }
+                        Text(
+                            text = "${selectedTrait.value} / ${selectedTrait.max}",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = color
+                        )
+                    }
+
+                    LinearProgressIndicator(
+                        progress = { (selectedTrait.value.toFloat() / selectedTrait.max).coerceIn(0f, 1f) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = color,
+                        trackColor = color.copy(alpha = 0.15f)
+                    )
+
+                    Text(
+                        text = selectedTrait.description,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                    )
+                }
+            }
+
+            // Synergy Perks Section
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "✨ Synergické Perk Bonusy Družiny",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFFFD700)
+                )
+
+                synergyPerks.forEach { perk ->
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (perk.isUnlocked) Color(0xFF2E7D32).copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.3f),
+                        border = BorderStroke(1.dp, if (perk.isUnlocked) Color(0xFF4CAF50) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(perk.icon, fontSize = 16.sp)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = perk.title,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp,
+                                        color = if (perk.isUnlocked) Color(0xFF81C784) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                    Text(
+                                        text = if (perk.isUnlocked) "AKTIVNÍ" else perk.requirementText,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (perk.isUnlocked) Color(0xFF4CAF50) else Color(0xFFFFB74D)
+                                    )
+                                }
+                                Text(
+                                    text = perk.bonusText,
+                                    fontSize = 10.sp,
+                                    color = if (perk.isUnlocked) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                var showDashboardOverlay by remember { mutableStateOf(false) }
+                Button(
+                    onClick = { showDashboardOverlay = true },
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32).copy(alpha = 0.85f)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("⚡ Otevřít Celý Synergický Dashboard", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+
+                if (showDashboardOverlay) {
+                    SynergyDashboardDialog(
+                        characters = listOf(character),
+                        onDismiss = { showDashboardOverlay = false }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CharacterTraitVicoChart(character: Character, modifier: Modifier = Modifier) {
+    val tier = AffinityData.getTierForPoints(character.affinityPoints)
+    val color = Color(tier.colorHex)
+
+    val traits = listOf(
+        Pair("Důvěra", character.duvera.toFloat()),
+        Pair("Loajalita", character.loajalita.toFloat()),
+        Pair("Poslušnost", character.poslusnost.toFloat()),
+        Pair("Touha", character.touha.toFloat()),
+        Pair("Morálka", character.morale.toFloat()),
+        Pair("Submise", character.submisivita.toFloat())
+    )
+
+    val entries = traits.mapIndexed { index, pair ->
+        FloatEntry(x = index.toFloat(), y = pair.second)
+    }
+    val chartModel = entryModelOf(entries)
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.5f))
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("📊 Vico Graf Rovnováhy Vlastností", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = color)
+                Text("Vliv otrokyně", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+            }
+
+            Chart(
+                chart = columnChart(),
+                model = chartModel,
+                startAxis = rememberStartAxis(title = "Úroveň (0-100)"),
+                bottomAxis = rememberBottomAxis(
+                    valueFormatter = { value, _ ->
+                        val index = value.toInt()
+                        if (index in traits.indices) traits[index].first else ""
+                    },
+                    title = "Vlastnost"
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
+            )
         }
     }
 }
@@ -1451,6 +1759,9 @@ fun ProfileAndStatsTab(
 
         // Radar Chart of Character Stats & Affinity Tier Growth
         CharacterRadarChart(character = character)
+
+        // Vico Column Chart for Trait Balance & Influence Tracking
+        CharacterTraitVicoChart(character = character)
 
         // Detailed Progress Stats
         Text("Základní vitální ukazatele:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
@@ -1762,6 +2073,29 @@ fun AffinityAndDialogueTab(
                             )
                         }
                     }
+                }
+
+                var showDialogueModal by remember(character.id) { mutableStateOf(false) }
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Button(
+                    onClick = { showDialogueModal = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(tier.colorHex))
+                ) {
+                    Icon(Icons.Default.Chat, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("💬 Zahájit hluboký rozhovor s otrokyní", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+
+                if (showDialogueModal) {
+                    SlaveDialogueModal(
+                        character = character,
+                        engine = engine,
+                        onDismiss = { showDialogueModal = false },
+                        onTriggerAffinity = onTriggerAffinityEffect
+                    )
                 }
             }
         }
@@ -5306,4 +5640,168 @@ fun GlobalAffinityMilestonesDialog(player: com.example.haremdark.models.Player, 
             }
         }
     }
+}
+
+@Composable
+fun SlaveDialogueModal(
+    character: Character,
+    engine: GameEngine?,
+    onDismiss: () -> Unit,
+    onTriggerAffinity: ((AffinityBurstType, Float) -> Unit)? = null
+) {
+    var selectedResponseText by remember { mutableStateOf<String?>(null) }
+    var lottieTriggerKey by remember { mutableLongStateOf(0L) }
+    var currentEmotion by remember { mutableStateOf(CharacterEmotionType.LOVE) }
+
+    data class DialogueTopic(val title: String, val response: String, val type: String)
+
+    val topics = listOf(
+        DialogueTopic(
+            "👑 Pochválit její loajalitu a službu",
+            "Děkuji, pane... má oddanost tobě je pevnější než ocel. Každý tvůj příkaz je pro mě zákonem a radostí.",
+            "loajalita"
+        ),
+        DialogueTopic(
+            "📜 Zeptat se na její minulost před zajetím",
+            "Někdy vzpomínám na staré časy, než jsi mě vzal do své péče... ale teď vím, že mé skutečné místo je navždy po tvém boku.",
+            "duvera"
+        ),
+        DialogueTopic(
+            "⚡ Zadat přísný úkol a varovat před neposlušností",
+            "Rozumím, pane! Udělám cokoliv, co mi nařídíš. Neodvážím se tě zklamat ani v nejmenším.",
+            "poslusnost"
+        ),
+        DialogueTopic(
+            "💖 Vyznat hlubokou vášeň a náklonnost",
+            "Mé srdce i duše hoří pro tebe... vládni mi navěky, můj drahý pane, patřím jen tobě.",
+            "vasen"
+        )
+    )
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            containerColor = Color(0xFF1E1028),
+            shape = RoundedCornerShape(16.dp),
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("💬", fontSize = 22.sp)
+                    Text(
+                        text = "Rozhovor s otrokyní: ${character.name}",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = Color(0xFFFF80AB)
+                    )
+                }
+            },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF2A1636),
+                    border = BorderStroke(1.dp, Color(0xFFFF80AB).copy(alpha = 0.4f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "Slova otrokyně:",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFFD700)
+                        )
+                        Text(
+                            text = selectedResponseText ?: "„Pane, poslouchám tvá slova. O čem si chceš promluvit?“",
+                            fontSize = 13.sp,
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                            color = Color.White,
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+
+                if (selectedResponseText == null) {
+                    Text(
+                        text = "Vyber téma rozhovoru:",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFE1BEE7)
+                    )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        topics.forEach { (topicTitle, responseMsg, type) ->
+                            Button(
+                                onClick = {
+                                    selectedResponseText = responseMsg
+                                    com.example.haremdark.domain.VoiceManager.speak(responseMsg, character.archetypeId)
+                                    currentEmotion = when (type) {
+                                        "loajalita" -> CharacterEmotionType.SPARKLE
+                                        "duvera" -> CharacterEmotionType.CHEER
+                                        "poslusnost" -> CharacterEmotionType.BLUSH
+                                        else -> CharacterEmotionType.LOVE
+                                    }
+                                    lottieTriggerKey = System.currentTimeMillis()
+                                    engine?.let { eng ->
+                                        val gain = when (type) {
+                                            "loajalita" -> Pair(10, 5)
+                                            "duvera" -> Pair(8, 5)
+                                            "poslusnost" -> Pair(6, 4)
+                                            else -> Pair(15, 8)
+                                        }
+                                        eng.applyDialogueChoiceOutcome(
+                                            characterId = character.id,
+                                            affinityGain = gain.first,
+                                            loyaltyGain = if (type == "loajalita") gain.second else 0,
+                                            trustGain = if (type == "duvera") gain.second else 0,
+                                            submissivenessGain = if (type == "poslusnost") gain.second else 0,
+                                            fearGain = 0,
+                                            brokenGain = 0,
+                                            logText = "Rozhovor s ${character.name}: $topicTitle",
+                                            prompt = "Hluboký rozhovor s otrokyní",
+                                            optionText = topicTitle,
+                                            feedback = responseMsg,
+                                            outcomeEffects = "Získány body náklonnosti a oddanosti"
+                                        )
+                                    }
+                                    onTriggerAffinity?.invoke(AffinityBurstType.HEARTS, 1.2f)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4A154B))
+                            ) {
+                                Text(topicTitle, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                        }
+                    }
+                } else {
+                    Button(
+                        onClick = { selectedResponseText = null },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A1B9A))
+                    ) {
+                        Text("🔄 Pokračovat v rozhovoru", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Zavřít", color = Color(0xFFFF80AB), fontWeight = FontWeight.Bold)
+            }
+        }
+    )
+
+    LottieEmotionOverlay(
+        triggerKey = lottieTriggerKey,
+        emotionType = currentEmotion,
+        modifier = Modifier.fillMaxSize(),
+        sizeDp = 140.dp
+    )
+  }
 }
