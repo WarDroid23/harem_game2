@@ -70,58 +70,155 @@ fun WorldMapScreen(
     var showLoreModal by remember { mutableStateOf(false) }
     var isFogEnabled by remember { mutableStateOf(gameState.fogOfWarEnabled) }
     var showBookmarksDialog by remember { mutableStateOf(false) }
+    var isVisualMode by remember { mutableStateOf(false) }
 
-    // Find the current active story milestone that needs completion
-    val nextMilestone = StoryMilestoneData.MILESTONES.find { !gameState.completedMilestones.contains(it.id) }
-        ?: StoryMilestoneData.MILESTONES.last()
-    val isNextMilestoneCompleted = gameState.completedMilestones.contains(nextMilestone.id)
-    val (canClaimNextMilestone, milestoneRequirements) = engine.checkMilestoneEligibility(nextMilestone)
+    // Dialog for Region Actions
+    var regionToInteractWith by remember { mutableStateOf<DomainLocation?>(null) }
 
-    val explorationProgress = gameState.regionExplorationProgress[selectedDomain.id] ?: 0
-    val dominionLevel = gameState.regionDominionLevel[selectedDomain.id] ?: 0
-
-    val isUnlocked = gameState.unlockedDomains.contains(selectedDomain.id) || player.level >= selectedDomain.minPlayerLevel
-    val isCurrent = gameState.currentDomainId == selectedDomain.id
-
-    // Animation for milestone claim beacon
-    val infiniteTransition = rememberInfiniteTransition(label = "beacon")
-    val beaconGlow by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "glow"
-    )
-
-    val equalizer1 by infiniteTransition.animateFloat(
-        initialValue = 0.2f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(tween(400, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
-        label = "eq1"
-    )
-    val equalizer2 by infiniteTransition.animateFloat(
-        initialValue = 0.8f,
-        targetValue = 0.3f,
-        animationSpec = infiniteRepeatable(tween(550, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
-        label = "eq2"
-    )
-    val equalizer3 by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 0.95f,
-        animationSpec = infiniteRepeatable(tween(320, easing = LinearEasing), repeatMode = RepeatMode.Reverse),
-        label = "eq3"
-    )
+    if (regionToInteractWith != null) {
+        val domain = regionToInteractWith!!
+        val isUnlocked = gameState.unlockedDomains.contains(domain.id) || player.level >= domain.minPlayerLevel
+        
+        AlertDialog(
+            onDismissRequest = { regionToInteractWith = null },
+            title = { 
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(if (isUnlocked) domain.name else "Neznámý region", style = MaterialTheme.typography.headlineSmall)
+                    if (gameState.currentDomainId == domain.id) {
+                        Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFF4CAF50).copy(alpha = 0.2f)) {
+                            Text("AKTUÁLNÍ SÍDLO", modifier = Modifier.padding(6.dp, 2.dp), fontSize = 10.sp, color = Color(0xFF81C784), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (isUnlocked) {
+                        Text(domain.description, style = MaterialTheme.typography.bodyMedium)
+                        
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                        
+                        Text("Aktivity v oblasti:", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // Expand Domain
+                            Card(
+                                modifier = Modifier.weight(1f).clickable { 
+                                    engine.subjugateRegionDominion(domain.id)
+                                    regionToInteractWith = null
+                                },
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("🏰", fontSize = 24.sp)
+                                    Text("Expanze", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Text("Vliv: ${gameState.regionDominionLevel[domain.id] ?: 0}%", fontSize = 10.sp)
+                                }
+                            }
+                            
+                            // Quest / Scout
+                            Card(
+                                modifier = Modifier.weight(1f).clickable { 
+                                    engine.scoutRegion(domain.id)
+                                    regionToInteractWith = null
+                                },
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("📜", fontSize = 24.sp)
+                                    Text("Scénář", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Text("Průzkum", fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    } else {
+                        Text("Tento region je prozatím zahalen mlhou. Musíš dosáhnout úrovně ${domain.minPlayerLevel} nebo splnit příběhový milník: ${domain.requiredMilestoneTitle}.", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            },
+            confirmButton = {
+                if (isUnlocked && gameState.currentDomainId != domain.id) {
+                    Button(onClick = { 
+                        engine.fastTravelToDomain(domain.id)
+                        regionToInteractWith = null
+                    }) {
+                        Text("Cestovat sem")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { regionToInteractWith = null }) {
+                    Text("Zpět")
+                }
+            }
+        )
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(top = 10.dp, bottom = 100.dp)
-        ) {
+        if (isVisualMode) {
+            com.example.haremdark.ui.components.KingdomMapView(
+                gameState = gameState,
+                onRegionClick = { domain ->
+                    regionToInteractWith = domain
+                }
+            )
+            
+            // Toggle Switch back
+            SmallFloatingActionButton(
+                onClick = { isVisualMode = false },
+                modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
+                containerColor = MaterialTheme.colorScheme.secondaryContainer
+            ) {
+                Icon(Icons.Default.List, contentDescription = "List View")
+            }
+        } else {
+            // Derived states and animations for the list view
+            val nextMilestone = com.example.haremdark.models.StoryMilestoneData.MILESTONES.find { !gameState.completedMilestones.contains(it.id) }
+                ?: com.example.haremdark.models.StoryMilestoneData.MILESTONES.last()
+            val isNextMilestoneCompleted = gameState.completedMilestones.contains(nextMilestone.id)
+            val (canClaimNextMilestone, milestoneRequirements) = engine.checkMilestoneEligibility(nextMilestone)
+
+            val explorationProgress = gameState.regionExplorationProgress[selectedDomain.id] ?: 0
+            val dominionLevel = gameState.regionDominionLevel[selectedDomain.id] ?: 0
+
+            val isUnlocked = gameState.unlockedDomains.contains(selectedDomain.id) || player.level >= selectedDomain.minPlayerLevel
+            val isCurrent = gameState.currentDomainId == selectedDomain.id
+
+            // Animations for the list view
+            val listInfiniteTransition = rememberInfiniteTransition(label = "list_fx")
+            val beaconGlow by listInfiniteTransition.animateFloat(
+                initialValue = 0.4f,
+                targetValue = 1.0f,
+                animationSpec = infiniteRepeatable(tween(1200, easing = LinearEasing), RepeatMode.Reverse),
+                label = "glow"
+            )
+
+            val equalizer1 by listInfiniteTransition.animateFloat(
+                initialValue = 0.2f,
+                targetValue = 1.0f,
+                animationSpec = infiniteRepeatable(tween(400, easing = LinearEasing), RepeatMode.Reverse),
+                label = "eq1"
+            )
+            val equalizer2 by listInfiniteTransition.animateFloat(
+                initialValue = 0.8f,
+                targetValue = 0.3f,
+                animationSpec = infiniteRepeatable(tween(550, easing = LinearEasing), RepeatMode.Reverse),
+                label = "eq2"
+            )
+            val equalizer3 by listInfiniteTransition.animateFloat(
+                initialValue = 0.4f,
+                targetValue = 0.95f,
+                animationSpec = infiniteRepeatable(tween(320, easing = LinearEasing), RepeatMode.Reverse),
+                label = "eq3"
+            )
+
+            LazyColumn(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(top = 10.dp, bottom = 100.dp)
+            ) {
 
         item {
             val totalRegions = DomainData.DOMAINS.size
@@ -193,11 +290,18 @@ fun WorldMapScreen(
                         Text(if (isFogEnabled) "🌫️" else "👁️", fontSize = 18.sp)
                     }
 
-                    IconButton(
+    IconButton(
                         onClick = { showBookmarksDialog = true },
                         modifier = Modifier.size(32.dp)
                     ) {
                         Text("📍", fontSize = 18.sp)
+                    }
+
+                    IconButton(
+                        onClick = { isVisualMode = true },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Text("🗺️", fontSize = 18.sp)
                     }
                 }
             }
@@ -1370,6 +1474,7 @@ fun WorldMapScreen(
             }
         }
     }
+}
 }
 }
 

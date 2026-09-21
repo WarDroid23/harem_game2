@@ -462,8 +462,18 @@ data class AffinityPointRecord(
 )
 
 fun Character.getSafeAffinityTrend(currentDay: Int = 1): List<AffinityPointRecord> {
-    if (affinityHistory.isNotEmpty()) {
+    if (affinityHistory.size >= 2) {
         return affinityHistory.toList()
+    }
+    if (affinityHistory.size == 1) {
+        val single = affinityHistory.first()
+        val startDay = (single.day - 2).coerceAtLeast(1)
+        val initialPoints = (single.points * 0.4f).toInt().coerceAtLeast(0)
+        val baseline = listOf(
+            AffinityPointRecord(startDay, initialPoints, "Počátek pouta"),
+            single
+        )
+        return baseline
     }
     // Provide realistic baseline affinity progression curve up to current points
     val baseline = (affinityPoints * 0.25f).toInt().coerceAtLeast(5)
@@ -576,6 +586,7 @@ data class Player(
     var unlockedTitleTags: MutableSet<String> = mutableSetOf("Neznámý vládce"),
     var selectedAvatarFrame: String = "Bronzový rám rozkoše",
     var unlockedAchievements: MutableList<String> = mutableListOf(),
+    var domainExpansionLevel: Int = 1,
     var weapons: MutableList<Weapon> = mutableListOf(
         Weapon("Dýka ze stříbra", "kratka", 15, 100),
         Weapon("Bič z dračí kůže", "bic", 25, 250)
@@ -724,6 +735,7 @@ data class GameSave(
     val player: Player,
     val characters: List<Character>,
     val haremLevel: Int = 1,
+    val domainExpansionLevel: Int = 1,
     val haremExp: Int = 0,
     val haremMaxExp: Int = 100,
     val buildings: List<Building>,

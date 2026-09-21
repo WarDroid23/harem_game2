@@ -294,15 +294,34 @@ fun PartyFormationRow(
                         }
                     }
 
-                    // Name
-                    Text(
-                        text = member.name,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = if (member.isAlive) Color.White else Color.Gray
-                    )
+                    // Name and Buff badge
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = member.name,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = if (member.isAlive) Color.White else Color.Gray,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (member.characterSpecificBuffIcon.isNotEmpty()) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0xFFFFD700).copy(alpha = 0.2f),
+                                border = BorderStroke(0.5.dp, Color(0xFFFFD700).copy(alpha = 0.6f))
+                            ) {
+                                Text(
+                                    text = member.characterSpecificBuffIcon,
+                                    fontSize = 9.sp,
+                                    modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                    }
 
                     if (member.isAlive) {
                         // HP Bar

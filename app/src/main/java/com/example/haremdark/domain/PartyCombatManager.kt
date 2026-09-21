@@ -61,7 +61,8 @@ object PartyCombatManager {
 
                 val affinityTier = com.example.haremdark.data.AffinityData.getTierForPoints(char.affinityPoints)
                 val combatBonuses = com.example.haremdark.data.AffinityData.getAffinityCombatBonuses(affinityTier.level)
-                val affinityDmgMult = (1.0f + (affinityTier.level * 0.05f) + (if (char.oblibena) 0.10f else 0f)) * (1.0f + combatBonuses.dmgMultiplierBonus)
+                val charSpecificBuff = com.example.haremdark.data.AffinityData.getCharacterSpecificBuff(char.archetypeId, affinityTier.level)
+                val affinityDmgMult = (1.0f + (affinityTier.level * 0.05f) + (if (char.oblibena) 0.10f else 0f)) * (1.0f + combatBonuses.dmgMultiplierBonus + charSpecificBuff.attackBonusPercent)
                 val passiveBonuses = com.example.haremdark.data.CharacterSkillCatalog.calculatePassiveBonuses(char)
                 val unlockedActiveSkills = com.example.haremdark.data.CharacterSkillCatalog.getUnlockedActiveSkills(char)
                 val baseSkills = PartyCombatCatalog.getSkillsForCharacter(
@@ -73,7 +74,7 @@ object PartyCombatManager {
                 val allSkills = (baseSkills + unlockedActiveSkills).distinctBy { it.id }
 
                 val baseAtk = 18 + combatSkill * 2 + eqBonusAtk + char.fazeZkazenosti * 3 + passiveBonuses.attackBonus
-                val finalAtk = (baseAtk * (1.0f + combatBonuses.dmgMultiplierBonus)).toInt()
+                val finalAtk = (baseAtk * (1.0f + combatBonuses.dmgMultiplierBonus + charSpecificBuff.attackBonusPercent)).toInt()
 
                 // Determine formation position
                 val chosenFormation = if (player.partyFormationMap.containsKey(char.id)) {
@@ -95,22 +96,26 @@ object PartyCombatManager {
                     archetypeId = char.archetype,
                     role = role,
                     formationPosition = chosenFormation,
-                    hp = char.hp + eqBonusHp + passiveBonuses.hpBonus + combatBonuses.hpBonus,
-                    maxHp = char.maxHp + eqBonusHp + passiveBonuses.hpBonus + combatBonuses.hpBonus,
+                    hp = char.hp + eqBonusHp + passiveBonuses.hpBonus + combatBonuses.hpBonus + charSpecificBuff.hpBonus,
+                    maxHp = char.maxHp + eqBonusHp + passiveBonuses.hpBonus + combatBonuses.hpBonus + charSpecificBuff.hpBonus,
                     mana = 50 + char.fazeZkazenosti * 5,
                     maxMana = 50 + char.fazeZkazenosti * 5,
                     attack = finalAtk,
-                    defense = 10 + (char.skills["defense"] ?: 3) + (if (role == CombatRole.TANK_GUARDIAN) 8 else 0) + passiveBonuses.defenseBonus + combatBonuses.defenseBonus,
+                    defense = 10 + (char.skills["defense"] ?: 3) + (if (role == CombatRole.TANK_GUARDIAN) 8 else 0) + passiveBonuses.defenseBonus + combatBonuses.defenseBonus + charSpecificBuff.defenseBonus,
                     speed = 12 + (if (role == CombatRole.ASSASSIN_BLADE) 6 else 0) + passiveBonuses.speedBonus,
-                    critRatePercent = 10 + (if (role == CombatRole.PHYSICAL_DPS || role == CombatRole.ASSASSIN_BLADE) 15 else 0) + passiveBonuses.critBonus + combatBonuses.critBonus,
+                    critRatePercent = 10 + (if (role == CombatRole.PHYSICAL_DPS || role == CombatRole.ASSASSIN_BLADE) 15 else 0) + passiveBonuses.critBonus + combatBonuses.critBonus + charSpecificBuff.critBonusPercent,
                     skills = allSkills,
                     loyaltyTierName = "${affinityTier.icon} ${affinityTier.title}",
                     affinityBonusDmg = affinityDmgMult,
                     favoriteWeaponIcon = if (role == CombatRole.TANK_GUARDIAN) "🛡️" else if (role == CombatRole.DARK_SORCERESS) "🔮" else "🗡️",
                     relationshipTierLevel = affinityTier.level,
                     relationshipStageName = "${affinityTier.icon} ${affinityTier.stageName}",
-                    relationshipCombatDescription = affinityTier.combatBonusDescription,
-                    combatRegenBonus = combatBonuses.regenBonus,
+                    relationshipCombatDescription = "${affinityTier.combatBonusDescription} | ${charSpecificBuff.icon} ${charSpecificBuff.name}: ${charSpecificBuff.perkEffectSummary}",
+                    combatRegenBonus = combatBonuses.regenBonus + charSpecificBuff.hpRegenPerTurn,
+                    characterSpecificBuffName = charSpecificBuff.name,
+                    characterSpecificBuffIcon = charSpecificBuff.icon,
+                    characterSpecificBuffSummary = charSpecificBuff.perkEffectSummary,
+                    specialEffectTag = charSpecificBuff.specialEffectTag,
                     strategy = char.preferredCombatRole
                 )
 
@@ -175,7 +180,7 @@ object PartyCombatManager {
 
         val startsWithArena = encounterDef.id.startsWith("arena")
         val backgroundRes = if (startsWithArena) {
-            when (haremLevel) {
+            when (player.domainExpansionLevel) {
                 1 -> com.example.haremdark.R.drawable.img_arena_battle
                 2 -> com.example.haremdark.R.drawable.img_arena_domain_2
                 3 -> com.example.haremdark.R.drawable.img_arena_domain_3

@@ -270,6 +270,10 @@ data class PartyMember(
     val relationshipStageName: String = "Acquaintance",
     val relationshipCombatDescription: String = "Základní bojové zapojení",
     val combatRegenBonus: Int = 0,
+    val characterSpecificBuffName: String = "",
+    val characterSpecificBuffIcon: String = "",
+    val characterSpecificBuffSummary: String = "",
+    val specialEffectTag: String = "",
     val strategy: CombatStrategy = CombatStrategy.BALANCED
 ) {
     val isAlive: Boolean get() = hp > 0

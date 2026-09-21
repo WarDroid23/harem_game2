@@ -55,9 +55,9 @@ fun SaveSettingsScreen(
     val lastAutoSave by engine.lastAutoSaveEvent.collectAsState()
 
     LaunchedEffect(Unit) {
-        summaries[99] = summaries[99] ?: "Načítání..."
-        summaries[0] = summaries[0] ?: "Načítání..."
-        for (i in 1..3) summaries[i] = engine.getSlotSummary(i)
+        listOf(0, 1, 2, 3, 99).forEach { slot ->
+            summaries[slot] = engine.getSlotSummary(slot)
+        }
     }
 
     val themes = listOf(

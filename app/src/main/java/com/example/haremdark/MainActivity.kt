@@ -383,6 +383,17 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                                 QuickNavDrawerItem(
+                                    icon = Icons.Default.Groups,
+                                    title = "Roster Postav",
+                                    subtitle = "Detailní statistiky & náklonnost",
+                                    isSelected = currentRoute == "roster",
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
+                                        navController.navigate("roster") { launchSingleTop = true }
+                                    }
+                                )
+                                QuickNavDrawerItem(
                                     icon = Icons.Default.Inventory2,
                                     title = "Inventář & Sklad",
                                     subtitle = "Batoh, zámecký sklad, dary & kořist",
@@ -615,28 +626,28 @@ class MainActivity : ComponentActivity() {
                             navController = navController,
                             startDestination = "home",
                             enterTransition = {
-                                slideInHorizontally(
-                                    initialOffsetX = { 700 },
-                                    animationSpec = tween(400, easing = LinearOutSlowInEasing)
-                                ) + fadeIn(animationSpec = tween(400))
+                                fadeIn(animationSpec = tween(500)) + slideIntoContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                                    animationSpec = tween(500, easing = EaseOutQuart)
+                                )
                             },
                             exitTransition = {
-                                slideOutHorizontally(
-                                    targetOffsetX = { -700 },
-                                    animationSpec = tween(400, easing = FastOutLinearInEasing)
-                                ) + fadeOut(animationSpec = tween(400))
+                                fadeOut(animationSpec = tween(500)) + slideOutOfContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                                    animationSpec = tween(500, easing = EaseOutQuart)
+                                )
                             },
                             popEnterTransition = {
-                                slideInHorizontally(
-                                    initialOffsetX = { -700 },
-                                    animationSpec = tween(400, easing = LinearOutSlowInEasing)
-                                ) + fadeIn(animationSpec = tween(400))
+                                fadeIn(animationSpec = tween(500)) + slideIntoContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.End,
+                                    animationSpec = tween(500, easing = EaseOutQuart)
+                                )
                             },
                             popExitTransition = {
-                                slideOutHorizontally(
-                                    targetOffsetX = { 700 },
-                                    animationSpec = tween(400, easing = FastOutLinearInEasing)
-                                ) + fadeOut(animationSpec = tween(400))
+                                fadeOut(animationSpec = tween(500)) + slideOutOfContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.End,
+                                    animationSpec = tween(500, easing = EaseOutQuart)
+                                )
                             }
                         ) {
                             composable("home") {
@@ -655,6 +666,13 @@ class MainActivity : ComponentActivity() {
                                     gameState = gameState,
                                     engine = engine,
                                     onNavigateToHunt = { navController.navigate("activities") }
+                                )
+                            }
+                            composable("roster") {
+                                RosterScreen(
+                                    gameState = gameState,
+                                    engine = engine,
+                                    onBack = { navController.popBackStack() }
                                 )
                             }
                             composable("map") {

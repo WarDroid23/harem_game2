@@ -57,6 +57,7 @@ data class MoodNotification(
 )
 
 class GameEngine(private val context: Context) {
+    private val saveManager = com.example.haremdark.data.SaveManager(context)
 
     private val _moodNotifications = kotlinx.coroutines.flow.MutableSharedFlow<MoodNotification>(extraBufferCapacity = 5)
     val moodNotifications: kotlinx.coroutines.flow.SharedFlow<MoodNotification> = _moodNotifications
@@ -210,8 +211,7 @@ class GameEngine(private val context: Context) {
         _isLightMode.value = _gameState.value.isLightMode
         
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-            val savedState = loadStateSuspend("save_slot_autosave") 
-                ?: loadStateSuspend("save_slot_1")
+            val savedState = saveManager.loadGame(0) ?: saveManager.loadGame(1)
             
             if (savedState != null) {
                 _gameState.value = savedState
@@ -4867,17 +4867,18 @@ class GameEngine(private val context: Context) {
         val state = _gameState.value
         val current = state.copy(
             slotNumber = slot,
-            saveDate = "Den ${state.player.day} - ${state.characters.size} dívek"
+            saveDate = "Den ${state.player.day} - ${state.characters.size} dívek - Expans: ${state.player.domainExpansionLevel}"
         )
         _gameState.value = current
-        saveStateAsync("save_slot_$slot", current)
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            saveManager.saveGame(slot, current)
+        }
         addLog("💾 Hra byla uložena do slotu $slot.")
         return true
     }
 
     suspend fun loadFromSlotSuspend(slot: Int): Boolean {
-        val key = when(slot) { 0 -> "save_slot_autosave"; 99 -> "save_slot_quicksave"; else -> "save_slot_$slot" }
-        val loaded = loadStateSuspend(key) ?: return false
+        val loaded = saveManager.loadGame(slot) ?: return false
         _gameState.value = loaded
         _currentTheme.value = loaded.currentTheme
         _isLightMode.value = loaded.isLightMode
@@ -4905,7 +4906,9 @@ class GameEngine(private val context: Context) {
             slotNumber = 0,
             saveDate = "Den ${state.player.day} ($reason • $timeFormatted)"
         )
-        saveStateAsync("save_slot_autosave", current)
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            saveManager.saveGame(0, current)
+        }
         _lastAutoSaveEvent.value = AutoSaveEvent(
             reason = reason,
             timestamp = System.currentTimeMillis(),
@@ -4935,25 +4938,15 @@ class GameEngine(private val context: Context) {
             saveDate = "Den ${state.player.day} (Rychlé uložení)"
         )
         _gameState.value = current
-        val keyQuick = stringPreferencesKey("save_slot_quicksave")
-        val keyAuto = stringPreferencesKey("save_slot_autosave")
-        val jsonStr = json.encodeToString(current)
-        context.dataStore.edit { prefs ->
-            prefs[keyQuick] = jsonStr
-            prefs[keyAuto] = jsonStr
-        }
+        saveManager.saveGame(99, current)
         val msg = "💾 Rychlé uložení: Stav pána (Den ${state.player.day}), statistiky ${state.characters.size} dívek i výbava úspěšně uloženy do DataStore."
         addLog(msg)
         return Pair(true, msg)
     }
 
     suspend fun getSlotSummary(slot: Int): String {
-        val key = when(slot) { 0 -> "save_slot_autosave"; 99 -> "save_slot_quicksave"; else -> "save_slot_$slot" }
-        val save = loadStateSuspend(key) ?: return "Prázdný slot"
-        val codexCount = save.player.unlockedCodexIds.size
-        val avgAffinity = if (save.characters.isNotEmpty()) save.characters.map { it.affinityPoints }.average().toInt() else 0
-        val synergiesCount = save.activeBuffs.size + save.activeDrugBuffs.size
-        return "Den ${save.player.day} | Náklonnost: $avgAffinity | Kodex: $codexCount | Synergie: $synergiesCount"
+        val summaries = saveManager.getSlotSummaries().first()
+        return summaries[slot] ?: "Prázdný slot"
     }
     fun runArenaExpedition(girlIds: List<String>): List<String> {
         val current = _gameState.value

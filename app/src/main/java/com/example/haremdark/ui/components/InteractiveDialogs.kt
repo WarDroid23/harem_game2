@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import kotlin.math.*
 import kotlin.random.Random
 import com.example.haremdark.data.AffinityData
+import com.example.haremdark.data.AffinityTierInfo
 import com.airbnb.lottie.compose.*
 import com.example.haremdark.data.CharacterSkillCatalog
 import com.example.haremdark.data.CharacterSkillNode
@@ -117,7 +118,7 @@ fun CharacterDetailDialog(
     val portraitRes = StaticData.getPortraitForArchetype(currentActiveCharacter.archetypeId)
 
     var selectedSection by remember { mutableIntStateOf(initialTab) }
-    val sectionTabs = listOf("📖 Životopis", "📊 Profil", "🛡️ Výbava", "💖 Náklonnost", "📖 Příběhy Pouta", "🎙️ Archiv & Hlasy", "🎁 Dary", "📦 Sklad & Inventář", "⚡ Akce", "✨ Dovednosti", "🎯 Výcvik", "📋 Úkoly", "🕰️ Klíčové Momenty", "🖼️ Galerie", "🏆 Milníky", "📜 Historie")
+    val sectionTabs = listOf("📖 Životopis", "📊 Profil", "🛡️ Výbava", "💖 Náklonnost & Trend", "📖 Příběhy Pouta", "🎙️ Archiv & Hlasy", "🎁 Dary", "📦 Sklad & Inventář", "⚡ Akce", "✨ Dovednosti", "🎯 Výcvik", "📋 Úkoly", "🕰️ Klíčové Momenty", "🖼️ Galerie", "🏆 Milníky", "📜 Historie")
     var activeEmote by remember { mutableStateOf<String?>(null) }
     var emoteKey by remember { mutableLongStateOf(0L) }
 
@@ -541,7 +542,8 @@ fun CharacterDetailDialog(
                             loyaltyTier = loyalty,
                             archetype = archetype,
                             phase = phase,
-                            engine = engine
+                            engine = engine,
+                            onOpenAffinityTrend = { selectedSection = 3 }
                         )
                         2 -> EquipmentTab(character = currentActiveCharacter, player = player, onEquip = onEquipItem, onUnequip = onUnequipItem, engine = engine)
                         3 -> AffinityAndDialogueTab(character = currentActiveCharacter, engine = engine, onTriggerAffinityEffect = triggerAffinityEffect)
@@ -1554,7 +1556,8 @@ fun ProfileAndStatsTab(
     loyaltyTier: com.example.haremdark.models.LoyaltyTier,
     archetype: com.example.haremdark.models.CharacterArchetype?,
     phase: com.example.haremdark.models.DegradationPhase?,
-    engine: GameEngine? = null
+    engine: GameEngine? = null,
+    onOpenAffinityTrend: (() -> Unit)? = null
 ) {
     Column(
         modifier = Modifier
@@ -1755,6 +1758,22 @@ fun ProfileAndStatsTab(
                 )
                 Text("💭 \"${AffinityData.getRandomActiveDialogue(character)}\"", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f), fontWeight = FontWeight.Medium)
                 Text("⚔️ Pasivní boj: ${affinityTier.combatBonusDescription}", fontSize = 10.sp, color = Color(0xFFFF80AB), fontWeight = FontWeight.SemiBold)
+                if (onOpenAffinityTrend != null) {
+                    Button(
+                        onClick = { onOpenAffinityTrend() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(34.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(affinityTier.colorHex).copy(alpha = 0.85f)),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.ShowChart, contentDescription = null, modifier = Modifier.size(15.dp))
+                            Text("📈 Zobrazit Vico Dashboard Trendu ↗", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
         }
 
@@ -1871,6 +1890,8 @@ fun AffinityAndDialogueTab(
         label = "AffinityProgressBarAnim"
     )
 
+    var subTabSection by remember { mutableIntStateOf(0) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1879,6 +1900,48 @@ fun AffinityAndDialogueTab(
     ) {
         // Dynamic Mood Atmosphere Banner
         MoodAtmosphereBanner(character = character)
+
+        // Sub-Tab Switcher between Vico Progression Dashboard and Dialogue/Perks
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = { subTabSection = 0 },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(38.dp),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (subTabSection == 0) Color(tier.colorHex) else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (subTabSection == 0) Color.White else MaterialTheme.colorScheme.onSurface
+                ),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(Icons.Default.ShowChart, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Text("📈 Vico Dashboard", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Button(
+                onClick = { subTabSection = 1 },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(38.dp),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (subTabSection == 1) Color(tier.colorHex) else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (subTabSection == 1) Color.White else MaterialTheme.colorScheme.onSurface
+                ),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(Icons.Default.Favorite, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Text("💖 Pouto & Dialogy", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
 
         // Main Affinity Level Status Card
         Card(
@@ -1943,16 +2006,29 @@ fun AffinityAndDialogueTab(
             }
         }
 
-        // Affinity Growth Trend Chart (Vico library visualization)
-        AffinityTrendChart(
-            character = character,
-            modifier = Modifier.fillMaxWidth()
-        )
+        if (subTabSection == 0) {
+            // Affinity Progression Dashboard with Vico charts
+            AffinityProgressionDashboard(
+                character = character,
+                currentDay = engine?.gameState?.value?.player?.day ?: 1,
+                engine = engine,
+                onTriggerAffinityEffect = onTriggerAffinityEffect,
+                modifier = Modifier.fillMaxWidth()
+            )
 
-        // Active Speech Dialogue Card
-        val activeLine = AffinityData.getRandomActiveDialogue(character)
-        
-        RelationshipMilestoneSystem(character = character)
+            // Direct Interaction Actions so player can test affinity gains in real-time
+            QuickAffinityInteractionsCard(
+                character = character,
+                engine = engine,
+                onTriggerAffinityEffect = onTriggerAffinityEffect
+            )
+
+            RelationshipMilestoneSystem(character = character)
+        } else {
+            // Active Speech Dialogue Card
+            val activeLine = AffinityData.getRandomActiveDialogue(character)
+            
+            RelationshipMilestoneSystem(character = character)
 
         Card(
             colors = CardDefaults.cardColors(
@@ -2176,6 +2252,17 @@ fun AffinityAndDialogueTab(
                 }
             }
         }
+
+        // --- CHARACTER-SPECIFIC COMBAT BUFFS & DIALOGUE LIBRARY ---
+        CharacterSpecificAffinityBuffsCard(character = character, currentTier = tier)
+
+        UnlockedDialogueLibraryCard(character = character, currentTier = tier)
+
+        QuickAffinityInteractionsCard(
+            character = character,
+            engine = engine,
+            onTriggerAffinityEffect = onTriggerAffinityEffect
+        )
 
         // --- 3. RANDOM NARRATIVE ENCOUNTER GENERATOR ---
         var generatedEventSummary by remember(character.id) { mutableStateOf<String?>(null) }
@@ -2731,6 +2818,7 @@ fun AffinityAndDialogueTab(
                 }
             }
         }
+    }
     }
 }
 
@@ -5651,33 +5739,14 @@ fun SlaveDialogueModal(
     onTriggerAffinity: ((AffinityBurstType, Float) -> Unit)? = null
 ) {
     var selectedResponseText by remember { mutableStateOf<String?>(null) }
+    var levelUpAnnouncement by remember { mutableStateOf<String?>(null) }
     var lottieTriggerKey by remember { mutableLongStateOf(0L) }
     var currentEmotion by remember { mutableStateOf(CharacterEmotionType.LOVE) }
 
-    data class DialogueTopic(val title: String, val response: String, val type: String)
-
-    val topics = listOf(
-        DialogueTopic(
-            "👑 Pochválit její loajalitu a službu",
-            "Děkuji, pane... má oddanost tobě je pevnější než ocel. Každý tvůj příkaz je pro mě zákonem a radostí.",
-            "loajalita"
-        ),
-        DialogueTopic(
-            "📜 Zeptat se na její minulost před zajetím",
-            "Někdy vzpomínám na staré časy, než jsi mě vzal do své péče... ale teď vím, že mé skutečné místo je navždy po tvém boku.",
-            "duvera"
-        ),
-        DialogueTopic(
-            "⚡ Zadat přísný úkol a varovat před neposlušností",
-            "Rozumím, pane! Udělám cokoliv, co mi nařídíš. Neodvážím se tě zklamat ani v nejmenším.",
-            "poslusnost"
-        ),
-        DialogueTopic(
-            "💖 Vyznat hlubokou vášeň a náklonnost",
-            "Mé srdce i duše hoří pro tebe... vládni mi navěky, můj drahý pane, patřím jen tobě.",
-            "vasen"
-        )
-    )
+    val currentTier = AffinityData.getTierForPoints(character.affinityPoints)
+    val scenario = remember(character.id, currentTier.level) {
+        AffinityData.getScenarioForArchetype(character.archetypeId, character.name, currentTier.level)
+    }
 
     Box(modifier = Modifier.fillMaxWidth()) {
         AlertDialog(
@@ -5690,119 +5759,588 @@ fun SlaveDialogueModal(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text("💬", fontSize = 22.sp)
-                    Text(
-                        text = "Rozhovor s otrokyní: ${character.name}",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = Color(0xFFFF80AB)
-                    )
+                    Column {
+                        Text(
+                            text = "Pouto a rozhovor: ${character.name}",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = Color(0xFFFF80AB)
+                        )
+                        Text(
+                            text = "${currentTier.icon} Stupeň ${currentTier.level}: ${currentTier.title}",
+                            fontSize = 11.sp,
+                            color = Color(currentTier.colorHex)
+                        )
+                    }
                 }
             },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFF2A1636),
-                    border = BorderStroke(1.dp, Color(0xFFFF80AB).copy(alpha = 0.4f)),
-                    modifier = Modifier.fillMaxWidth()
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            text = "Slova otrokyně:",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFFFD700)
-                        )
-                        Text(
-                            text = selectedResponseText ?: "„Pane, poslouchám tvá slova. O čem si chceš promluvit?“",
-                            fontSize = 13.sp,
-                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                            color = Color.White,
-                            lineHeight = 18.sp
-                        )
-                    }
-                }
-
-                if (selectedResponseText == null) {
-                    Text(
-                        text = "Vyber téma rozhovoru:",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFE1BEE7)
-                    )
-
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        topics.forEach { (topicTitle, responseMsg, type) ->
-                            Button(
-                                onClick = {
-                                    selectedResponseText = responseMsg
-                                    com.example.haremdark.domain.VoiceManager.speak(responseMsg, character.archetypeId)
-                                    currentEmotion = when (type) {
-                                        "loajalita" -> CharacterEmotionType.SPARKLE
-                                        "duvera" -> CharacterEmotionType.CHEER
-                                        "poslusnost" -> CharacterEmotionType.BLUSH
-                                        else -> CharacterEmotionType.LOVE
-                                    }
-                                    lottieTriggerKey = System.currentTimeMillis()
-                                    engine?.let { eng ->
-                                        val gain = when (type) {
-                                            "loajalita" -> Pair(10, 5)
-                                            "duvera" -> Pair(8, 5)
-                                            "poslusnost" -> Pair(6, 4)
-                                            else -> Pair(15, 8)
-                                        }
-                                        eng.applyDialogueChoiceOutcome(
-                                            characterId = character.id,
-                                            affinityGain = gain.first,
-                                            loyaltyGain = if (type == "loajalita") gain.second else 0,
-                                            trustGain = if (type == "duvera") gain.second else 0,
-                                            submissivenessGain = if (type == "poslusnost") gain.second else 0,
-                                            fearGain = 0,
-                                            brokenGain = 0,
-                                            logText = "Rozhovor s ${character.name}: $topicTitle",
-                                            prompt = "Hluboký rozhovor s otrokyní",
-                                            optionText = topicTitle,
-                                            feedback = responseMsg,
-                                            outcomeEffects = "Získány body náklonnosti a oddanosti"
-                                        )
-                                    }
-                                    onTriggerAffinity?.invoke(AffinityBurstType.HEARTS, 1.2f)
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4A154B))
-                            ) {
-                                Text(topicTitle, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            }
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFF2A1636),
+                        border = BorderStroke(1.dp, Color(0xFFFF80AB).copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "Slova dívky:",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFFD700)
+                            )
+                            Text(
+                                text = selectedResponseText ?: scenario.prompt,
+                                fontSize = 13.sp,
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                color = Color.White,
+                                lineHeight = 18.sp
+                            )
                         }
                     }
-                } else {
-                    Button(
-                        onClick = { selectedResponseText = null },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A1B9A))
-                    ) {
-                        Text("🔄 Pokračovat v rozhovoru", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+
+                    if (levelUpAnnouncement != null) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFF1B5E20).copy(alpha = 0.85f),
+                            border = BorderStroke(1.dp, Color(0xFF81C784)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = levelUpAnnouncement ?: "",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFE8F5E9),
+                                modifier = Modifier.padding(10.dp),
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+
+                    if (selectedResponseText == null) {
+                        Text(
+                            text = "Jak odpovíš své konkubíně?",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFE1BEE7)
+                        )
+
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            scenario.options.forEach { option ->
+                                Button(
+                                    onClick = {
+                                        selectedResponseText = option.feedback
+                                        com.example.haremdark.domain.VoiceManager.speak(option.feedback, character.archetypeId)
+                                        currentEmotion = when {
+                                            option.loyalty > 10 -> CharacterEmotionType.SPARKLE
+                                            option.trust > 10 -> CharacterEmotionType.CHEER
+                                            option.submissiveness > 10 -> CharacterEmotionType.BLUSH
+                                            else -> CharacterEmotionType.LOVE
+                                        }
+                                        lottieTriggerKey = System.currentTimeMillis()
+
+                                        val prevTier = AffinityData.getTierForPoints(character.affinityPoints)
+                                        val newPoints = character.affinityPoints + option.affinity
+                                        val nextTier = AffinityData.getTierForPoints(newPoints)
+
+                                        if (nextTier.level > prevTier.level) {
+                                            val newBuff = AffinityData.getCharacterSpecificBuff(character.archetypeId, nextTier.level)
+                                            levelUpAnnouncement = "🌟 Pouto posíleno na Stupeň ${nextTier.level}: ${nextTier.title}!\nOdemčen unikátní bojový buff: ${newBuff.icon} ${newBuff.name} (${newBuff.perkEffectSummary})"
+                                            com.example.haremdark.domain.SoundEffectManager.playHarem(com.example.haremdark.domain.HaremSound.AFFINITY_UP)
+                                        }
+
+                                        engine?.applyDialogueChoiceOutcome(
+                                            characterId = character.id,
+                                            affinityGain = option.affinity,
+                                            loyaltyGain = option.loyalty,
+                                            trustGain = option.trust,
+                                            submissivenessGain = option.submissiveness,
+                                            fearGain = option.fear,
+                                            brokenGain = option.broken,
+                                            logText = "Rozhovor s ${character.name}: ${option.text.take(30)}...",
+                                            prompt = scenario.prompt,
+                                            optionText = option.text,
+                                            feedback = option.feedback,
+                                            outcomeEffects = "+${option.affinity} Náklonnost, +${option.loyalty} Loajalita"
+                                        )
+                                        onTriggerAffinity?.invoke(AffinityBurstType.HEARTS, 1.4f)
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4A154B))
+                                ) {
+                                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                                        Text(
+                                            text = option.text,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Text("+${option.affinity} náklonnost", fontSize = 9.sp, color = Color(0xFFFF80AB))
+                                            if (option.loyalty != 0) Text("+${option.loyalty} loajalita", fontSize = 9.sp, color = Color(0xFFFFD700))
+                                            if (option.trust != 0) Text("+${option.trust} důvěra", fontSize = 9.sp, color = Color(0xFF80D8FF))
+                                            if (option.submissiveness != 0) Text("+${option.submissiveness} poddajnost", fontSize = 9.sp, color = Color(0xFFCE93D8))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                selectedResponseText = null
+                                levelUpAnnouncement = null
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A1B9A))
+                        ) {
+                            Text("🔄 Pokračovat v rozhovoru", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
                     }
                 }
+            },
+            confirmButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("Zavřít", color = Color(0xFFFF80AB), fontWeight = FontWeight.Bold)
+                }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Zavřít", color = Color(0xFFFF80AB), fontWeight = FontWeight.Bold)
-            }
-        }
-    )
+        )
 
-    LottieEmotionOverlay(
+        LottieEmotionOverlay(
         triggerKey = lottieTriggerKey,
         emotionType = currentEmotion,
         modifier = Modifier.fillMaxSize(),
         sizeDp = 140.dp
     )
   }
+}
+
+/**
+ * Displays all unlocked and locked character-specific combat buffs for the heroine's archetype.
+ */
+@Composable
+fun CharacterSpecificAffinityBuffsCard(
+    character: Character,
+    currentTier: AffinityTierInfo
+) {
+    val allBuffs = remember(character.archetypeId) {
+        AffinityData.getAllBuffsForArchetype(character.archetypeId)
+    }
+    val activeBuff = remember(character.archetypeId, currentTier.level) {
+        AffinityData.getCharacterSpecificBuff(character.archetypeId, currentTier.level)
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, Color(0xFFFF80AB).copy(alpha = 0.5f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("⚔️", fontSize = 20.sp)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Unikátní bojové buffy (${character.archetypeId})",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = Color(0xFFFF80AB)
+                    )
+                    Text(
+                        text = "Exkluzivní bojové schopnosti a perky odemčené hloubkou pouta",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+            }
+
+            // Highlight Active Buff
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = Color(0xFF880E4F).copy(alpha = 0.25f),
+                border = BorderStroke(1.5.dp, Color(0xFFFF80AB)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(activeBuff.icon, fontSize = 18.sp)
+                            Text(
+                                text = "Aktivní: ${activeBuff.name}",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = Color(0xFFFF80AB)
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF4CAF50).copy(alpha = 0.3f),
+                            border = BorderStroke(1.dp, Color(0xFF4CAF50))
+                        ) {
+                            Text(
+                                text = "STUPEŇ ${activeBuff.tierRequired}",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF81C784),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                    Text(
+                        text = activeBuff.description,
+                        fontSize = 11.sp,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
+                    )
+                    Text(
+                        text = "⚡ Efekt: ${activeBuff.perkEffectSummary}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFFFD700)
+                    )
+                }
+            }
+
+            Text(
+                text = "Všechny stupně bojových buffů:",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+            )
+
+            // List of all 6 tier buffs
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                allBuffs.forEach { buff ->
+                    val isUnlocked = buff.tierRequired <= currentTier.level
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isUnlocked) MaterialTheme.colorScheme.surface.copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.2f),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isUnlocked) Color(0xFF4CAF50).copy(alpha = 0.5f) else Color.Gray.copy(alpha = 0.3f)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = if (isUnlocked) buff.icon else "🔒",
+                                fontSize = 16.sp
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = "[Stupeň ${buff.tierRequired}] ${buff.name}",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isUnlocked) Color.White else Color.Gray
+                                    )
+                                    if (isUnlocked) {
+                                        Text("✓", fontSize = 10.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                Text(
+                                    text = buff.perkEffectSummary,
+                                    fontSize = 10.sp,
+                                    color = if (isUnlocked) Color(0xFFFFD700) else Color.Gray.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Displays unlocked dialogue entries from the affinity progression library.
+ */
+@Composable
+fun UnlockedDialogueLibraryCard(
+    character: Character,
+    currentTier: AffinityTierInfo
+) {
+    val unlockedDialogues = remember(character.id, character.affinityPoints) {
+        AffinityData.getUnlockedDialogueLibrary(character).filter { it.isUnlocked }
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, Color(0xFFBA68C8).copy(alpha = 0.4f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("📜", fontSize = 20.sp)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Knihovna odemčených vyznání (${unlockedDialogues.size} dialogů)",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = Color(0xFFBA68C8)
+                    )
+                    Text(
+                        text = "Jedinečné dialogové repliky odemčené za dosažené úrovně náklonnosti",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                unlockedDialogues.forEach { entry ->
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF2A1636).copy(alpha = 0.6f),
+                        border = BorderStroke(1.dp, Color(0xFFBA68C8).copy(alpha = 0.3f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0xFF6A1B9A).copy(alpha = 0.5f)
+                            ) {
+                                Text(
+                                    text = "Lv.${entry.tier}",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFE1BEE7),
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+                            }
+                            Text(
+                                text = entry.text,
+                                fontSize = 11.sp,
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f),
+                                lineHeight = 15.sp
+                            )
+                            IconButton(
+                                onClick = { com.example.haremdark.domain.VoiceManager.speak(entry.text, character.archetypeId) },
+                                modifier = Modifier.size(26.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                    contentDescription = "Přehrát hlas",
+                                    tint = Color(0xFFBA68C8),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (currentTier.level < 6) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color.Black.copy(alpha = 0.3f),
+                        border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("🔒", fontSize = 14.sp)
+                            Text(
+                                text = "Další unikátní dialogy se odemknou na Stupni ${currentTier.level + 1}...",
+                                fontSize = 10.sp,
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                color = Color.Gray
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Quick interactions directly from the affinity tab to nurture the relationship.
+ */
+@Composable
+fun QuickAffinityInteractionsCard(
+    character: Character,
+    engine: GameEngine?,
+    onTriggerAffinityEffect: ((AffinityBurstType, Float) -> Unit)? = null
+) {
+    var interactionFeedback by remember(character.id) { mutableStateOf<String?>(null) }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, Color(0xFFFF80AB).copy(alpha = 0.5f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("💖", fontSize = 20.sp)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Rychlé interakce pro zvýšení náklonnosti",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = Color(0xFFFF80AB)
+                    )
+                    Text(
+                        text = "Věnuj dívce pozornost pro posílení vzájemného pouta",
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+            }
+
+            data class QuickAction(val title: String, val gain: Int, val loyaltyGain: Int, val desc: String)
+            val actions = listOf(
+                QuickAction("👑 Udělit pochvalu", 8, 4, "Chválíš její snahu a věrnost v dominiu."),
+                QuickAction("💖 Něžné objetí", 12, 2, "Přitáhneš ji k sobě v hřejivém objetí."),
+                QuickAction("⚔️ Společný výcvik", 15, 6, "Společně procvičujete bojové techniky."),
+                QuickAction("🍷 Slavnostní přípitek", 18, 8, "Připijete si na věrnost a nová vítězství.")
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                actions.take(2).forEach { act ->
+                    Button(
+                        onClick = {
+                            engine?.applyDialogueChoiceOutcome(
+                                characterId = character.id,
+                                affinityGain = act.gain,
+                                loyaltyGain = act.loyaltyGain,
+                                trustGain = act.gain / 2,
+                                submissivenessGain = 0,
+                                fearGain = 0,
+                                brokenGain = 0,
+                                logText = "${act.title} s ${character.name} (+${act.gain} náklonnost)",
+                                prompt = act.title,
+                                optionText = act.title,
+                                feedback = act.desc,
+                                outcomeEffects = "+${act.gain} Náklonnost, +${act.loyaltyGain} Loajalita"
+                            )
+                            val dialogues = AffinityData.getDialoguesForTier(character.archetypeId, character.affinityLevel)
+                            val quote = if (dialogues.isNotEmpty()) dialogues.random() else "Děkuji, můj pane..."
+                            interactionFeedback = "${act.desc}\n${character.name}: „$quote“"
+                            com.example.haremdark.domain.VoiceManager.speak(quote, character.archetypeId)
+                            com.example.haremdark.domain.SoundEffectManager.playHarem(com.example.haremdark.domain.HaremSound.AFFINITY_UP)
+                            onTriggerAffinityEffect?.invoke(AffinityBurstType.HEARTS, 1.2f)
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF880E4F).copy(alpha = 0.8f))
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(act.title, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text("+${act.gain} nákl.", fontSize = 9.sp, color = Color(0xFFFF80AB))
+                        }
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                actions.drop(2).forEach { act ->
+                    Button(
+                        onClick = {
+                            engine?.applyDialogueChoiceOutcome(
+                                characterId = character.id,
+                                affinityGain = act.gain,
+                                loyaltyGain = act.loyaltyGain,
+                                trustGain = act.gain / 2,
+                                submissivenessGain = 0,
+                                fearGain = 0,
+                                brokenGain = 0,
+                                logText = "${act.title} s ${character.name} (+${act.gain} náklonnost)",
+                                prompt = act.title,
+                                optionText = act.title,
+                                feedback = act.desc,
+                                outcomeEffects = "+${act.gain} Náklonnost, +${act.loyaltyGain} Loajalita"
+                            )
+                            val dialogues = AffinityData.getDialoguesForTier(character.archetypeId, character.affinityLevel)
+                            val quote = if (dialogues.isNotEmpty()) dialogues.random() else "Děkuji, můj pane..."
+                            interactionFeedback = "${act.desc}\n${character.name}: „$quote“"
+                            com.example.haremdark.domain.VoiceManager.speak(quote, character.archetypeId)
+                            com.example.haremdark.domain.SoundEffectManager.playHarem(com.example.haremdark.domain.HaremSound.FLIRT)
+                            onTriggerAffinityEffect?.invoke(AffinityBurstType.HEARTS, 1.3f)
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4A148C).copy(alpha = 0.8f))
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(act.title, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text("+${act.gain} nákl.", fontSize = 9.sp, color = Color(0xFFFF80AB))
+                        }
+                    }
+                }
+            }
+
+            if (interactionFeedback != null) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFFFF80AB).copy(alpha = 0.15f),
+                    border = BorderStroke(1.dp, Color(0xFFFF80AB).copy(alpha = 0.4f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = interactionFeedback ?: "",
+                        fontSize = 11.sp,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                        color = Color.White,
+                        modifier = Modifier.padding(10.dp),
+                        lineHeight = 16.sp
+                    )
+                }
+            }
+        }
+    }
 }
