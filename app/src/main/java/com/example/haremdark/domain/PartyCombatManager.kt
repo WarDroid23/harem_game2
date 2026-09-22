@@ -43,7 +43,15 @@ object PartyCombatManager {
                 speed = 14,
                 critRatePercent = 15 + playerCombat * 2,
                 skills = PartyCombatCatalog.getPlayerSkills(playerCombat, playerDark),
-                loyaltyTierName = "Vládce",
+                loyaltyTierName = "👑 Pán",
+                loyaltyValue = 100,
+                loyaltyCombatBonusDmg = 1.0f,
+                loyaltyCombatBonusDef = 1.0f,
+                loyaltyCombatBonusCrit = 0,
+                loyaltyAssistChancePercent = 0,
+                loyaltyProtectLordChancePercent = 0,
+                loyaltyCombatPerkTag = "LORD",
+                loyaltyCombatDescription = "Pán a vládce dominia",
                 affinityBonusDmg = 1.25f,
                 favoriteWeaponIcon = "👑"
             )
@@ -73,8 +81,12 @@ object PartyCombatManager {
                 )
                 val allSkills = (baseSkills + unlockedActiveSkills).distinctBy { it.id }
 
+                val loyaltyBonus = com.example.haremdark.data.LoyaltyCombatData.getBonusForLoyalty(char.loajalita)
                 val baseAtk = 18 + combatSkill * 2 + eqBonusAtk + char.fazeZkazenosti * 3 + passiveBonuses.attackBonus
-                val finalAtk = (baseAtk * (1.0f + combatBonuses.dmgMultiplierBonus + charSpecificBuff.attackBonusPercent)).toInt()
+                val finalAtk = ((baseAtk * (1.0f + combatBonuses.dmgMultiplierBonus + charSpecificBuff.attackBonusPercent)) * loyaltyBonus.attackMultiplier).toInt()
+                val baseDef = 10 + (char.skills["defense"] ?: 3) + (if (role == CombatRole.TANK_GUARDIAN) 8 else 0) + passiveBonuses.defenseBonus + combatBonuses.defenseBonus + charSpecificBuff.defenseBonus
+                val finalDef = (baseDef * loyaltyBonus.defenseMultiplier).toInt()
+                val finalCrit = 10 + (if (role == CombatRole.PHYSICAL_DPS || role == CombatRole.ASSASSIN_BLADE) 15 else 0) + passiveBonuses.critBonus + combatBonuses.critBonus + charSpecificBuff.critBonusPercent + loyaltyBonus.critBonusPercent
 
                 // Determine formation position
                 val chosenFormation = if (player.partyFormationMap.containsKey(char.id)) {
@@ -101,17 +113,25 @@ object PartyCombatManager {
                     mana = 50 + char.fazeZkazenosti * 5,
                     maxMana = 50 + char.fazeZkazenosti * 5,
                     attack = finalAtk,
-                    defense = 10 + (char.skills["defense"] ?: 3) + (if (role == CombatRole.TANK_GUARDIAN) 8 else 0) + passiveBonuses.defenseBonus + combatBonuses.defenseBonus + charSpecificBuff.defenseBonus,
+                    defense = finalDef,
                     speed = 12 + (if (role == CombatRole.ASSASSIN_BLADE) 6 else 0) + passiveBonuses.speedBonus,
-                    critRatePercent = 10 + (if (role == CombatRole.PHYSICAL_DPS || role == CombatRole.ASSASSIN_BLADE) 15 else 0) + passiveBonuses.critBonus + combatBonuses.critBonus + charSpecificBuff.critBonusPercent,
+                    critRatePercent = finalCrit.coerceAtLeast(1),
                     skills = allSkills,
-                    loyaltyTierName = "${affinityTier.icon} ${affinityTier.title}",
+                    loyaltyTierName = "${loyaltyBonus.icon} ${loyaltyBonus.title}",
+                    loyaltyValue = char.loajalita,
+                    loyaltyCombatBonusDmg = loyaltyBonus.attackMultiplier,
+                    loyaltyCombatBonusDef = loyaltyBonus.defenseMultiplier,
+                    loyaltyCombatBonusCrit = loyaltyBonus.critBonusPercent,
+                    loyaltyAssistChancePercent = loyaltyBonus.assistStrikeChancePercent,
+                    loyaltyProtectLordChancePercent = loyaltyBonus.protectLordChancePercent,
+                    loyaltyCombatPerkTag = loyaltyBonus.perkTag,
+                    loyaltyCombatDescription = loyaltyBonus.summaryText,
                     affinityBonusDmg = affinityDmgMult,
                     favoriteWeaponIcon = if (role == CombatRole.TANK_GUARDIAN) "🛡️" else if (role == CombatRole.DARK_SORCERESS) "🔮" else "🗡️",
                     relationshipTierLevel = affinityTier.level,
                     relationshipStageName = "${affinityTier.icon} ${affinityTier.stageName}",
                     relationshipCombatDescription = "${affinityTier.combatBonusDescription} | ${charSpecificBuff.icon} ${charSpecificBuff.name}: ${charSpecificBuff.perkEffectSummary}",
-                    combatRegenBonus = combatBonuses.regenBonus + charSpecificBuff.hpRegenPerTurn,
+                    combatRegenBonus = combatBonuses.regenBonus + charSpecificBuff.hpRegenPerTurn + loyaltyBonus.hpRegenPerTurn,
                     characterSpecificBuffName = charSpecificBuff.name,
                     characterSpecificBuffIcon = charSpecificBuff.icon,
                     characterSpecificBuffSummary = charSpecificBuff.perkEffectSummary,
@@ -260,14 +280,18 @@ object PartyCombatManager {
         val synergyAtkBonus = (1.0f + session.activeSynergies.map { it.attackBonusPercent }.sum()) * formAtkBonus
         val buffAtk = activeMember.statusEffects.filter { it.type == "ATK_BUFF" }.sumOf { it.value }
 
+        val isHesitant = (!activeMember.isPlayer && activeMember.loyaltyValue < 30 && Random.nextInt(100) < 20)
+        val loyaltyDmgMod = if (isHesitant) 0.75f else 1.0f
+
         val rawDmg = (activeMember.attack + buffAtk + Random.nextInt(-2, 4)) * activeMember.affinityBonusDmg * synergyAtkBonus * comboDmgMult
-        val finalDmg = ((rawDmg - (target.defense * 0.4f)) * critMult).toInt().coerceAtLeast(8)
+        val finalDmg = (((rawDmg - (target.defense * 0.4f)) * critMult) * loyaltyDmgMod).toInt().coerceAtLeast(6)
 
         // Apply damage to enemy
         target.hp = (target.hp - finalDmg).coerceAtLeast(0)
 
-        // Charge Harem Combo
-        val newCombo = (session.haremComboGauge + (if (isCrit) 18 else 10)).coerceAtMost(session.maxHaremComboGauge)
+        // Charge Harem Combo (Devotion tier increases combo gain by 50%)
+        val comboLoyaltyBonus = if (activeMember.loyaltyValue >= 95) 1.5f else 1.0f
+        val newCombo = (session.haremComboGauge + ((if (isCrit) 18 else 10) * comboLoyaltyBonus).toInt()).coerceAtMost(session.maxHaremComboGauge)
 
         // Sound effect
         if (isCrit) {
@@ -282,7 +306,8 @@ object PartyCombatManager {
 
         val critTag = if (isCrit) " 💥 KRITICKÝ ZÁSAH!" else ""
         val chainTag = if (newChain > 1) " 🔥 [Kombo x$newChain]" else ""
-        val logMsg = "🗡️ ${activeMember.name} zaútočila na ${target.name} a udělila $finalDmg poškození!$critTag$chainTag"
+        val hesitationTag = if (isHesitant) " ⚠️ [Zaváhání z nízké loajality -25%]" else ""
+        val logMsg = "🗡️ ${activeMember.name} zaútočila na ${target.name} a udělila $finalDmg poškození!$critTag$chainTag$hesitationTag"
 
         val newLog = CombatLogEntry(
             turn = session.currentRound,
@@ -294,7 +319,29 @@ object PartyCombatManager {
             damageCalculation = "[Síla: ${activeMember.attack}] * [Krit: x${"%.2f".format(critMult)}] * [Kombo: x${"%.2f".format(comboDmgMult)}] = $finalDmg DMG"
         )
 
-        val updatedLogs = listOf(newLog) + session.combatLogs
+        // Check for Devotion Assist from loyal harem companions
+        val assistLogs = mutableListOf<CombatLogEntry>()
+        if (target.isAlive) {
+            val loyalAssisters = session.party.filter { it.isAlive && it.id != activeMember.id && it.loyaltyAssistChancePercent > 0 }
+            for (assister in loyalAssisters) {
+                if (target.isAlive && Random.nextInt(100) < assister.loyaltyAssistChancePercent) {
+                    val assistDmg = ((assister.attack * 0.45f) * assister.affinityBonusDmg).toInt().coerceAtLeast(6)
+                    target.hp = (target.hp - assistDmg).coerceAtLeast(0)
+                    assistLogs.add(
+                        CombatLogEntry(
+                            turn = session.currentRound,
+                            type = "player_special",
+                            message = "💖 [Věrný protiúder] ${assister.name} (Loajalita ${assister.loyaltyValue}%) z oddanosti k Pánu asistovala bleskovým výpadem za $assistDmg poškození!",
+                            actor = assister.name,
+                            actionName = "Věrný protiúder",
+                            damageDealt = assistDmg
+                        )
+                    )
+                }
+            }
+        }
+
+        val updatedLogs = listOf(newLog) + assistLogs + session.combatLogs
 
         var nextSession = session.copy(
             haremComboGauge = newCombo,
@@ -371,6 +418,27 @@ object PartyCombatManager {
                             narrativeText = skill.voiceQuote ?: "${activeMember.name} soustředila svou sílu do zničujícího úderu."
                         )
                     )
+
+                    // Devotion assist on skill
+                    if (target.isAlive) {
+                        val loyalAssisters = session.party.filter { it.isAlive && it.id != activeMember.id && it.loyaltyAssistChancePercent > 0 }
+                        for (assister in loyalAssisters) {
+                            if (target.isAlive && Random.nextInt(100) < assister.loyaltyAssistChancePercent) {
+                                val assistDmg = ((assister.attack * 0.40f) * assister.affinityBonusDmg).toInt().coerceAtLeast(6)
+                                target.hp = (target.hp - assistDmg).coerceAtLeast(0)
+                                newLogs.add(
+                                    CombatLogEntry(
+                                        turn = session.currentRound,
+                                        type = "player_special",
+                                        message = "💖 [Věrný protiúder] ${assister.name} (Loajalita ${assister.loyaltyValue}%) navázala na dovednost '${skill.name}' asistenčním úderem za $assistDmg DMG!",
+                                        actor = assister.name,
+                                        actionName = "Věrný protiúder",
+                                        damageDealt = assistDmg
+                                    )
+                                )
+                            }
+                        }
+                    }
                 }
             }
             SkillTargetType.ALL_ENEMIES -> {
@@ -700,8 +768,37 @@ object PartyCombatManager {
             val defMitigation = target.defense * 0.4f
             val guardReduction = if (target.isDefending) 0.40f else 1.0f
 
-            val finalDmg = ((baseDmg - defMitigation) * guardReduction).toInt().coerceAtLeast(6)
-            target.hp = (target.hp - finalDmg).coerceAtLeast(0)
+            val rawFinalDmg = ((baseDmg - defMitigation) * guardReduction).toInt().coerceAtLeast(6)
+
+            // Guardian Devotion: If Lord is targeted, an alive loyal guardian may intercept and mitigate damage
+            val loyalGuardian = if (target.isPlayer) {
+                aliveParty.filter { !it.isPlayer && it.isAlive && it.loyaltyProtectLordChancePercent > 0 }
+                    .maxByOrNull { it.loyaltyProtectLordChancePercent }
+            } else null
+
+            val isProtected = loyalGuardian != null && Random.nextInt(100) < loyalGuardian.loyaltyProtectLordChancePercent
+
+            val finalDmg: Int
+            if (isProtected && loyalGuardian != null) {
+                val mitigated = (rawFinalDmg * 0.65f).toInt().coerceAtLeast(4)
+                val guardianShare = mitigated / 2
+                val lordShare = mitigated - guardianShare
+                target.hp = (target.hp - lordShare).coerceAtLeast(0)
+                loyalGuardian.hp = (loyalGuardian.hp - guardianShare).coerceAtLeast(0)
+                finalDmg = lordShare
+                enemyLogs.add(
+                    CombatLogEntry(
+                        turn = session.currentRound,
+                        type = "player_special",
+                        message = "🛡️ [Oddaná ochrana] ${loyalGuardian.name} (Loajalita: ${loyalGuardian.loyaltyValue}%) skočila před svého Pána! Pohltila $guardianShare poškození a zmírnila zásah Pána na $lordShare!",
+                        actor = loyalGuardian.name,
+                        actionName = "Ochrana Pána"
+                    )
+                )
+            } else {
+                finalDmg = rawFinalDmg
+                target.hp = (target.hp - finalDmg).coerceAtLeast(0)
+            }
 
             SoundEffectManager.playCombat(if (isSpecial) CombatSound.BOSS_SPECIAL else CombatSound.ENEMY_STRIKE)
 
@@ -725,8 +822,9 @@ object PartyCombatManager {
         // Tick status effects & mana / HP regen from relationship tiers
         session.party.forEach { member ->
             member.isDefending = false
-            // Mana regen per round
-            val manaRegen = 8 + session.activeSynergies.sumOf { it.manaRegenBonus }
+            // Mana regen per round (including loyalty bonus)
+            val loyaltyBonus = com.example.haremdark.data.LoyaltyCombatData.getBonusForLoyalty(member.loyaltyValue)
+            val manaRegen = 8 + session.activeSynergies.sumOf { it.manaRegenBonus } + loyaltyBonus.mpRegenPerTurn
             member.mana = (member.mana + manaRegen).coerceAtMost(member.maxMana)
 
             // Relationship Tier HP Regeneration

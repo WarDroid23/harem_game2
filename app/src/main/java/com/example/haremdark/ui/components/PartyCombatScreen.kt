@@ -337,30 +337,11 @@ fun PartyCombatScreen(
                 )
             }
 
-            // --- LATEST COMBAT FEEDBACK LOG ---
-            val lastLog = session.combatLogs.firstOrNull()
-            if (lastLog != null) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xDD120818),
-                    border = BorderStroke(1.dp, Color(0xFFFF4081).copy(alpha = 0.3f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text("⚡", fontSize = 14.sp)
-                        Text(
-                            text = lastLog.message,
-                            fontSize = 11.sp,
-                            color = Color(0xFFF8BBD0),
-                            maxLines = 2
-                        )
-                    }
-                }
-            }
+            // --- SCROLLABLE COMBAT LOG VIEW ---
+            ScrollableCombatLogView(
+                logs = session.combatLogs,
+                onOpenFullModal = { showLogsModal = true }
+            )
 
             // --- HAREM ULTIMATE COMBO GAUGE ---
             HaremUltimateComboGauge(

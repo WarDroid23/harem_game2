@@ -67,6 +67,7 @@ fun PartySelectionDialog(
     }
 
     var showSaveFormationDialog by remember { mutableStateOf(false) }
+    var showPreBattleFormation by remember { mutableStateOf(false) }
     var formationNameInput by remember { mutableStateOf("Boss Squad") }
     var formationIconInput by remember { mutableStateOf("🐉") }
 
@@ -824,8 +825,21 @@ fun PartySelectionDialog(
                     }
                 }
 
-                // --- 4. START COMBAT ACTION BUTTON ---
+                // --- 4. PRE-BATTLE FORMATION & START COMBAT BUTTONS ---
                 val canStart = selectedGirls.isNotEmpty() || includePlayer
+                OutlinedButton(
+                    onClick = { showPreBattleFormation = true },
+                    enabled = canStart,
+                    modifier = Modifier.fillMaxWidth().height(42.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, Color(0xFFFFD700)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFFD700))
+                ) {
+                    Icon(Icons.Default.GridView, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("🛡️ Pokročilá formace a pozice v liniích", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                }
+
                 Button(
                     onClick = {
                         onStartCombat(selectedGirls.toList(), includePlayer, selectedEncounter)
@@ -833,7 +847,7 @@ fun PartySelectionDialog(
                     enabled = canStart,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(50.dp),
+                        .height(48.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFFC2185B),
@@ -851,6 +865,21 @@ fun PartySelectionDialog(
                 }
             }
         }
+    }
+
+    if (showPreBattleFormation) {
+        PreBattleFormationDialog(
+            gameState = gameState,
+            engine = engine,
+            selectedCharacterIds = selectedGirls,
+            includePlayer = includePlayer,
+            onDismiss = { showPreBattleFormation = false },
+            onSaveAndProceed = { updatedFormations ->
+                engine.updatePartyFormations(updatedFormations)
+                showPreBattleFormation = false
+                onStartCombat(selectedGirls.toList(), includePlayer, selectedEncounter)
+            }
+        )
     }
 
     if (showSaveFormationDialog) {

@@ -1,6 +1,8 @@
 package com.example.haremdark.ui.screens
 
 import android.widget.Toast
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -10,7 +12,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -28,6 +32,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -254,6 +259,29 @@ fun HaremScreen(
 
     val haremTabs = listOf("🔲 Mřížka", "🛏️ Komnaty", "👑 Hierarchie", "👶 Dynastie", "👗 Garderóba", "📚 Archiv", "🖼️ Galerie", "📈 Heatmap", "🕸️ Síť Vztahů")
     
+    val coroutineScope = rememberCoroutineScope()
+    val gridState = rememberLazyGridState()
+    val chambersListState = rememberLazyListState()
+
+    val showGridScrollToTop by remember {
+        derivedStateOf { gridState.firstVisibleItemIndex > 2 }
+    }
+    val showChambersScrollToTop by remember {
+        derivedStateOf { chambersListState.firstVisibleItemIndex > 2 }
+    }
+
+    val activeFilterCount = remember(filterCriteria) {
+        var count = 0
+        if (filterCriteria.status != "Všechny") count++
+        if (filterCriteria.role != "Všechny") count++
+        if (filterCriteria.affinityLevel != "Všechny") count++
+        if (filterCriteria.loyaltyLevel != "Všechny") count++
+        if (filterCriteria.moraleStatus != "Všechny") count++
+        count
+    }
+
+    var isDashboardExpanded by remember { mutableStateOf(false) }
+    var isLowMoraleWarningDismissed by remember { mutableStateOf(false) }
     var filterSheetExpanded by remember { mutableStateOf(false) }
     
     val selectedIds = remember { mutableStateListOf<String>() }
@@ -304,27 +332,93 @@ fun HaremScreen(
             var showSynergyDashboardDialog by remember { mutableStateOf(false) }
 
             if (gameState.characters.isNotEmpty()) {
-                MilestoneTrackerBanner(characters = gameState.characters)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp)
                 ) {
-                    Button(
-                        onClick = { showGlobalMilestonesDialog = true },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700).copy(alpha = 0.85f)),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("👑 Síň slávy milníků", fontWeight = FontWeight.Bold, color = Color.Black, fontSize = 11.sp, maxLines = 1)
-                    }
+                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.clickable { isDashboardExpanded = !isDashboardExpanded }
+                            ) {
+                                Text("🏰", fontSize = 15.sp)
+                                Text(
+                                    "Přehled dominia",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primaryContainer
+                                ) {
+                                    Text(
+                                        "${gameState.characters.size} dívek",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
 
-                    Button(
-                        onClick = { showSynergyDashboardDialog = true },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32).copy(alpha = 0.9f)),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text("⚡ Synergický Dashboard", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 11.sp, maxLines = 1)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = { showGlobalMilestonesDialog = true },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(26.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFFD700))
+                                ) {
+                                    Text("👑 Milníky", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                OutlinedButton(
+                                    onClick = { showSynergyDashboardDialog = true },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(26.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF81C784))
+                                ) {
+                                    Text("⚡ Synergie", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                IconButton(
+                                    onClick = { isDashboardExpanded = !isDashboardExpanded },
+                                    modifier = Modifier.size(26.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isDashboardExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        contentDescription = if (isDashboardExpanded) "Sbalit" else "Rozbalit",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        AnimatedVisibility(
+                            visible = isDashboardExpanded,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut()
+                        ) {
+                            Column(modifier = Modifier.padding(top = 8.dp)) {
+                                MilestoneTrackerBanner(characters = gameState.characters)
+                            }
+                        }
                     }
                 }
             }
@@ -425,28 +519,28 @@ fun HaremScreen(
                     gameState.characters.filter { it.morale < 35 || it.loajalita < 25 }
                 }
 
-                if (lowMoraleGirls.isNotEmpty()) {
+                if (lowMoraleGirls.isNotEmpty() && !isLowMoraleWarningDismissed) {
                     Surface(
                         shape = RoundedCornerShape(10.dp),
                         color = Color(0xFF3E1212),
                         border = BorderStroke(1.dp, Color(0xFFFF5252)),
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(10.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text("⚠️", fontSize = 22.sp)
+                            Text("⚠️", fontSize = 18.sp)
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    "VAROVÁNÍ SÍSTÉMU DOHLEDU HARÉMU",
+                                    "VAROVÁNÍ DOHLEDU HARÉMU",
                                     color = Color(0xFFFF5252),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 11.sp
                                 )
                                 Text(
-                                    "${lowMoraleGirls.size} otrokyní má nízkou morálku! (Např. ${lowMoraleGirls.first().name}). Hrozí vzpoura nebo pokus o útěk!",
+                                    "${lowMoraleGirls.size} dívek má nízkou morálku/loajalitu!",
                                     color = Color.White.copy(alpha = 0.9f),
                                     fontSize = 10.sp
                                 )
@@ -454,9 +548,17 @@ fun HaremScreen(
                             Button(
                                 onClick = { haremViewModel.openInteraction(lowMoraleGirls.first()) },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(28.dp),
+                                shape = RoundedCornerShape(6.dp)
                             ) {
                                 Text("Zasáhnout", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                            IconButton(
+                                onClick = { isLowMoraleWarningDismissed = true },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Zavřít", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(14.dp))
                             }
                         }
                     }
@@ -468,21 +570,21 @@ fun HaremScreen(
                     // --- TAB 0: DEDICATED HAREM GRID SCREEN ---
                     Column(
                         modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        // Search & Quick Stats Banner
+                        // Search & Filter & Sort Bar
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 2.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             OutlinedTextField(
                                 value = searchQuery,
                                 onValueChange = { haremViewModel.setSearchQuery(it) },
-                                placeholder = { Text("Hledat...", fontSize = 12.sp) },
-                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                                placeholder = { Text("Hledat dívku...", fontSize = 12.sp) },
+                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp)) },
                                 trailingIcon = {
                                     if (searchQuery.isNotEmpty()) {
                                         IconButton(onClick = { haremViewModel.setSearchQuery("") }, modifier = Modifier.size(20.dp)) {
@@ -492,18 +594,44 @@ fun HaremScreen(
                                 },
                                 singleLine = true,
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(10.dp)
                             )
                             
+                            // Filter Button with Badge
+                            IconButton(
+                                onClick = { filterSheetExpanded = true },
+                                modifier = Modifier
+                                    .background(
+                                        if (activeFilterCount > 0) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                        RoundedCornerShape(10.dp)
+                                    )
+                                    .size(44.dp)
+                            ) {
+                                BadgedBox(
+                                    badge = {
+                                        if (activeFilterCount > 0) {
+                                            Badge { Text("$activeFilterCount", fontSize = 9.sp) }
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        Icons.Default.FilterList,
+                                        contentDescription = "Filtry",
+                                        tint = if (activeFilterCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+
+                            // Sort Button
                             Box {
                                 IconButton(
                                     onClick = { sortExpanded = true },
                                     modifier = Modifier
-                                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
-                                        .height(56.dp)
-                                        .width(48.dp)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp))
+                                        .size(44.dp)
                                 ) {
-                                    Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Třídit", tint = MaterialTheme.colorScheme.primary)
+                                    Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Třídit", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                 }
                                 DropdownMenu(
                                     expanded = sortExpanded,
@@ -520,61 +648,108 @@ fun HaremScreen(
                                     }
                                 }
                             }
-
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                modifier = Modifier.height(56.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier.padding(horizontal = 12.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Text("${gameState.characters.size}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
-                                        Text("dívek", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-                                    }
-                                }
-                            }
                         }
 
-                        // Active Filter Summaries
+                        // Active Filter Summaries & Quick Count Row
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            val activeFilters = buildList {
-                                if (filterCriteria.status != "Všechny") add("Status: ${filterCriteria.status}")
-                                if (filterCriteria.role != "Všechny") add("Role: ${filterCriteria.role}")
-                                if (filterCriteria.affinityLevel != "Všechny") add("Vztah: ${filterCriteria.affinityLevel}")
-                                if (filterCriteria.loyaltyLevel != "Všechny") add("Loajalita: ${filterCriteria.loyaltyLevel}")
-                                if (filterCriteria.moraleStatus != "Všechny") add("Morálka: ${filterCriteria.moraleStatus}")
-                                add("Řazení: $selectedSort")
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                            ) {
+                                Text(
+                                    "${filteredList.size} z ${gameState.characters.size} dívek",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                )
                             }
-                            activeFilters.forEach { f ->
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant,
-                                    modifier = Modifier.padding(vertical = 2.dp)
-                                ) {
-                                    Text(f, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), color = MaterialTheme.colorScheme.onSurface)
-                                }
+
+                            if (filterCriteria.status != "Všechny") {
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { haremViewModel.setFilterCriteria(filterCriteria.copy(status = "Všechny")) },
+                                    label = { Text("Status: ${filterCriteria.status} ✕", fontSize = 10.sp) }
+                                )
+                            }
+                            if (filterCriteria.role != "Všechny") {
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { haremViewModel.setFilterCriteria(filterCriteria.copy(role = "Všechny")) },
+                                    label = { Text("Role: ${filterCriteria.role} ✕", fontSize = 10.sp) }
+                                )
+                            }
+                            if (filterCriteria.affinityLevel != "Všechny") {
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { haremViewModel.setFilterCriteria(filterCriteria.copy(affinityLevel = "Všechny")) },
+                                    label = { Text("Vztah: ${filterCriteria.affinityLevel} ✕", fontSize = 10.sp) }
+                                )
+                            }
+                            if (filterCriteria.loyaltyLevel != "Všechny") {
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { haremViewModel.setFilterCriteria(filterCriteria.copy(loyaltyLevel = "Všechny")) },
+                                    label = { Text("Loajalita: ${filterCriteria.loyaltyLevel} ✕", fontSize = 10.sp) }
+                                )
+                            }
+                            if (filterCriteria.moraleStatus != "Všechny") {
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { haremViewModel.setFilterCriteria(filterCriteria.copy(moraleStatus = "Všechny")) },
+                                    label = { Text("Morálka: ${filterCriteria.moraleStatus} ✕", fontSize = 10.sp) }
+                                )
                             }
                         }
 
                         // Grid of Characters
                         if (filteredList.isEmpty()) {
-                            // ... empty state ...
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.SearchOff,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                    Text(
+                                        text = "Žádná dívka neodpovídá zvolenému filtru.",
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                        fontSize = 13.sp
+                                    )
+                                    TextButton(
+                                        onClick = {
+                                            haremViewModel.setSearchQuery("")
+                                            haremViewModel.setFilterCriteria(com.example.haremdark.viewmodels.HaremFilterCriteria())
+                                        }
+                                    ) {
+                                        Text("Resetovat filtry")
+                                    }
+                                }
+                            }
                         } else {
                             Box(modifier = Modifier.fillMaxSize()) {
                                 LazyVerticalGrid(
+                                    state = gridState,
                                     columns = GridCells.Fixed(2),
                                     modifier = Modifier.fillMaxSize(),
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                                     verticalArrangement = Arrangement.spacedBy(10.dp),
-                                    contentPadding = PaddingValues(top = 2.dp, bottom = 90.dp)
+                                    contentPadding = PaddingValues(top = 2.dp, bottom = 100.dp)
                                 ) {
                                     items(filteredList, key = { it.id }) { character ->
                                         val hasEvent = activeEvent?.characterId == character.id
@@ -614,6 +789,31 @@ fun HaremScreen(
                                     }
                                 }
 
+                                // Scroll To Top Button
+                                if (showGridScrollToTop) {
+                                    Button(
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                gridState.animateScrollToItem(0)
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                        ),
+                                        shape = RoundedCornerShape(20.dp),
+                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp),
+                                        modifier = Modifier
+                                            .align(Alignment.BottomCenter)
+                                            .padding(bottom = if (selectedIds.isNotEmpty()) 150.dp else 90.dp)
+                                    ) {
+                                        Icon(Icons.Default.ArrowUpward, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Nahoru (${filteredList.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
                                 if (selectedIds.isNotEmpty()) {
                                     Surface(
                                         modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 100.dp),
@@ -641,169 +841,300 @@ fun HaremScreen(
 
                 1 -> {
                     // --- TAB 1: CONCUBINE CHAMBERS (LIST VIEW) ---
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(top = 4.dp, bottom = 90.dp)
-                    ) {
-                        // Hero Boudoir Banner
-                        item {
-                            Card(
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
-                                Column {
-                                    Box(modifier = Modifier.fillMaxWidth().height(115.dp)) {
-                                        Image(
-                                            painter = painterResource(id = R.drawable.img_harem_boudoir),
-                                            contentDescription = "Komnaty harému",
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                                        )
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .background(
-                                                    Brush.verticalGradient(
-                                                        colors = listOf(Color.Transparent, Color(0xDD1B0914))
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(
+                            state = chambersListState,
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(top = 2.dp, bottom = 100.dp)
+                        ) {
+                            // Hero Boudoir Banner
+                            item {
+                                Card(
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    Column {
+                                        Box(modifier = Modifier.fillMaxWidth().height(105.dp)) {
+                                            Image(
+                                                painter = painterResource(id = R.drawable.img_harem_boudoir),
+                                                contentDescription = "Komnaty harému",
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(
+                                                        Brush.verticalGradient(
+                                                            colors = listOf(Color.Transparent, Color(0xDD1B0914))
+                                                        )
                                                     )
-                                                )
-                                        )
-                                        Column(
-                                            modifier = Modifier
-                                                .align(Alignment.BottomStart)
-                                                .padding(10.dp)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
+                                            )
+                                            Column(
+                                                modifier = Modifier
+                                                    .align(Alignment.BottomStart)
+                                                    .padding(10.dp)
                                             ) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = "Komnaty harému (Úroveň ${gameState.haremLevel})",
+                                                        style = MaterialTheme.typography.titleMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color.White
+                                                    )
+                                                    Text(
+                                                        text = "${gameState.characters.size} dívek",
+                                                        fontSize = 12.sp,
+                                                        color = Color(0xFFFFD700),
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
                                                 Text(
-                                                    text = "Komnaty harému (Úroveň ${gameState.haremLevel})",
-                                                    style = MaterialTheme.typography.titleMedium,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = Color.White
-                                                )
-                                                Text(
-                                                    text = "${gameState.characters.size} dívek",
-                                                    fontSize = 12.sp,
-                                                    color = Color(0xFFFFD700),
-                                                    fontWeight = FontWeight.Bold
+                                                    text = "Pasivní příjem: +${gameState.haremLevel * 10} zl./den • EXP: ${gameState.haremExp}/${gameState.haremMaxExp}",
+                                                    fontSize = 10.sp,
+                                                    color = Color(0xFFFFCDD2)
                                                 )
                                             }
-                                            Text(
-                                                text = "Pasivní příjem: +${gameState.haremLevel * 10} zl./den • EXP: ${gameState.haremExp}/${gameState.haremMaxExp}",
-                                                fontSize = 10.sp,
-                                                color = Color(0xFFFFCDD2)
+                                        }
+
+                                        // Progress bar
+                                        val progress = (gameState.haremExp.toFloat() / gameState.haremMaxExp.toFloat()).coerceIn(0f, 1f)
+                                        LinearProgressIndicator(
+                                            progress = { progress },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(4.dp),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Search & Filter Controls inside Chambers Tab
+                            item {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OutlinedTextField(
+                                        value = searchQuery,
+                                        onValueChange = { haremViewModel.setSearchQuery(it) },
+                                        placeholder = { Text("Hledat dívku...", fontSize = 12.sp) },
+                                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                        trailingIcon = {
+                                            if (searchQuery.isNotEmpty()) {
+                                                IconButton(onClick = { haremViewModel.setSearchQuery("") }, modifier = Modifier.size(20.dp)) {
+                                                    Icon(Icons.Default.Close, contentDescription = "Vymazat", modifier = Modifier.size(14.dp))
+                                                }
+                                            }
+                                        },
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+
+                                    IconButton(
+                                        onClick = { filterSheetExpanded = true },
+                                        modifier = Modifier
+                                            .background(
+                                                if (activeFilterCount > 0) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                                RoundedCornerShape(10.dp)
+                                            )
+                                            .size(44.dp)
+                                    ) {
+                                        BadgedBox(
+                                            badge = {
+                                                if (activeFilterCount > 0) {
+                                                    Badge { Text("$activeFilterCount", fontSize = 9.sp) }
+                                                }
+                                            }
+                                        ) {
+                                            Icon(
+                                                Icons.Default.FilterList,
+                                                contentDescription = "Filtry",
+                                                tint = if (activeFilterCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(18.dp)
                                             )
                                         }
                                     }
 
-                                    // Progress bar
-                                    val progress = (gameState.haremExp.toFloat() / gameState.haremMaxExp.toFloat()).coerceIn(0f, 1f)
-                                    LinearProgressIndicator(
-                                        progress = { progress },
+                                    Box {
+                                        IconButton(
+                                            onClick = { sortExpanded = true },
+                                            modifier = Modifier
+                                                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp))
+                                                .size(44.dp)
+                                        ) {
+                                            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Třídit", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                        }
+                                        DropdownMenu(
+                                            expanded = sortExpanded,
+                                            onDismissRequest = { sortExpanded = false }
+                                        ) {
+                                            sortOptions.forEach { option ->
+                                                DropdownMenuItem(
+                                                    text = { Text(option, fontWeight = if (selectedSort == option) FontWeight.Bold else FontWeight.Normal) },
+                                                    onClick = { 
+                                                        haremViewModel.setSort(option)
+                                                        sortExpanded = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Active Filter Summaries
+                            item {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                    ) {
+                                        Text(
+                                            "${filteredList.size} z ${gameState.characters.size} dívek",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                        )
+                                    }
+                                    if (filterCriteria.status != "Všechny") {
+                                        FilterChip(
+                                            selected = true,
+                                            onClick = { haremViewModel.setFilterCriteria(filterCriteria.copy(status = "Všechny")) },
+                                            label = { Text("Status: ${filterCriteria.status} ✕", fontSize = 10.sp) }
+                                        )
+                                    }
+                                    if (filterCriteria.role != "Všechny") {
+                                        FilterChip(
+                                            selected = true,
+                                            onClick = { haremViewModel.setFilterCriteria(filterCriteria.copy(role = "Všechny")) },
+                                            label = { Text("Role: ${filterCriteria.role} ✕", fontSize = 10.sp) }
+                                        )
+                                    }
+                                    if (filterCriteria.affinityLevel != "Všechny") {
+                                        FilterChip(
+                                            selected = true,
+                                            onClick = { haremViewModel.setFilterCriteria(filterCriteria.copy(affinityLevel = "Všechny")) },
+                                            label = { Text("Vztah: ${filterCriteria.affinityLevel} ✕", fontSize = 10.sp) }
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Concubines List
+                            if (filteredList.isEmpty()) {
+                                item {
+                                    Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(4.dp),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                            .padding(vertical = 32.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.SentimentDissatisfied,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                                modifier = Modifier.size(48.dp)
+                                            )
+                                            Text(
+                                                text = "Žádná dívka neodpovídá zvolenému filtru.",
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                                fontSize = 13.sp
+                                            )
+                                            TextButton(
+                                                onClick = {
+                                                    haremViewModel.setSearchQuery("")
+                                                    haremViewModel.setFilterCriteria(com.example.haremdark.viewmodels.HaremFilterCriteria())
+                                                }
+                                            ) {
+                                                Text("Resetovat filtry")
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                items(filteredList, key = { it.id }) { character ->
+                                    val hasEvent = activeEvent?.characterId == character.id
+                                    CharacterCard(
+                                        character = character,
+                                        hasActiveEvent = hasEvent,
+                                        onInteractClick = {
+                                            if (hasEvent) {
+                                                haremViewModel.openActiveEventDialogue()
+                                            } else {
+                                                haremViewModel.openInteraction(character)
+                                            }
+                                        },
+                                        onDetailClick = {
+                                            if (hasEvent) {
+                                                haremViewModel.openActiveEventDialogue()
+                                            } else {
+                                                haremViewModel.openProfile(character)
+                                            }
+                                        },
+                                        onPinClick = {
+                                            val (success, res) = engine.togglePin(character.id)
+                                            Toast.makeText(context, res, Toast.LENGTH_SHORT).show()
+                                        },
+                                        onFavoriteClick = {
+                                            val res = engine.setFavorite(character.id)
+                                            Toast.makeText(context, res, Toast.LENGTH_SHORT).show()
+                                        },
+                                        onGrantFavorClick = {
+                                            val (success, msg) = engine.grantFavor(character.id)
+                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                        },
+                                        onGreetClick = {
+                                            val (success, msg) = engine.greetCharacter(character.id)
+                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                        }
                                     )
                                 }
                             }
                         }
 
-                        // Active Filter Summaries
-                        item {
-                            Row(
+                        // Scroll To Top Button for Chambers tab
+                        if (showChambersScrollToTop) {
+                            Button(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        chambersListState.animateScrollToItem(0)
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                ),
+                                shape = RoundedCornerShape(20.dp),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                                elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp),
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    .align(Alignment.BottomCenter)
+                                    .padding(bottom = 90.dp)
                             ) {
-                                val activeFilters = buildList {
-                                    if (filterCriteria.status != "Všechny") add("Status: ${filterCriteria.status}")
-                                    if (filterCriteria.role != "Všechny") add("Role: ${filterCriteria.role}")
-                                    if (filterCriteria.affinityLevel != "Všechny") add("Vztah: ${filterCriteria.affinityLevel}")
-                                    add("Řazení: $selectedSort")
-                                }
-                                activeFilters.forEach { f ->
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = MaterialTheme.colorScheme.surfaceVariant,
-                                        modifier = Modifier.padding(vertical = 2.dp)
-                                    ) {
-                                        Text(f, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), color = MaterialTheme.colorScheme.onSurface)
-                                    }
-                                }
-                            }
-                        }
-
-                        // Concubines List
-                        if (filteredList.isEmpty()) {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 32.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.SentimentDissatisfied,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                                            modifier = Modifier.size(48.dp)
-                                        )
-                                        Text(
-                                            text = "Žádná dívka neodpovídá zvolenému filtru.",
-                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                            fontSize = 13.sp
-                                        )
-                                    }
-                                }
-                            }
-                        } else {
-                            items(filteredList, key = { it.id }) { character ->
-                                val hasEvent = activeEvent?.characterId == character.id
-                                CharacterCard(
-                                    character = character,
-                                    hasActiveEvent = hasEvent,
-                                    onInteractClick = {
-                                        if (hasEvent) {
-                                            haremViewModel.openActiveEventDialogue()
-                                        } else {
-                                            haremViewModel.openInteraction(character)
-                                        }
-                                    },
-                                    onDetailClick = {
-                                        if (hasEvent) {
-                                            haremViewModel.openActiveEventDialogue()
-                                        } else {
-                                            haremViewModel.openProfile(character)
-                                        }
-                                    },
-                                    onPinClick = {
-                                        val (success, res) = engine.togglePin(character.id)
-                                        Toast.makeText(context, res, Toast.LENGTH_SHORT).show()
-                                    },
-                                    onFavoriteClick = {
-                                        val res = engine.setFavorite(character.id)
-                                        Toast.makeText(context, res, Toast.LENGTH_SHORT).show()
-                                    },
-                                    onGrantFavorClick = {
-                                        val (success, msg) = engine.grantFavor(character.id)
-                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                                    },
-                                    onGreetClick = {
-                                        val (success, msg) = engine.greetCharacter(character.id)
-                                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                                    }
-                                )
+                                Icon(Icons.Default.ArrowUpward, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Nahoru (${filteredList.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }

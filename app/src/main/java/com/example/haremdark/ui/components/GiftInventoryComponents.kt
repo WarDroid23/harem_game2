@@ -235,6 +235,108 @@ fun CollectibleGiftInventoryTab(
             }
         }
 
+        // LOYALTY & COMBAT PERFORMANCE STATUS CARD
+        val loyaltyBonus = com.example.haremdark.data.LoyaltyCombatData.getBonusForLoyalty(character.loajalita)
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = Color(0xFF1B1429),
+            border = BorderStroke(1.dp, Color(0xFFAB47BC).copy(alpha = 0.5f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(loyaltyBonus.icon, fontSize = 16.sp)
+                        Column {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "Bojový vliv loajality: ${loyaltyBonus.title}",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    color = Color(0xFFFFD54F)
+                                )
+                                Text(
+                                    text = "(Stupeň ${loyaltyBonus.tierLevel})",
+                                    fontSize = 10.sp,
+                                    color = Color.White.copy(alpha = 0.6f)
+                                )
+                            }
+                            Text(
+                                text = loyaltyBonus.perkName,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFFCE93D8)
+                            )
+                        }
+                    }
+
+                    // Numeric Loyalty Pill
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF2C193D),
+                        border = BorderStroke(1.dp, Color(0xFFFF80AB).copy(alpha = 0.6f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text("🛡️", fontSize = 10.sp)
+                            Text(
+                                text = "${character.loajalita}/100",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                color = Color(0xFFFF80AB)
+                            )
+                        }
+                    }
+                }
+
+                // Linear progress bar for loyalty
+                LinearProgressIndicator(
+                    progress = { (character.loajalita / 100f).coerceIn(0f, 1f) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(5.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    color = Color(0xFFFF4081),
+                    trackColor = Color.White.copy(alpha = 0.1f)
+                )
+
+                // Combat Perks Badge Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "⚔️ ${loyaltyBonus.summaryText}",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White.copy(alpha = 0.9f)
+                    )
+                    Text(
+                        text = "Z darů a hýčkání",
+                        fontSize = 9.sp,
+                        color = Color(0xFFFF80AB).copy(alpha = 0.8f)
+                    )
+                }
+            }
+        }
+
         // CELEBRATION / RESULT BANNER (when a gift was just given)
         AnimatedVisibility(
             visible = uiState.lastGiftResult != null,
@@ -743,6 +845,50 @@ fun GiftInspectionBottomPanel(
                 }
             }
 
+            // LOYALTY COMBAT IMPACT PREVIEW
+            val projectedLoyalty = (character.loajalita + totalLoyalty).coerceIn(0, 100)
+            val currentBonus = com.example.haremdark.data.LoyaltyCombatData.getBonusForLoyalty(character.loajalita)
+            val projectedBonus = com.example.haremdark.data.LoyaltyCombatData.getBonusForLoyalty(projectedLoyalty)
+            val isTierUpgrade = projectedBonus.tierLevel > currentBonus.tierLevel
+
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = if (isTierUpgrade) Color(0xFF3E1F47) else Color(0xFF1E1729),
+                border = BorderStroke(1.dp, if (isTierUpgrade) Color(0xFFFFD54F) else Color(0xFFAB47BC).copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(projectedBonus.icon, fontSize = 16.sp)
+                    Column {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = if (isTierUpgrade) "⚔️ Nový bojový stupeň: ${projectedBonus.title}!" else "⚔️ Bojový vliv: ${projectedBonus.title}",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                color = if (isTierUpgrade) Color(0xFFFFD54F) else Color(0xFFCE93D8)
+                            )
+                            Text(
+                                text = "(${character.loajalita} → $projectedLoyalty%)",
+                                fontSize = 10.sp,
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
+                        }
+                        Text(
+                            text = projectedBonus.summaryText,
+                            fontSize = 10.sp,
+                            color = Color.White.copy(alpha = 0.85f)
+                        )
+                    }
+                }
+            }
+
             // Quantity Selector Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -933,6 +1079,36 @@ fun GiftReactionCard(
                 Text("+${result.affinityGained} 💖 Náklonnost", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF80AB))
                 Text("+${result.loyaltyGained} 🛡️ Loajalita", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF81C784))
                 Text("+${result.desireGained} 🔥 Touha", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFB74D))
+            }
+
+            // Combat performance feedback
+            val loyaltyBonus = com.example.haremdark.data.LoyaltyCombatData.getBonusForLoyalty(result.character.loajalita)
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFF2C193D),
+                border = BorderStroke(1.dp, Color(0xFFFFD54F).copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(loyaltyBonus.icon, fontSize = 14.sp)
+                    Column {
+                        Text(
+                            text = "Bojový status: ${loyaltyBonus.title} (${result.character.loajalita}% loajalita)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFFD54F)
+                        )
+                        Text(
+                            text = loyaltyBonus.summaryText,
+                            fontSize = 10.sp,
+                            color = Color.White.copy(alpha = 0.9f)
+                        )
+                    }
+                }
             }
         }
     }

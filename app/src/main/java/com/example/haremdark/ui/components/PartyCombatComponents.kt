@@ -367,6 +367,52 @@ fun PartyFormationRow(
                         Text("💀 Zraněna / V bezvědomí", fontSize = 9.sp, color = Color.Red, fontWeight = FontWeight.Bold)
                     }
 
+                    // Loyalty Combat Performance Badge
+                    if (!member.isPlayer && member.isAlive) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFF261230),
+                            border = BorderStroke(0.5.dp, Color(0xFFFF80AB).copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = member.loyaltyTierName,
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFFD54F),
+                                    maxLines = 1
+                                )
+                                if (member.loyaltyAssistChancePercent > 0) {
+                                    Text(
+                                        text = "💖 Asist ${member.loyaltyAssistChancePercent}%",
+                                        fontSize = 7.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFFFF80AB)
+                                    )
+                                } else if (member.loyaltyCombatBonusDmg > 1.0f) {
+                                    Text(
+                                        text = "+${((member.loyaltyCombatBonusDmg - 1.0f) * 100).toInt()}% DMG",
+                                        fontSize = 7.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFF81C784)
+                                    )
+                                } else if (member.loyaltyValue < 30) {
+                                    Text(
+                                        text = "⚠️ Váhavá",
+                                        fontSize = 7.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFFFFB74D)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     // Status Effects with countdown timers
                     if (member.statusEffects.isNotEmpty()) {
                         CharacterStatusEffectsRow(
@@ -1279,3 +1325,132 @@ fun PartyCombatLogModal(
         }
     }
 }
+
+/**
+ * Scrollable Combat Log View embedded directly at the bottom of the battle screen.
+ */
+@Composable
+fun ScrollableCombatLogView(
+    logs: List<CombatLogEntry>,
+    onOpenFullModal: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isExpanded by remember { mutableStateOf(true) }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = Color(0xFF140B1A),
+        border = BorderStroke(1.dp, Color(0xFFFF80AB).copy(alpha = 0.4f)),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("📜", fontSize = 14.sp)
+                    Text(
+                        text = "Bojový deník tahů",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        color = Color(0xFFFFD700)
+                    )
+                    Text(
+                        text = "(${logs.size})",
+                        fontSize = 10.sp,
+                        color = Color.White.copy(alpha = 0.6f)
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        onClick = onOpenFullModal,
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                        modifier = Modifier.height(24.dp)
+                    ) {
+                        Text("Vše", fontSize = 10.sp, color = Color(0xFFFF80AB))
+                    }
+                    IconButton(
+                        onClick = { isExpanded = !isExpanded },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = if (isExpanded) "Sbalit" else "Rozbalit",
+                            tint = Color.White
+                        )
+                    }
+                }
+            }
+
+            if (isExpanded) {
+                val displayLogs = logs.take(8)
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(110.dp)
+                        .background(Color(0xFF0C0610), RoundedCornerShape(8.dp))
+                        .padding(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(displayLogs) { entry ->
+                        val tacticalType = TacticalAnimationType.fromLogEntry(entry.type, entry.message, entry.actionName)
+                        val logColor = when (entry.type) {
+                            "player_attack", "player_spell" -> Color(0xFFFFCC80)
+                            "enemy_attack", "enemy_special" -> Color(0xFFFF8A80)
+                            "player_heal" -> Color(0xFFA5D6A7)
+                            "player_support" -> Color(0xFF80D8FF)
+                            "victory" -> Color(0xFFFFD700)
+                            "defeat" -> Color(0xFFE53935)
+                            else -> Color(0xFFE0E0E0)
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            TacticalLottieMicroBadge(
+                                animationType = tacticalType,
+                                sizeDp = 14.dp,
+                                showBorder = false
+                            )
+                            Text(
+                                text = "• [Kolo ${entry.turn}] ${entry.message}",
+                                color = logColor,
+                                fontSize = 10.sp,
+                                maxLines = 1,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            } else {
+                val latest = logs.firstOrNull()
+                if (latest != null) {
+                    Text(
+                        text = "• [Kolo ${latest.turn}] ${latest.message}",
+                        color = Color(0xFFF8BBD0),
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                } else {
+                    Text(
+                        text = "Zatím žádné záznamy v boji.",
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+

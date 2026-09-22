@@ -28,8 +28,13 @@ import com.patrykandpatrick.vico.compose.chart.Chart
 import com.patrykandpatrick.vico.compose.chart.line.lineChart
 import com.patrykandpatrick.vico.core.entry.FloatEntry
 import com.patrykandpatrick.vico.core.entry.entryModelOf
+import com.example.haremdark.domain.EventSound
 import com.example.haremdark.domain.GameEngine
+import com.example.haremdark.domain.HapticManager
+import com.example.haremdark.domain.SoundEffectManager
+import com.example.haremdark.models.Character
 import com.example.haremdark.models.GameSave
+import com.example.haremdark.ui.components.CharacterDiscoveryDialog
 
 @Composable
 fun EmpireScreen(
@@ -108,6 +113,7 @@ fun RecruitmentTab(gameState: GameSave, engine: GameEngine) {
     var selectedClassFilter by remember { mutableStateOf("ALL") }
     var selectedSortOption by remember { mutableStateOf(RecruitmentSortOption.TIER_LEVEL) }
     var sortDescending by remember { mutableStateOf(false) }
+    var discoveredCharacter by remember { mutableStateOf<Character?>(null) }
 
     val allPackages = remember {
         listOf(
@@ -303,11 +309,25 @@ fun RecruitmentTab(gameState: GameSave, engine: GameEngine) {
                 playerGold = player.gold,
                 playerMana = player.mana,
                 onRecruit = {
-                    val (success, msg) = engine.recruitCharacter(pkg.type)
-                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                    val result = engine.recruitWithRng(pkg.type)
+                    if (result.success && result.character != null) {
+                        HapticManager.vibrateHeavy()
+                        SoundEffectManager.playEvent(EventSound.EVENT_SUMMON)
+                        discoveredCharacter = result.character
+                    } else {
+                        Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+                    }
                 }
             )
         }
+    }
+
+    discoveredCharacter?.let { char ->
+        CharacterDiscoveryDialog(
+            character = char,
+            onDismiss = { discoveredCharacter = null },
+            onRecruitAnother = { discoveredCharacter = null }
+        )
     }
 }
 

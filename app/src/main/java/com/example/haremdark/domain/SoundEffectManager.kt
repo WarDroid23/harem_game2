@@ -63,6 +63,14 @@ enum class NavSound {
     SCREEN_ENTER
 }
 
+enum class CharacterVoiceType {
+    TAP_GREETING,
+    BATTLE_ATTACK,
+    BATTLE_CRITICAL,
+    BATTLE_VICTORY,
+    AFFECTION_TALK
+}
+
 enum class LocationAmbientSound(
     val domainId: String,
     val title: String,
@@ -588,6 +596,33 @@ object SoundEffectManager {
                 }
             } catch (e: Exception) {
                 fallbackTone(ToneGenerator.TONE_CDMA_ALERT_AUTOREDIAL_LITE, 220)
+            }
+        }
+    }
+
+    fun playCharacterVoice(voiceType: CharacterVoiceType) {
+        if (_isMuted.value) return
+        scope.launch {
+            try {
+                when (voiceType) {
+                    CharacterVoiceType.TAP_GREETING -> {
+                        playPcmTrack(synthesizeArpeggio(listOf(784.0, 987.77, 1174.66), 0.1, 0.6f))
+                    }
+                    CharacterVoiceType.BATTLE_ATTACK -> {
+                        playPcmTrack(synthesizeDescending(440.0, 330.0, 0.18))
+                    }
+                    CharacterVoiceType.BATTLE_CRITICAL -> {
+                        playPcmTrack(synthesizeArpeggio(listOf(523.25, 783.99, 1046.5), 0.08, 0.8f))
+                    }
+                    CharacterVoiceType.BATTLE_VICTORY -> {
+                        playPcmTrack(synthesizeFanfare(listOf(659.25, 880.0, 1318.51), 0.12))
+                    }
+                    CharacterVoiceType.AFFECTION_TALK -> {
+                        playPcmTrack(synthesizeChord(listOf(523.25, 659.25, 783.99), 0.35, 0.6f))
+                    }
+                }
+            } catch (e: Exception) {
+                fallbackTone(ToneGenerator.TONE_PROP_BEEP, 100)
             }
         }
     }

@@ -388,9 +388,15 @@ class MainActivity : ComponentActivity() {
                                     subtitle = "Detailní statistiky & náklonnost",
                                     isSelected = currentRoute == "roster",
                                     onClick = {
-                                        coroutineScope.launch { drawerState.close() }
+                                        coroutineScope.launch {
+                                            runCatching { drawerState.close() }
+                                        }
                                         SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
-                                        navController.navigate("roster") { launchSingleTop = true }
+                                        if (currentRoute != "roster") {
+                                            runCatching {
+                                                navController.navigate("roster") { launchSingleTop = true }
+                                            }
+                                        }
                                     }
                                 )
                                 QuickNavDrawerItem(
@@ -672,7 +678,11 @@ class MainActivity : ComponentActivity() {
                                 RosterScreen(
                                     gameState = gameState,
                                     engine = engine,
-                                    onBack = { navController.popBackStack() }
+                                    onBack = {
+                                        if (!navController.popBackStack()) {
+                                            navController.navigate("home") { launchSingleTop = true }
+                                        }
+                                    }
                                 )
                             }
                             composable("map") {

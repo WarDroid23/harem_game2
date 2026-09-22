@@ -164,6 +164,18 @@ data class KeyMemory(
 )
 
 @Serializable
+data class CharacterAttributes(
+    var strength: Int = 15,
+    var loyalty: Int = 30,
+    var affection: Int = 50,
+    var obedience: Int = 30,
+    var morale: Int = 50,
+    var lust: Int = 50,
+    var fear: Int = 20,
+    var defense: Int = 10
+)
+
+@Serializable
 data class Character(
     val id: String,
     var name: String,
@@ -180,6 +192,16 @@ data class Character(
     var submisivita: Int = 40,
     var loajalita: Int = 30,
     var strength: Int = 15,
+    var attributes: CharacterAttributes = CharacterAttributes(
+        strength = 15,
+        loyalty = 30,
+        affection = 70,
+        obedience = 30,
+        morale = 50,
+        lust = 50,
+        fear = 30,
+        defense = 10
+    ),
     var nalada: String = "neutrální",
     var statusIcon: String = "😐",
     var morale: Int = 50,
@@ -257,8 +279,31 @@ data class Character(
         set(value) {
             val oldLoyalty = loajalita
             loajalita = value.coerceIn(0, 100)
+            attributes.loyalty = loajalita
             checkMilestones(oldLoyalty, loajalita)
         }
+
+    var affection: Int
+        get() = srdce
+        set(value) {
+            srdce = value.coerceIn(0, 100)
+            attributes.affection = srdce
+        }
+
+    fun getEffectiveAttributes(): CharacterAttributes {
+        attributes.strength = strength.coerceAtLeast(attributes.strength)
+        attributes.loyalty = loajalita.coerceAtLeast(attributes.loyalty)
+        attributes.affection = srdce.coerceAtLeast(attributes.affection)
+        attributes.obedience = poslusnost.coerceAtLeast(attributes.obedience)
+        attributes.morale = morale.coerceAtLeast(attributes.morale)
+        attributes.lust = touha.coerceAtLeast(attributes.lust)
+        attributes.fear = strach.coerceAtLeast(attributes.fear)
+        return attributes
+    }
+
+    val effectiveStrength: Int get() = getEffectiveAttributes().strength
+    val effectiveLoyalty: Int get() = getEffectiveAttributes().loyalty
+    val effectiveAffection: Int get() = getEffectiveAttributes().affection
 
     private fun checkMilestones(old: Int, new: Int) {
         val thresholds = listOf(25, 50, 75)

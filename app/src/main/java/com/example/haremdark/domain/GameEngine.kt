@@ -59,6 +59,8 @@ data class MoodNotification(
 class GameEngine(private val context: Context) {
     private val saveManager = com.example.haremdark.data.SaveManager(context)
 
+    val resourceStateManager: ResourceStateManager = ResourceStateManager()
+
     private val _moodNotifications = kotlinx.coroutines.flow.MutableSharedFlow<MoodNotification>(extraBufferCapacity = 5)
     val moodNotifications: kotlinx.coroutines.flow.SharedFlow<MoodNotification> = _moodNotifications
 
@@ -544,6 +546,12 @@ class GameEngine(private val context: Context) {
                             resultMsg = "🎁 Daroval jsi ${item.name} dívce ${copy.name}. Její loajalita vzrostla."
                         }
                     }
+                    copy.srdce = (copy.srdce + (affinityGain / 2).coerceAtLeast(4)).coerceIn(0, 100)
+                    copy.attributes.loyalty = copy.loajalita
+                    copy.attributes.affection = copy.srdce
+                    val loyaltyBonus = com.example.haremdark.data.LoyaltyCombatData.getBonusForLoyalty(copy.loajalita)
+                    resultMsg += " (+${affinityGain} Nákl., Boj: ${loyaltyBonus.icon} ${loyaltyBonus.summaryText})"
+
                     val newPhase = StaticData.calculatePhase(
                         broken = copy.broken,
                         mindbreak = copy.mindbreak,
@@ -1163,17 +1171,41 @@ class GameEngine(private val context: Context) {
             addLog("★ ${character.name} postoupila do fáze zkázanosti: ${phaseInfo?.name ?: "$newPhase"}!")
         }
 
-        // Affinity increase on interaction based on interaction depth and bond
+        // Affinity, Loyalty & Affection increase on interaction based on interaction depth and bond
         val prevAffinityLevel = character.affinityLevel
+        val prevLoyalty = character.loajalita
         val affinityGain = when (interaction.type) {
             "intimni" -> 8 + if (character.oblibena || character.jeManzelkou) 4 else 0
             "rozmluva" -> 5 + if (character.oblibena || character.jeManzelkou) 3 else 0
             else -> 4 + if (character.oblibena || character.jeManzelkou) 2 else 0
         }
+        val loyaltyGain = when (interaction.type) {
+            "intimni" -> 4 + if (character.oblibena || character.jeManzelkou) 2 else 0
+            "rozmluva" -> 3 + if (character.oblibena || character.jeManzelkou) 2 else 0
+            "odmena", "dar" -> 6
+            else -> 2
+        }
+        val affectionGain = when (interaction.type) {
+            "intimni" -> 5 + if (character.oblibena || character.jeManzelkou) 3 else 0
+            "rozmluva" -> 4 + if (character.oblibena || character.jeManzelkou) 2 else 0
+            else -> 2
+        }
+
         character.affinityPoints += affinityGain
+        character.loajalita = (character.loajalita + loyaltyGain).coerceIn(0, 100)
+        character.srdce = (character.srdce + affectionGain).coerceIn(0, 100)
+        character.attributes.loyalty = character.loajalita
+        character.attributes.affection = character.srdce
+
         val newAffinityLevel = com.example.haremdark.data.AffinityData.getLevelForPoints(character.affinityPoints)
         character.affinityLevel = newAffinityLevel
-        character.addAffinityHistory(_gameState.value.player.day, "${interaction.name} (+$affinityGain pts)")
+        character.addAffinityHistory(_gameState.value.player.day, "${interaction.name} (+$affinityGain pts, +$loyaltyGain loaj.)")
+
+        val loyaltyBonus = com.example.haremdark.data.LoyaltyCombatData.getBonusForLoyalty(character.loajalita)
+        val prevLoyaltyBonus = com.example.haremdark.data.LoyaltyCombatData.getBonusForLoyalty(prevLoyalty)
+        val loyaltyTierUpAnnouncement = if (loyaltyBonus.tierLevel > prevLoyaltyBonus.tierLevel) {
+            "\n⚔️ Bojová oddanost posílena! Nový bojový stupeň: ${loyaltyBonus.icon} ${loyaltyBonus.title} (${loyaltyBonus.summaryText})!"
+        } else ""
 
         character.interactionLogs.add(
             com.example.haremdark.models.InteractionLogEntry(
@@ -1186,7 +1218,7 @@ class GameEngine(private val context: Context) {
                 },
                 title = interaction.name,
                 description = message,
-                statChanges = "+$affinityGain Náklonnost, Morálka: ${character.morale}%"
+                statChanges = "+$affinityGain Náklonnost, +$loyaltyGain Loajalita, +$affectionGain Srdce (Boj: ${loyaltyBonus.summaryText})"
             )
         )
 
@@ -1203,7 +1235,7 @@ class GameEngine(private val context: Context) {
         addHaremExp(8)
         progressMission("INTERACT", 1, characterId = characterId)
 
-        val fullMessage = "$message (+$affinityGain náklonnost)\n💬 ${character.name}: „$unlockedDialogue“$levelUpAnnouncement"
+        val fullMessage = "$message (+$affinityGain nákl., +$loyaltyGain loajalita)\n💬 ${character.name}: „$unlockedDialogue“$levelUpAnnouncement$loyaltyTierUpAnnouncement"
         addLog(fullMessage)
         updateState { it.copy() }
         
@@ -3051,8 +3083,16 @@ class GameEngine(private val context: Context) {
         val levelUpAnnouncement = if (newAffinityLvl > prevAffinityLevel) {
             "\n🌟 Pouto posíleno! ${character.name} dosáhla úrovně vztahu ${tierInfo.level}: ${tierInfo.title}! ${tierInfo.combatBonusDescription}"
         } else ""
+        val prevLoyalty = character.loajalita
+        val targetLoyalty = (character.loajalita + gift.loyaltyBoost).coerceAtMost(100)
+        val loyaltyBonus = com.example.haremdark.data.LoyaltyCombatData.getBonusForLoyalty(targetLoyalty)
+        val prevLoyaltyBonus = com.example.haremdark.data.LoyaltyCombatData.getBonusForLoyalty(prevLoyalty)
+        val loyaltyCombatAnnouncement = if (loyaltyBonus.tierLevel > prevLoyaltyBonus.tierLevel) {
+            "\n⚔️ Nový bojový stupeň: ${loyaltyBonus.icon} ${loyaltyBonus.title}! ${loyaltyBonus.summaryText}"
+        } else " (Boj: ${loyaltyBonus.summaryText})"
+
         val unlockedDialogue = AffinityData.getRandomActiveDialogue(character.copy(affinityPoints = newAffinity))
-        val msg = "🎁 ${character.name} ${gift.flavorMessage} (+${gift.loyaltyBoost} loajalita, +${gift.desireBoost} touha, +$affinityGain náklonnost)\n💬 ${character.name}: „$unlockedDialogue“$levelUpAnnouncement"
+        val msg = "🎁 ${character.name} ${gift.flavorMessage} (+${gift.loyaltyBoost} loajalita, +${gift.desireBoost} touha, +$affinityGain náklonnost)\n💬 ${character.name}: „$unlockedDialogue“$levelUpAnnouncement$loyaltyCombatAnnouncement"
 
         updateState { state ->
             val updatedCharacters = state.characters.map { c ->
@@ -3062,10 +3102,14 @@ class GameEngine(private val context: Context) {
                     val newObedience = (c.poslusnost + gift.obedienceBoost).coerceAtMost(100)
                     val newTrust = (c.duvera + gift.trustBoost).coerceAtMost(100)
                     val newRomance = (c.romanceBody + gift.romanceBoost).coerceAtMost(100)
+                    val newAffection = (c.srdce + affinityGain / 2).coerceIn(0, 100)
                     val isPartner = c.partnerka || newRomance >= 50
-                    c.affinityHistory.add(AffinityPointRecord(state.player.day, newAffinity, "Dar: ${gift.name} (+$affinityGain pts)"))
+                    c.attributes.loyalty = newLoyalty
+                    c.attributes.affection = newAffection
+                    c.affinityHistory.add(AffinityPointRecord(state.player.day, newAffinity, "Dar: ${gift.name} (+$affinityGain pts, +${gift.loyaltyBoost} loaj.)"))
                     c.copy(
                         loajalita = newLoyalty,
+                        srdce = newAffection,
                         touha = newDesire,
                         poslusnost = newObedience,
                         duvera = newTrust,
@@ -3212,6 +3256,14 @@ class GameEngine(private val context: Context) {
             "\n🌟 Pouto posíleno! ${character.name} dosáhla úrovně ${tierInfo.level}: ${tierInfo.title}! ${tierInfo.combatBonusDescription}"
         } else ""
 
+        val prevLoyalty = character.loajalita
+        val newLoyalty = (character.loajalita + totalLoyalty).coerceIn(0, 100)
+        val loyaltyCombatBonus = com.example.haremdark.data.LoyaltyCombatData.getBonusForLoyalty(newLoyalty)
+        val prevLoyaltyBonus = com.example.haremdark.data.LoyaltyCombatData.getBonusForLoyalty(prevLoyalty)
+        val loyaltyCombatAnnouncement = if (loyaltyCombatBonus.tierLevel > prevLoyaltyBonus.tierLevel) {
+            "\n⚔️ Nový bojový stupeň: ${loyaltyCombatBonus.icon} ${loyaltyCombatBonus.title}! ${loyaltyCombatBonus.summaryText}"
+        } else " (Boj: ${loyaltyCombatBonus.summaryText})"
+
         val moodLabel = when (character.nalada.lowercase()) {
             "veselá", "happy" -> " (veselá: +25% nákl.)"
             "rozmarná", "playful" -> " (rozmarná: +10% nákl.)"
@@ -3219,7 +3271,7 @@ class GameEngine(private val context: Context) {
             "rozzlobená", "angry" -> " (rozzlobená: -40% nákl.)"
             else -> ""
         }
-        val actionLog = "🎁 Darováno $count× ${gift.name} (${gift.icon}) pro ${character.name} (+$totalAffinity nákl.$moodLabel, +$totalLoyalty loaj., +$totalDesire touha)$levelUpMsg"
+        val actionLog = "🎁 Darováno $count× ${gift.name} (${gift.icon}) pro ${character.name} (+$totalAffinity nákl.$moodLabel, +$totalLoyalty loaj., +$totalDesire touha)$levelUpMsg$loyaltyCombatAnnouncement"
 
         updateState { state ->
             val updatedItems = state.player.items.mapNotNull { item ->
@@ -3231,15 +3283,19 @@ class GameEngine(private val context: Context) {
 
             val updatedCharacters = state.characters.map { c ->
                 if (c.id == characterId) {
+                    val newAffection = (c.srdce + (totalAffinity / 2).coerceAtLeast(3) * count).coerceIn(0, 100)
+                    c.attributes.loyalty = newLoyalty
+                    c.attributes.affection = newAffection
                     c.affinityHistory.add(
                         AffinityPointRecord(
                             day = state.player.day,
                             points = newAffinityPoints,
-                            source = "Dar: $count× ${gift.name} (+$totalAffinity pts)"
+                            source = "Dar: $count× ${gift.name} (+$totalAffinity pts, +$totalLoyalty loaj.)"
                         )
                     )
                     c.copy(
-                        loajalita = (c.loajalita + totalLoyalty).coerceIn(0, 100),
+                        loajalita = newLoyalty,
+                        srdce = newAffection,
                         touha = (c.touha + totalDesire).coerceIn(0, 100),
                         duvera = (c.duvera + totalTrust).coerceIn(0, 100),
                         poslusnost = (c.poslusnost + (gift.obedienceBonus * count)).coerceIn(0, 100),
@@ -3263,7 +3319,7 @@ class GameEngine(private val context: Context) {
             SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
             VoiceManager.playTriggerVoice(
                 VoiceTriggerType.AFFINITY_LEVEL_UP,
-                character.copy(affinityPoints = newAffinityPoints, affinityLevel = newAffinityLevel)
+                character.copy(affinityPoints = newAffinityPoints, affinityLevel = newAffinityLevel, loajalita = newLoyalty)
             )
         } else {
             SoundEffectManager.playHarem(HaremSound.GIFT)
@@ -3280,7 +3336,7 @@ class GameEngine(private val context: Context) {
         progressMission("GIFT", count, characterId = characterId)
 
         return GiftActionResult(
-            character = character.copy(affinityPoints = newAffinityPoints, affinityLevel = newAffinityLevel),
+            character = character.copy(affinityPoints = newAffinityPoints, affinityLevel = newAffinityLevel, loajalita = newLoyalty, srdce = (character.srdce + (totalAffinity / 2).coerceAtLeast(3) * count).coerceIn(0, 100)),
             gift = gift,
             quantity = count,
             affinityGained = totalAffinity,
@@ -4006,8 +4062,10 @@ class GameEngine(private val context: Context) {
                 
                 if (isCrit) {
                     SoundEffectManager.playCombat(CombatSound.CRITICAL_HIT)
+                    SoundEffectManager.playCharacterVoice(CharacterVoiceType.BATTLE_CRITICAL)
                 } else {
                     SoundEffectManager.playCombat(CombatSound.PLAYER_SLASH)
+                    SoundEffectManager.playCharacterVoice(CharacterVoiceType.BATTLE_ATTACK)
                 }
 
                 newLogEntries.add(0, CombatLogEntry(
@@ -4485,6 +4543,7 @@ class GameEngine(private val context: Context) {
             lootInfo = "+${session.boss.rewardGold} zlatých • +${session.boss.rewardXp} XP$charExpStr$itemDropStr"
 
             SoundEffectManager.playCombat(CombatSound.VICTORY)
+            SoundEffectManager.playCharacterVoice(CharacterVoiceType.BATTLE_VICTORY)
             
             newLogEntries.add(0, CombatLogEntry(
                 turn = currentTurn,
@@ -5195,66 +5254,29 @@ class GameEngine(private val context: Context) {
     }
 
 
-    fun recruitCharacter(type: String): Pair<Boolean, String> {
-        var result = Pair(false, "Neznámý typ náboru.")
+    fun recruitWithRng(type: String): RecruitResult {
+        var recruitResult = RecruitResult(false, "Neznámý typ náboru.")
         updateState { current ->
             val p = current.player
+            val tier = CharacterGenerator.RECRUIT_TIERS.find { it.id == type }
+                ?: CharacterGenerator.RECRUIT_TIERS.first()
             
-            // Define cost based on type
-            val costGold: Int
-            val costMana: Int
-            val minRarity: Int
-            val title: String
-            
-            when (type) {
-                "basic" -> { costGold = 250; costMana = 0; minRarity = 1; title = "Běžný otrok" }
-                "advanced" -> { costGold = 600; costMana = 20; minRarity = 2; title = "Vzácný zajatec" }
-                "elite" -> { costGold = 1500; costMana = 50; minRarity = 3; title = "Exkluzivní trofej" }
-                else -> return@updateState current
-            }
+            val costGold = tier.goldCost
+            val costMana = tier.manaCost
+            val title = tier.title
             
             if (p.gold < costGold || p.mana < costMana) {
-                result = Pair(false, "Nedostatek surovin (Potřebuješ $costGold Zlata a $costMana Many).")
+                recruitResult = RecruitResult(false, "Nedostatek surovin (Potřebuješ $costGold Zlata a $costMana Many).")
                 return@updateState current
             }
             
             if (current.characters.size >= p.maxPopulation) {
-                result = Pair(false, "Tvůj harém je plný! (Kapacita: ${p.maxPopulation})")
+                recruitResult = RecruitResult(false, "Tvůj harém je plný! (Kapacita: ${p.maxPopulation})")
                 return@updateState current
             }
             
-            // Generate char
-            val names = listOf("Lumia", "Sera", "Thalia", "Vex", "Kaelia", "Rina", "Myra", "Nyx", "Elaria", "Zora", "Lyra", "Tess", "Aria", "Morgana", "Lilith", "Carmilla", "Isolde", "Ophelia")
-            val randomName = names.random()
-            val archetypes = com.example.haremdark.data.StaticData.ARCHETYPES.keys.toList()
-            val chosenArchetype = archetypes.random()
-            val age = (18..26).random()
-            
-            // Stats based on type
-            val statBoost = minRarity * 15
-            
-            val availableTraits = listOf("Arogantní", "Pracovitá", "Líná", "Týmová hráčka", "Samotářka", "Povýšená", "Mírná").shuffled()
-            
-            val newGirl = com.example.haremdark.models.Character(
-                id = "c_${java.util.UUID.randomUUID().toString().take(8)}",
-                name = randomName,
-                age = age,
-                archetypeId = chosenArchetype,
-                rarity = minRarity,
-                hp = 100 + (minRarity * 20),
-                maxHp = 100 + (minRarity * 20),
-                srdce = 50 + (0..statBoost).random(),
-                poslusnost = 20 + (0..statBoost).random(),
-                vlhkost = 40 + (0..statBoost).random(),
-                submisivita = 30 + (0..statBoost).random(),
-                loajalita = 20 + (0..statBoost).random(),
-                touha = 40 + (0..statBoost).random(),
-                level = minRarity,
-                xp = 0,
-                skillPoints = minRarity - 1,
-                skills = mutableMapOf("combat" to (0..minRarity).random(), "defense" to (0..minRarity).random(), "production" to (0..minRarity).random(), "rental" to (0..minRarity).random()),
-                traits = mutableListOf(availableTraits[0], availableTraits[1])
-            )
+            // Generate character using basic RNG engine
+            val newGirl = CharacterGenerator.generateRandomCharacter(tier.id)
             
             val newPlayer = p.copy(
                 gold = p.gold - costGold,
@@ -5264,16 +5286,25 @@ class GameEngine(private val context: Context) {
             val newList = current.characters.toMutableList()
             newList.add(newGirl)
             
-            result = Pair(true, "Nábor úspěšný! Získal jsi novou dívku: $randomName.")
+            recruitResult = RecruitResult(
+                success = true,
+                message = "Úspěšný nábor! Do harému přichází ${newGirl.name} (${newGirl.role}, ${newGirl.rarity}★).",
+                character = newGirl
+            )
             
             current.copy(
                 player = newPlayer,
                 characters = newList,
-                gameLog = current.gameLog + "⛓️ Úspěšný nábor ($title): $randomName se přidává do harému!"
+                gameLog = current.gameLog + "⛓️ Objev/Nábor ($title): ${newGirl.name} [${newGirl.rarity}★] se přidává do harému!"
             )
         }
-        if (result.first) autoSave()
-        return result
+        if (recruitResult.success) autoSave()
+        return recruitResult
+    }
+
+    fun recruitCharacter(type: String): Pair<Boolean, String> {
+        val res = recruitWithRng(type)
+        return Pair(res.success, res.message)
     }
 
 
@@ -5860,6 +5891,16 @@ class GameEngine(private val context: Context) {
                 addLog("📍 Oblast '${domain.name}' byla přidána do záložek.")
             }
             state.copy(mapBookmarks = newList)
+        }
+    }
+
+    fun updatePartyFormations(formations: Map<String, com.example.haremdark.models.FormationPosition>) {
+        updateState { state ->
+            val newMap = state.player.partyFormationMap.toMutableMap()
+            formations.forEach { (id, pos) ->
+                newMap[id] = pos.name
+            }
+            state.copy(player = state.player.copy(partyFormationMap = newMap))
         }
     }
 

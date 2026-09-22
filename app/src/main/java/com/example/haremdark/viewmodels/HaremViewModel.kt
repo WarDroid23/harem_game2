@@ -97,14 +97,17 @@ class HaremViewModel(private val engine: GameEngine) : ViewModel() {
         
         // 5. Sort
         when (sort) {
-            "Úroveň vztahu" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.affinityLevel }.thenByDescending { it.affinityPoints })
-            "Jméno" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenBy { it.name })
-            "Nedávná interakce" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.lastInteractionDay })
-            "Náklonnost" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.affinityPoints })
-            "Rarita / Úroveň" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.rarity }.thenByDescending { it.affinityLevel })
-            "Role (Archetyp)" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenBy { it.archetypeId })
-            "Bojová síla" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.hp + it.maxHp })
-            else -> list = list.sortedWith(compareByDescending<Character> { it.isPinned }.thenByDescending { it.affinityPoints })
+            "Úroveň" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned || it.oblibena }.thenByDescending { it.affinityLevel })
+            "Rarita" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned || it.oblibena }.thenByDescending { it.rarity }.thenByDescending { it.affinityLevel })
+            "Náklonnost" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned || it.oblibena }.thenByDescending { it.srdce }.thenByDescending { it.affinityPoints })
+            "Síla" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned || it.oblibena }.thenByDescending { it.effectiveStrength })
+            "Loajalita" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned || it.oblibena }.thenByDescending { it.effectiveLoyalty })
+            "Úroveň vztahu" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned || it.oblibena }.thenByDescending { it.affinityLevel }.thenByDescending { it.affinityPoints })
+            "Jméno" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned || it.oblibena }.thenBy { it.name })
+            "Nedávná interakce" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned || it.oblibena }.thenByDescending { it.lastInteractionDay })
+            "Role (Archetyp)" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned || it.oblibena }.thenBy { it.archetypeId })
+            "Bojová síla" -> list = list.sortedWith(compareByDescending<Character> { it.isPinned || it.oblibena }.thenByDescending { it.hp + it.maxHp })
+            else -> list = list.sortedWith(compareByDescending<Character> { it.isPinned || it.oblibena }.thenByDescending { it.srdce })
         }
         list
     }.stateIn(

@@ -164,6 +164,84 @@ class ResourceStateManager(
     // ENERGY & HP OPERATIONS
     // ==========================================
 
+    fun addDarkEnergy(amount: Int): Int {
+        if (amount <= 0) return _resources.value.darkEnergy
+        _resources.update {
+            val newDark = (it.darkEnergy + amount).coerceAtMost(it.maxDarkEnergy)
+            it.copy(darkEnergy = newDark)
+        }
+        notifyChange()
+        return _resources.value.darkEnergy
+    }
+
+    fun consumeDarkEnergy(amount: Int): Boolean {
+        if (amount < 0) return false
+        val curr = _resources.value.darkEnergy
+        if (curr < amount) return false
+        _resources.update { it.copy(darkEnergy = curr - amount) }
+        notifyChange()
+        return true
+    }
+
+    fun addSexEnergy(amount: Int): Int {
+        if (amount <= 0) return _resources.value.sexEnergy
+        _resources.update {
+            val newSex = (it.sexEnergy + amount).coerceAtMost(it.maxSexEnergy)
+            it.copy(sexEnergy = newSex)
+        }
+        notifyChange()
+        return _resources.value.sexEnergy
+    }
+
+    fun consumeSexEnergy(amount: Int): Boolean {
+        if (amount < 0) return false
+        val curr = _resources.value.sexEnergy
+        if (curr < amount) return false
+        _resources.update { it.copy(sexEnergy = curr - amount) }
+        notifyChange()
+        return true
+    }
+
+    fun addHp(amount: Int): Int {
+        if (amount <= 0) return _resources.value.hp
+        _resources.update {
+            val newHp = (it.hp + amount).coerceAtMost(it.maxHp)
+            it.copy(hp = newHp)
+        }
+        notifyChange()
+        return _resources.value.hp
+    }
+
+    /**
+     * Applies quest / mission resource rewards directly through safe business rules.
+     * Optionally returns a descriptive summary of resources gained.
+     */
+    fun applyQuestReward(
+        gold: Int = 0,
+        darkEnergy: Int = 0,
+        sexEnergy: Int = 0,
+        mana: Int = 0,
+        influence: Int = 0
+    ): String {
+        _resources.update {
+            it.copy(
+                gold = (it.gold + gold.coerceAtLeast(0)),
+                darkEnergy = (it.darkEnergy + darkEnergy.coerceAtLeast(0)).coerceAtMost(it.maxDarkEnergy),
+                sexEnergy = (it.sexEnergy + sexEnergy.coerceAtLeast(0)).coerceAtMost(it.maxSexEnergy),
+                mana = (it.mana + mana.coerceAtLeast(0)).coerceAtMost(it.maxMana),
+                influence = (it.influence + influence.coerceAtLeast(0)).coerceAtMost(it.maxInfluence)
+            )
+        }
+        notifyChange()
+        val parts = mutableListOf<String>()
+        if (gold > 0) parts.add("+$gold Zlato")
+        if (darkEnergy > 0) parts.add("+$darkEnergy Temná energie")
+        if (sexEnergy > 0) parts.add("+$sexEnergy Smyslná energie")
+        if (mana > 0) parts.add("+$mana Mana")
+        if (influence > 0) parts.add("+$influence Vliv")
+        return parts.joinToString(", ")
+    }
+
     fun restoreDailyResources() {
         _resources.update {
             it.copy(
