@@ -6,9 +6,108 @@ import kotlin.random.Random
 
 object PartyCombatManager {
 
-    /**
-     * Create a new party combat session with selected harem girls and optional player.
-     */
+    fun getElementMultiplier(attacker: Element, defender: Element): Float {
+        return when (attacker) {
+            Element.FIRE -> when (defender) {
+                Element.EARTH, Element.ICE -> 1.25f
+                Element.WATER -> 0.75f
+                else -> 1.0f
+            }
+            Element.WATER -> when (defender) {
+                Element.FIRE -> 1.25f
+                Element.AIR, Element.ICE -> 0.75f
+                else -> 1.0f
+            }
+            Element.EARTH -> when (defender) {
+                Element.AIR, Element.LIGHTNING -> 1.25f
+                Element.FIRE -> 0.75f
+                else -> 1.0f
+            }
+            Element.AIR -> when (defender) {
+                Element.WATER, Element.EARTH -> 1.25f
+                Element.LIGHTNING -> 0.75f
+                else -> 1.0f
+            }
+            Element.ICE -> when (defender) {
+                Element.WATER, Element.AIR -> 1.25f
+                Element.FIRE -> 0.75f
+                else -> 1.0f
+            }
+            Element.LIGHTNING -> when (defender) {
+                Element.WATER, Element.AIR -> 1.25f
+                Element.EARTH -> 0.75f
+                else -> 1.0f
+            }
+            Element.DARK -> when (defender) {
+                Element.HOLY, Element.PHYSICAL -> 1.30f
+                Element.DARK -> 0.80f
+                else -> 1.0f
+            }
+            Element.HOLY -> when (defender) {
+                Element.DARK -> 1.30f
+                Element.HOLY -> 0.80f
+                else -> 1.0f
+            }
+            Element.PHYSICAL -> when (defender) {
+                Element.ICE, Element.EARTH -> 1.10f
+                else -> 1.0f
+            }
+        }
+    }
+
+    fun getMatchupType(multiplier: Float): ElementalMatchupType {
+        return when {
+            multiplier >= 1.28f -> ElementalMatchupType.EXTREME_WEAKNESS
+            multiplier >= 1.15f -> ElementalMatchupType.SUPER_EFFECTIVE
+            multiplier <= 0.72f -> ElementalMatchupType.EXTREME_RESISTANCE
+            multiplier <= 0.88f -> ElementalMatchupType.RESISTED
+            else -> ElementalMatchupType.NEUTRAL
+        }
+    }
+
+    private fun tryApplyStatusEffect(attacker: PartyMember, target: Any, isCrit: Boolean) {
+        if (!isCrit) return
+
+        val effectType = when(attacker.element) {
+            Element.FIRE -> "BURN"
+            Element.WATER -> "POISON"
+            Element.AIR -> "STUN"
+            else -> null
+        }
+
+        if (effectType != null) {
+            val duration = if (effectType == "STUN") 1 else 3
+            val effect = CombatStatusEffect(
+                id = "${effectType}_${System.currentTimeMillis()}",
+                name = when(effectType) { "BURN" -> "Hoření"; "POISON" -> "Otrávení"; "STUN" -> "Omráčení"; else -> "" },
+                icon = when(effectType) { "BURN" -> "🔥"; "POISON" -> "🧪"; "STUN" -> "⚡"; else -> "" },
+                type = effectType,
+                value = 10, // Default DoT value
+                durationTurns = duration,
+                maxDuration = duration
+            )
+
+            when (target) {
+                is PartyMember -> target.statusEffects.add(effect)
+                is CombatEnemy -> target.statusEffects.add(effect)
+            }
+        }
+    }
+
+    fun triggerDomainExpansion(session: PartyCombatSession, character: PartyMember): PartyCombatSession {
+        // Example logic: Only high-lineage/affinity characters can trigger
+        val domain = DomainExpansionEffect(
+            id = "dom_${System.currentTimeMillis()}",
+            name = "Doména: ${character.name}'s Lineage",
+            icon = "🌌",
+            description = "Pole vlivu ${character.name} posiluje spojence.",
+            statsModifier = 1.3f,
+            environmentStatChange = "Všechny útoky +30%",
+            originLineage = character.archetypeId
+        )
+        return session.copy(activeDomainExpansion = domain)
+    }
+
     fun createSession(
         selectedCharacterIds: List<String>,
         allCharacters: List<Character>,
@@ -53,6 +152,8 @@ object PartyCombatManager {
                 loyaltyCombatPerkTag = "LORD",
                 loyaltyCombatDescription = "Pán a vládce dominia",
                 affinityBonusDmg = 1.25f,
+                element = Element.DARK,
+                elementalMultipliers = mapOf("DARK" to 1.25f, "PHYSICAL" to 1.10f),
                 favoriteWeaponIcon = "👑"
             )
             partyList.add(playerMember)
@@ -127,6 +228,17 @@ object PartyCombatManager {
                     loyaltyCombatPerkTag = loyaltyBonus.perkTag,
                     loyaltyCombatDescription = loyaltyBonus.summaryText,
                     affinityBonusDmg = affinityDmgMult,
+                    element = when (char.archetypeId) {
+                        "sukuba", "krvava_subka" -> Element.DARK
+                        "chladna" -> Element.ICE
+                        "draci_divka" -> Element.FIRE
+                        "subka" -> Element.WATER
+                        "touha" -> Element.LIGHTNING
+                        "knezkyn" -> Element.HOLY
+                        "vzdorna" -> Element.EARTH
+                        else -> Element.PHYSICAL
+                    },
+                    elementalMultipliers = char.elementalMultipliers.toMap(),
                     favoriteWeaponIcon = if (role == CombatRole.TANK_GUARDIAN) "🛡️" else if (role == CombatRole.DARK_SORCERESS) "🔮" else "🗡️",
                     relationshipTierLevel = affinityTier.level,
                     relationshipStageName = "${affinityTier.icon} ${affinityTier.stageName}",
@@ -190,6 +302,7 @@ object PartyCombatManager {
             )
         }
         val synergies = PartyCombatCatalog.calculateSynergies(partyList)
+        val elementalSynergies = ElementalSynergyManager.calculateActiveSynergies(partyList)
         val combatWeather = CombatWeather.getWeatherForLocation(encounterDef.location)
         val environmentalHazard = EnvironmentalHazard.getHazardForLocation(encounterDef.location)
         val teamFormationSynergy = TeamFormationSynergy.calculateFormationSynergy(partyList)
@@ -211,6 +324,42 @@ object PartyCombatManager {
             encounterDef.backgroundRes
         }
 
+        val initialLogs = mutableListOf(
+            CombatLogEntry(
+                turn = 1,
+                type = "system",
+                message = "🛡️ Formace týmu: ${teamFormationSynergy.icon} ${teamFormationSynergy.name} (${teamFormationSynergy.teamBuffDescription}).",
+                actor = "Taktická formace",
+                actionName = teamFormationSynergy.name
+            ),
+            CombatLogEntry(
+                turn = 1,
+                type = "system",
+                message = "⚔️ Střet začíná! Terén: ${environmentalHazard.icon} ${environmentalHazard.name} (${environmentalHazard.terrainModifierDesc}).",
+                actor = "Terénní prostředí",
+                actionName = environmentalHazard.title
+            ),
+            CombatLogEntry(
+                turn = 1,
+                type = "system",
+                message = "🌤️ Počasí na bojišti: ${combatWeather.icon} ${combatWeather.name} (${combatWeather.description}).",
+                actor = "Meteorologická anomálie",
+                actionName = "Klima bojiště"
+            )
+        )
+
+        elementalSynergies.forEach { syn ->
+            initialLogs.add(
+                CombatLogEntry(
+                    turn = 1,
+                    type = "player_support",
+                    message = "✨ [Elementární Synergie: ${syn.icon} ${syn.name}] Aktivní pasivní štít! ${syn.bonusPerkDescription} (Rezonance: ${syn.participatingMemberNames.joinToString()})",
+                    actor = "Elementární Rezonance",
+                    actionName = syn.name
+                )
+            )
+        }
+
         return PartyCombatSession(
             id = "combat_${System.currentTimeMillis()}",
             encounterTitle = encounterDef.title,
@@ -225,33 +374,12 @@ object PartyCombatManager {
             selectedTargetAllyIndex = 0,
             haremComboGauge = startingCombo,
             activeSynergies = synergies,
+            elementalSynergies = elementalSynergies,
             weather = combatWeather,
             environmentalHazard = environmentalHazard,
             hazardCountdown = environmentalHazard.triggerIntervalTurns,
             teamFormationSynergy = teamFormationSynergy,
-            combatLogs = listOf(
-                CombatLogEntry(
-                    turn = 1,
-                    type = "system",
-                    message = "🛡️ Formace týmu: ${teamFormationSynergy.icon} ${teamFormationSynergy.name} (${teamFormationSynergy.teamBuffDescription}).",
-                    actor = "Taktická formace",
-                    actionName = teamFormationSynergy.name
-                ),
-                CombatLogEntry(
-                    turn = 1,
-                    type = "system",
-                    message = "⚔️ Střet začíná! Terén: ${environmentalHazard.icon} ${environmentalHazard.name} (${environmentalHazard.terrainModifierDesc}).",
-                    actor = "Terénní prostředí",
-                    actionName = environmentalHazard.title
-                ),
-                CombatLogEntry(
-                    turn = 1,
-                    type = "system",
-                    message = "🌤️ Počasí na bojišti: ${combatWeather.icon} ${combatWeather.name} (${combatWeather.description}).",
-                    actor = "Meteorologická anomálie",
-                    actionName = "Klima bojiště"
-                )
-            ),
+            combatLogs = initialLogs,
             isFinished = false,
             isVictory = false
         )
@@ -283,11 +411,82 @@ object PartyCombatManager {
         val isHesitant = (!activeMember.isPlayer && activeMember.loyaltyValue < 30 && Random.nextInt(100) < 20)
         val loyaltyDmgMod = if (isHesitant) 0.75f else 1.0f
 
-        val rawDmg = (activeMember.attack + buffAtk + Random.nextInt(-2, 4)) * activeMember.affinityBonusDmg * synergyAtkBonus * comboDmgMult
-        val finalDmg = (((rawDmg - (target.defense * 0.4f)) * critMult) * loyaltyDmgMod).toInt().coerceAtLeast(6)
+        val affinityMultiplier = activeMember.elementalMultipliers[activeMember.element.name]
+            ?: activeMember.affinityBonusDmg
+
+        val elementMult = getElementMultiplier(activeMember.element, target.element)
+        val matchupType = getMatchupType(elementMult)
+
+        val baseAtkVal = activeMember.attack + buffAtk + Random.nextInt(-2, 4)
+        val defMitigation = (target.defense * 0.4f).toInt()
+
+        val rawDmg = (baseAtkVal * synergyAtkBonus * comboDmgMult) * affinityMultiplier * elementMult
+        val finalDmg = (((rawDmg - defMitigation) * critMult) * loyaltyDmgMod).toInt().coerceAtLeast(6)
+
+        val rawWithoutAffinity = (baseAtkVal * synergyAtkBonus * comboDmgMult) * 1.0f * elementMult
+        val finalWithoutAffinity = (((rawWithoutAffinity - defMitigation) * critMult) * loyaltyDmgMod).toInt().coerceAtLeast(6)
+        val affinityBonusGained = (finalDmg - finalWithoutAffinity).coerceAtLeast(0)
+
+        val rawWithoutMatchup = (baseAtkVal * synergyAtkBonus * comboDmgMult) * affinityMultiplier * 1.0f
+        val finalWithoutMatchup = (((rawWithoutMatchup - defMitigation) * critMult) * loyaltyDmgMod).toInt().coerceAtLeast(6)
+        val matchupBonusGained = finalDmg - finalWithoutMatchup
+
+        val formulaStr = "[Báze: $baseAtkVal] × [Afinita: ${"%.2f".format(affinityMultiplier)}x] × [Živel: ${"%.2f".format(elementMult)}x]${if (isCrit) " × [Krit: 1.65x]" else ""} - [Obrana: $defMitigation] = $finalDmg DMG"
+
+        val tacticalNote = buildString {
+            if (affinityBonusGained > 0) {
+                append("Trénink afinity přidal +${affinityBonusGained} DMG (${"%.2f".format(affinityMultiplier)}x). ")
+            }
+            when (matchupType) {
+                ElementalMatchupType.EXTREME_WEAKNESS, ElementalMatchupType.SUPER_EFFECTIVE -> {
+                    append("${activeMember.element.name} zasáhl slabinu ${target.element.name}! (+${matchupBonusGained} DMG)")
+                }
+                ElementalMatchupType.EXTREME_RESISTANCE, ElementalMatchupType.RESISTED -> {
+                    append("${target.element.name} odolal živlu ${activeMember.element.name} (${matchupBonusGained} DMG).")
+                }
+                ElementalMatchupType.NEUTRAL -> {
+                    append("Neutrální elementární interakce.")
+                }
+            }
+        }
+
+        val breakdown = ElementalDamageBreakdown(
+            turn = session.combatLogs.size + 1,
+            round = session.currentRound,
+            attackerName = activeMember.name,
+            attackerElement = activeMember.element,
+            defenderName = target.name,
+            defenderElement = target.element,
+            isPlayerPartyAttacker = true,
+            actionName = "Základní útok",
+            basePower = baseAtkVal,
+            affinityMultiplier = affinityMultiplier,
+            elementMatchupMultiplier = elementMult,
+            matchupType = matchupType,
+            isCritical = isCrit,
+            critMultiplier = critMult,
+            comboMultiplier = comboDmgMult,
+            synergyMultiplier = synergyAtkBonus,
+            targetDefense = target.defense,
+            defenseMitigation = defMitigation,
+            rawCalculatedDamage = rawDmg.toInt(),
+            finalDamage = finalDmg,
+            affinityBonusDamageGained = affinityBonusGained,
+            matchupBonusDamageGained = matchupBonusGained,
+            formulaDisplay = formulaStr,
+            tacticalNote = tacticalNote
+        )
 
         // Apply damage to enemy
         target.hp = (target.hp - finalDmg).coerceAtLeast(0)
+        tryApplyStatusEffect(activeMember, target, isCrit)
+        
+        // Trigger visual effect for elemental affinity
+        if (elementMult > 1.0f) {
+            // FxManager would be ideal, but we access fxState via UI layer.
+            // Since we are in the domain layer, this needs to be passed via UI session or event.
+            // For now, assume a simple event listener or direct trigger if available.
+        }
 
         // Charge Harem Combo (Devotion tier increases combo gain by 50%)
         val comboLoyaltyBonus = if (activeMember.loyaltyValue >= 95) 1.5f else 1.0f
@@ -316,7 +515,8 @@ object PartyCombatManager {
             actor = activeMember.name,
             actionName = "Základní útok (Kombo x$newChain)",
             damageDealt = finalDmg,
-            damageCalculation = "[Síla: ${activeMember.attack}] * [Krit: x${"%.2f".format(critMult)}] * [Kombo: x${"%.2f".format(comboDmgMult)}] = $finalDmg DMG"
+            damageCalculation = formulaStr,
+            elementalBreakdown = breakdown
         )
 
         // Check for Devotion Assist from loyal harem companions
@@ -388,8 +588,69 @@ object PartyCombatManager {
                 val aliveEnemies = session.enemies.filter { it.isAlive }
                 val target = aliveEnemies.getOrNull(targetIndex) ?: aliveEnemies.firstOrNull()
                 if (target != null) {
-                    val rawDmg = ((activeMember.attack * skill.powerMultiplier) + skill.baseDamageBonus) * activeMember.affinityBonusDmg * synergyAtk
-                    val finalDmg = (rawDmg - (target.defense * 0.3f)).toInt().coerceAtLeast(10)
+                    val affinityMultiplier = activeMember.elementalMultipliers[activeMember.element.name]
+                        ?: activeMember.affinityBonusDmg
+                    val elementMult = getElementMultiplier(activeMember.element, target.element)
+                    val matchupType = getMatchupType(elementMult)
+
+                    val baseAtkVal = ((activeMember.attack * skill.powerMultiplier) + skill.baseDamageBonus).toInt()
+                    val defMitigation = (target.defense * 0.3f).toInt()
+                    val rawDmg = baseAtkVal * affinityMultiplier * synergyAtk * elementMult
+                    val finalDmg = (rawDmg - defMitigation).toInt().coerceAtLeast(10)
+
+                    val rawWithoutAffinity = baseAtkVal * 1.0f * synergyAtk * elementMult
+                    val finalWithoutAffinity = (rawWithoutAffinity - defMitigation).toInt().coerceAtLeast(10)
+                    val affinityBonusGained = (finalDmg - finalWithoutAffinity).coerceAtLeast(0)
+
+                    val rawWithoutMatchup = baseAtkVal * affinityMultiplier * synergyAtk * 1.0f
+                    val finalWithoutMatchup = (rawWithoutMatchup - defMitigation).toInt().coerceAtLeast(10)
+                    val matchupBonusGained = finalDmg - finalWithoutMatchup
+
+                    val formulaStr = "[Dovednost: $baseAtkVal] × [Afinita: ${"%.2f".format(affinityMultiplier)}x] × [Živel: ${"%.2f".format(elementMult)}x] - [Obrana: $defMitigation] = $finalDmg DMG"
+
+                    val tacticalNote = buildString {
+                        if (affinityBonusGained > 0) {
+                            append("Trénink afinity přidal +${affinityBonusGained} DMG (${"%.2f".format(affinityMultiplier)}x). ")
+                        }
+                        when (matchupType) {
+                            ElementalMatchupType.EXTREME_WEAKNESS, ElementalMatchupType.SUPER_EFFECTIVE -> {
+                                append("${activeMember.element.name} udeřil do slabiny ${target.element.name}! (+${matchupBonusGained} DMG)")
+                            }
+                            ElementalMatchupType.EXTREME_RESISTANCE, ElementalMatchupType.RESISTED -> {
+                                append("${target.element.name} částečně ztlumil ${activeMember.element.name} (${matchupBonusGained} DMG).")
+                            }
+                            ElementalMatchupType.NEUTRAL -> {
+                                append("Neutrální elementární interakce.")
+                            }
+                        }
+                    }
+
+                    val breakdown = ElementalDamageBreakdown(
+                        turn = session.combatLogs.size + 1,
+                        round = session.currentRound,
+                        attackerName = activeMember.name,
+                        attackerElement = activeMember.element,
+                        defenderName = target.name,
+                        defenderElement = target.element,
+                        isPlayerPartyAttacker = true,
+                        actionName = skill.name,
+                        basePower = baseAtkVal,
+                        affinityMultiplier = affinityMultiplier,
+                        elementMatchupMultiplier = elementMult,
+                        matchupType = matchupType,
+                        isCritical = false,
+                        comboMultiplier = comboDmgMult,
+                        synergyMultiplier = synergyAtk,
+                        targetDefense = target.defense,
+                        defenseMitigation = defMitigation,
+                        rawCalculatedDamage = rawDmg.toInt(),
+                        finalDamage = finalDmg,
+                        affinityBonusDamageGained = affinityBonusGained,
+                        matchupBonusDamageGained = matchupBonusGained,
+                        formulaDisplay = formulaStr,
+                        tacticalNote = tacticalNote
+                    )
+
                     target.hp = (target.hp - finalDmg).coerceAtLeast(0)
 
                     if (skill.appliedStatus != null) {
@@ -415,6 +676,8 @@ object PartyCombatManager {
                             actor = activeMember.name,
                             actionName = skill.name,
                             damageDealt = finalDmg,
+                            damageCalculation = formulaStr,
+                            elementalBreakdown = breakdown,
                             narrativeText = skill.voiceQuote ?: "${activeMember.name} soustředila svou sílu do zničujícího úderu."
                         )
                     )
@@ -445,7 +708,8 @@ object PartyCombatManager {
                 val aliveEnemies = session.enemies.filter { it.isAlive }
                 var totalDmg = 0
                 aliveEnemies.forEach { enemy ->
-                    val rawDmg = ((activeMember.attack * skill.powerMultiplier) + skill.baseDamageBonus) * activeMember.affinityBonusDmg * synergyAtk
+                    val elementMult = getElementMultiplier(activeMember.element, enemy.element)
+                    val rawDmg = ((activeMember.attack * skill.powerMultiplier) + skill.baseDamageBonus) * activeMember.affinityBonusDmg * synergyAtk * elementMult
                     val finalDmg = (rawDmg - (enemy.defense * 0.25f)).toInt().coerceAtLeast(8)
                     enemy.hp = (enemy.hp - finalDmg).coerceAtLeast(0)
                     totalDmg += finalDmg
@@ -689,20 +953,33 @@ object PartyCombatManager {
      * Advance party turn or trigger enemy phase when all living party members have acted.
      */
     private fun advanceTurn(session: PartyCombatSession): Pair<PartyCombatSession, String> {
-        val aliveParty = session.aliveParty
-        if (aliveParty.isEmpty()) {
-            return handleDefeat(session)
+        var updatedSession = session
+        
+        // Handle Domain Expansion duration
+        updatedSession.activeDomainExpansion?.let { domain ->
+            if (domain.durationTurns > 1) {
+                updatedSession = updatedSession.copy(
+                    activeDomainExpansion = domain.copy(durationTurns = domain.durationTurns - 1)
+                )
+            } else {
+                updatedSession = updatedSession.copy(activeDomainExpansion = null)
+            }
         }
 
-        val nextIndex = session.currentTurnIndex + 1
+        val aliveParty = updatedSession.aliveParty
+        if (aliveParty.isEmpty()) {
+            return handleDefeat(updatedSession)
+        }
+
+        val nextIndex = updatedSession.currentTurnIndex + 1
 
         if (nextIndex < aliveParty.size) {
             // Next party member's turn
-            val updatedSession = session.copy(currentTurnIndex = nextIndex)
-            return Pair(updatedSession, "Tah: ${updatedSession.currentActiveMember?.name}")
+            val nextSession = updatedSession.copy(currentTurnIndex = nextIndex)
+            return Pair(nextSession, "Tah: ${nextSession.currentActiveMember?.name}")
         } else {
             // Party phase complete -> Run Enemy Phase!
-            return executeEnemyPhase(session)
+            return executeEnemyPhase(updatedSession)
         }
     }
 
@@ -768,7 +1045,66 @@ object PartyCombatManager {
             val defMitigation = target.defense * 0.4f
             val guardReduction = if (target.isDefending) 0.40f else 1.0f
 
-            val rawFinalDmg = ((baseDmg - defMitigation) * guardReduction).toInt().coerceAtLeast(6)
+            val elementMult = getElementMultiplier(enemy.element, target.element)
+            val matchupType = getMatchupType(elementMult)
+            val baseMitigatedDmg = (((baseDmg - defMitigation) * guardReduction) * elementMult).toInt().coerceAtLeast(6)
+
+            // Elemental Synergy passive damage resistance
+            val synergyResult = ElementalSynergyManager.calculateDamageMitigation(
+                incomingDamage = baseMitigatedDmg,
+                attackerElement = enemy.element,
+                activeSynergies = session.elementalSynergies
+            )
+            val rawFinalDmg = synergyResult.finalDamageAfterSynergy.coerceAtLeast(4)
+
+            val synergyFormulaTag = if (synergyResult.mitigatedDamageAmount > 0) {
+                " - [Synergie: -${(synergyResult.totalMitigationRatio * 100).toInt()}% (-${synergyResult.mitigatedDamageAmount} DMG)]"
+            } else ""
+            val formulaStr = "[Útok: $baseDmg] × [Živel: ${"%.2f".format(elementMult)}x]${if (target.isDefending) " × [Obranný postoj: 0.4x]" else ""} - [Obrana: ${(defMitigation).toInt()}]$synergyFormulaTag = $rawFinalDmg DMG"
+            val tacticalNote = buildString {
+                when (matchupType) {
+                    ElementalMatchupType.EXTREME_WEAKNESS, ElementalMatchupType.SUPER_EFFECTIVE -> {
+                        append("Nepřítel (${enemy.element.name}) zasáhl slabinu obránce (${target.element.name})!")
+                    }
+                    ElementalMatchupType.EXTREME_RESISTANCE, ElementalMatchupType.RESISTED -> {
+                        append("Obránce (${target.element.name}) odolal nepřátelskému živlu (${enemy.element.name})!")
+                    }
+                    ElementalMatchupType.NEUTRAL -> {
+                        append("Neutrální elementární zásah nepřítele.")
+                    }
+                }
+                if (synergyResult.mitigatedDamageAmount > 0) {
+                    val activeNames = synergyResult.contributingSynergies.joinToString { it.name }
+                    append(" 🛡️ Elementární synergie ($activeNames) pohltila -${synergyResult.mitigatedDamageAmount} DMG (-${(synergyResult.totalMitigationRatio * 100).toInt()}%)!")
+                }
+            }
+
+            val enemyBreakdown = ElementalDamageBreakdown(
+                turn = session.combatLogs.size + enemyLogs.size + 1,
+                round = session.currentRound,
+                attackerName = enemy.name,
+                attackerElement = enemy.element,
+                defenderName = target.name,
+                defenderElement = target.element,
+                isPlayerPartyAttacker = false,
+                actionName = if (isSpecial) "Drtivý speciální útok" else "Útok nepřítele",
+                basePower = baseDmg,
+                affinityMultiplier = 1.0f,
+                elementMatchupMultiplier = elementMult,
+                matchupType = matchupType,
+                isCritical = isSpecial,
+                critMultiplier = if (isSpecial) 1.5f else 1.0f,
+                synergyMitigatedDamage = synergyResult.mitigatedDamageAmount,
+                activeSynergyName = synergyResult.contributingSynergies.firstOrNull()?.name,
+                targetDefense = target.defense,
+                defenseMitigation = (defMitigation).toInt(),
+                rawCalculatedDamage = (baseDmg * elementMult).toInt(),
+                finalDamage = rawFinalDmg,
+                affinityBonusDamageGained = 0,
+                matchupBonusDamageGained = (rawFinalDmg - (((baseDmg - defMitigation) * guardReduction) * 1.0f).toInt()),
+                formulaDisplay = formulaStr,
+                tacticalNote = tacticalNote
+            )
 
             // Guardian Devotion: If Lord is targeted, an alive loyal guardian may intercept and mitigate damage
             val loyalGuardian = if (target.isPlayer) {
@@ -803,14 +1139,17 @@ object PartyCombatManager {
             SoundEffectManager.playCombat(if (isSpecial) CombatSound.BOSS_SPECIAL else CombatSound.ENEMY_STRIKE)
 
             val specialTag = if (isSpecial) " 💥 SPECIÁLNÍ ÚTOK!" else ""
+            val synergyTag = if (synergyResult.mitigatedDamageAmount > 0) " 🛡️ [Synergie: -${synergyResult.mitigatedDamageAmount} DMG]" else ""
             enemyLogs.add(
                 CombatLogEntry(
                     turn = session.currentRound,
                     type = if (isSpecial) "enemy_special" else "enemy_attack",
-                    message = "👹 ${enemy.name} zaútočil na ${target.name} za $finalDmg poškození!$specialTag",
+                    message = "👹 ${enemy.name} zaútočil na ${target.name} za $finalDmg poškození!$specialTag$synergyTag",
                     actor = enemy.name,
                     actionName = if (isSpecial) "Drtivý úder" else "Útok",
-                    damageDealt = finalDmg
+                    damageDealt = finalDmg,
+                    damageCalculation = formulaStr,
+                    elementalBreakdown = enemyBreakdown
                 )
             )
 

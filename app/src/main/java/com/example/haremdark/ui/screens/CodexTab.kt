@@ -26,7 +26,7 @@ import com.example.haremdark.models.GameSave
 @Composable
 fun CodexTab(gameState: GameSave, engine: GameEngine) {
     var selectedCategory by remember { mutableStateOf("Vše") }
-    val categories = listOf("Vše", "Lore", "Bestiář", "Postavy")
+    val categories = listOf("Vše", "Živly", "Lore", "Bestiář", "Postavy")
     
     // Check and unlock new entries automatically
     LaunchedEffect(gameState) {

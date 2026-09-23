@@ -36,7 +36,7 @@ fun CodexScreen(
     onBack: () -> Unit
 ) {
     var selectedCategory by remember { mutableStateOf("Lore") }
-    val categories = listOf("Lore", "Bestiář", "Postavy", "Události", "Předměty")
+    val categories = listOf("Lore", "Živly", "Bestiář", "Postavy", "Události", "Předměty")
     
     val unlockedIds = player.unlockedCodexIds
     

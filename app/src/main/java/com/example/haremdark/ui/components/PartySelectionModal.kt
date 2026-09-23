@@ -33,6 +33,9 @@ import com.example.haremdark.domain.GameEngine
 import com.example.haremdark.models.Character
 import com.example.haremdark.models.CombatRole
 import com.example.haremdark.models.GameSave
+import com.example.haremdark.models.Element
+import com.example.haremdark.models.ElementalSynergyManager
+import com.example.haremdark.models.ElementalSynergyBuff
 
 enum class PartySortOption(val title: String, val icon: String) {
     AFFINITY("Úroveň náklonnosti", "💖"),
@@ -380,6 +383,119 @@ fun PartySelectionDialog(
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(bonusInfo.first, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFD700))
                             Text(bonusInfo.second, fontSize = 8.sp, color = Color(0xFFB39DDB), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+
+                // --- REAL-TIME ELEMENTAL SYNERGY PREVIEW ---
+                val draftedElements = remember(selectedGirls, includePlayer, availableGirls) {
+                    val pairs = mutableListOf<Pair<String, Element>>()
+                    if (includePlayer) {
+                        pairs.add("Pán Dominia" to Element.DARK)
+                    }
+                    selectedGirls.forEach { id ->
+                        val char = availableGirls.find { it.id == id }
+                        if (char != null) {
+                            val elem = when (char.archetypeId) {
+                                "sukuba", "krvava_subka" -> Element.DARK
+                                "chladna" -> Element.ICE
+                                "draci_divka" -> Element.FIRE
+                                "subka" -> Element.WATER
+                                "touha" -> Element.LIGHTNING
+                                "knezkyn" -> Element.HOLY
+                                "vzdorna" -> Element.EARTH
+                                else -> Element.PHYSICAL
+                            }
+                            pairs.add(char.name to elem)
+                        }
+                    }
+                    pairs
+                }
+
+                val activeElementalSynergies = remember(draftedElements) {
+                    ElementalSynergyManager.evaluateSynergiesFromPairs(draftedElements)
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color(0xFF1E102E),
+                    border = BorderStroke(1.dp, if (activeElementalSynergies.isNotEmpty()) Color(0xFFAB47BC) else Color.White.copy(alpha = 0.1f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text("🛡️", fontSize = 11.sp)
+                                Text(
+                                    "Elementární Synergie Týmu:",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFFD54F)
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = if (activeElementalSynergies.isNotEmpty()) Color(0xFF4CAF50).copy(alpha = 0.2f) else Color.Gray.copy(alpha = 0.2f)
+                            ) {
+                                Text(
+                                    text = if (activeElementalSynergies.isNotEmpty()) "${activeElementalSynergies.size} aktivní" else "0 aktivních",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (activeElementalSynergies.isNotEmpty()) Color(0xFF69F0AE) else Color.Gray,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+
+                        if (activeElementalSynergies.isNotEmpty()) {
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(activeElementalSynergies) { syn ->
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = Color(0xFF2C1642),
+                                        border = BorderStroke(0.5.dp, Color(0xFFCE93D8).copy(alpha = 0.5f))
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(syn.icon, fontSize = 11.sp)
+                                            Text(
+                                                syn.name,
+                                                fontSize = 9.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                            Text(
+                                                "-${(syn.damageResistancePercent * 100).toInt()}% DMG",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color(0xFF69F0AE)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            Text(
+                                text = "💡 Tip: Sestavte dívky s komplementárními živly (např. Oheň + Země, Voda + Led, Blesk + Vzduch) pro aktivaci pasivních štítů!",
+                                fontSize = 9.sp,
+                                color = Color.White.copy(alpha = 0.55f)
+                            )
                         }
                     }
                 }

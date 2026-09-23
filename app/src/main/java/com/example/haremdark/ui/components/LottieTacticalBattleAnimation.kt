@@ -133,6 +133,13 @@ enum class TacticalAnimationType(
         accentColor = Color(0xFF00E5FF),
         secondaryColor = Color(0xFF80D8FF)
     ),
+    DOMAIN_EXPANSION(
+        title = "Rozšíření domény",
+        category = "Doména",
+        icon = "🌌",
+        accentColor = Color(0xFF6200EE),
+        secondaryColor = Color(0xFF3700B3)
+    ),
     SKILL_ACTIVATION(
         title = "Aktivace dovednosti",
         category = "Dovednost",
@@ -157,6 +164,7 @@ enum class TacticalAnimationType(
                 text.contains("harém") || text.contains("požehnání") || text.contains("podpora") || text.contains("vášeň") || type == "player_support" -> HAREM_DEVOTION
                 text.contains("temn") || text.contains("výboj") || text.contains("duše") || text.contains("dark") || type.contains("spell") -> DARK_MAGIC_BURST
                 text.contains("drtiv") || text.contains("těžký") || text.contains("úder") || text.contains("heavy") -> HEAVY_CRUSH
+                text.contains("doména") || text.contains("domain") -> DOMAIN_EXPANSION
                 text.contains("dovednost") || text.contains("technika") || text.contains("skill") -> SKILL_ACTIVATION
                 else -> SLASH_BLADE
             }
@@ -362,9 +370,35 @@ object LottieTacticalJsonCatalog {
             TacticalAnimationType.POISON_TRIGGER -> POISON_JSON
             TacticalAnimationType.FURY_TRIGGER -> FURY_JSON
             TacticalAnimationType.DODGE_EVADE -> SLASH_JSON
+            TacticalAnimationType.DOMAIN_EXPANSION -> DOMAIN_EXPANSION_JSON
             TacticalAnimationType.SKILL_ACTIVATION -> SUPERNOVA_JSON
         }
     }
+
+    val DOMAIN_EXPANSION_JSON = """
+    {
+      "v": "5.7.4", "fr": 30, "ip": 0, "op": 60, "w": 200, "h": 200, "nm": "Domain Expansion", "ddd": 0, "assets": [],
+      "layers": [
+        {
+          "ddd": 0, "ind": 1, "ty": 4, "nm": "Domain Expansion Glow", "sr": 1,
+          "ks": {
+            "o": { "a": 1, "k": [{ "t": 0, "s": [0] }, { "t": 15, "s": [100] }, { "t": 45, "s": [100] }, { "t": 60, "s": [0] }] },
+            "p": { "a": 0, "k": [100, 100, 0] },
+            "s": { "a": 1, "k": [{ "t": 0, "s": [10, 10] }, { "t": 30, "s": [150, 150] }] }
+          },
+          "shapes": [
+            {
+              "ty": "gr",
+              "it": [
+                { "d": 1, "ty": "el", "s": { "a": 0, "k": [80, 80] }, "p": { "a": 0, "k": [0, 0] } },
+                { "ty": "fl", "c": { "a": 0, "k": [0.38, 0, 0.93, 1] }, "o": { "a": 0, "k": 60 } }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+    """.trimIndent()
 
     val SLASH_JSON = """
     {

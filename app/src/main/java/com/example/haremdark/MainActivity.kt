@@ -470,6 +470,29 @@ class MainActivity : ComponentActivity() {
                                         navController.navigate("arena") { launchSingleTop = true }
                                     }
                                 )
+                                QuickNavDrawerItem(
+                                    icon = Icons.Default.AutoFixHigh,
+                                    title = "Trénink Živlů & Afinity",
+                                    subtitle = "Zvyšování násobičů poškození (+0.05x)",
+                                    isSelected = currentRoute == "affinity_training",
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
+                                        navController.navigate("affinity_training") { launchSingleTop = true }
+                                    }
+                                )
+                                QuickNavDrawerItem(
+                                    icon = Icons.Default.AutoStories,
+                                    title = "Elementární Kodex",
+                                    subtitle = "Lore a historie objevených živlů",
+                                    badgeText = "${com.example.haremdark.data.ElementalCodexData.getDiscoveredCount(gameState)}/9",
+                                    isSelected = currentRoute == "elemental_codex",
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
+                                        navController.navigate("elemental_codex") { launchSingleTop = true }
+                                    }
+                                )
 
                                 HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
@@ -717,6 +740,26 @@ class MainActivity : ComponentActivity() {
                                     gameState = gameState,
                                     engine = engine,
                                     onMenuClick = { coroutineScope.launch { drawerState.open() } }
+                                )
+                            }
+                            composable("affinity_training") {
+                                com.example.haremdark.ui.screens.AffinityTrainingScreen(
+                                    gameState = gameState,
+                                    engine = engine,
+                                    onBack = { navController.popBackStack() },
+                                    onOpenElementalCodex = { navController.navigate("elemental_codex") }
+                                )
+                            }
+                            composable("elemental_codex") {
+                                com.example.haremdark.ui.screens.ElementalCodexScreen(
+                                    gameState = gameState,
+                                    engine = engine,
+                                    onBack = { navController.popBackStack() },
+                                    onNavigateToTraining = { _ ->
+                                        navController.navigate("affinity_training") {
+                                            launchSingleTop = true
+                                        }
+                                    }
                                 )
                             }
                         }

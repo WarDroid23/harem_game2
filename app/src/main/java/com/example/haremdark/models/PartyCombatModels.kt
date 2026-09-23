@@ -20,7 +20,7 @@ enum class CombatRole(
 }
 
 enum class Element {
-    PHYSICAL, FIRE, ICE, LIGHTNING, DARK, HOLY
+    PHYSICAL, FIRE, WATER, EARTH, AIR, ICE, LIGHTNING, DARK, HOLY
 }
 
 /**
@@ -273,6 +273,8 @@ data class PartyMember(
     val loyaltyCombatPerkTag: String = "",
     val loyaltyCombatDescription: String = "",
     val affinityBonusDmg: Float = 1.0f,
+    val element: Element = Element.PHYSICAL,
+    val elementalMultipliers: Map<String, Float> = emptyMap(),
     val favoriteWeaponIcon: String = "🗡️",
     val relationshipTierLevel: Int = 1,
     val relationshipStageName: String = "Acquaintance",
@@ -306,6 +308,7 @@ data class CombatEnemy(
     val icon: String = "👹",
     val title: String = "Nepřítel",
     val archetype: String = "Běžný",
+    val element: Element = Element.PHYSICAL,
     var formationPosition: FormationPosition = FormationPosition.FRONT_LINE,
     var hp: Int = 120,
     val maxHp: Int = 120,
@@ -405,6 +408,18 @@ data class CombatWeather(
     }
 }
 
+@Serializable
+data class DomainExpansionEffect(
+    val id: String,
+    val name: String,
+    val icon: String,
+    val description: String,
+    val statsModifier: Float = 1.2f, // Modifier for ally stats
+    val environmentStatChange: String = "", // e.g., "Fire damage +20%"
+    val durationTurns: Int = 3,
+    val originLineage: String
+)
+
 /**
  * Active Party Combat Session.
  */
@@ -424,7 +439,9 @@ data class PartyCombatSession(
     var haremComboGauge: Int = 25, // 0 to 100
     val maxHaremComboGauge: Int = 100,
     var comboChainCount: Int = 0,
+    var activeDomainExpansion: DomainExpansionEffect? = null,
     val activeSynergies: List<PartySynergy> = emptyList(),
+    val elementalSynergies: List<ElementalSynergyBuff> = emptyList(),
     val weather: CombatWeather = CombatWeather.getWeatherForLocation("Arena"),
     val environmentalHazard: EnvironmentalHazard? = null,
     var hazardCountdown: Int = 2,
@@ -446,3 +463,11 @@ data class PartyCombatSession(
     val midLineParty: List<PartyMember> get() = aliveParty.filter { it.formationPosition == FormationPosition.MID_LINE }
     val backLineParty: List<PartyMember> get() = aliveParty.filter { it.formationPosition == FormationPosition.BACK_LINE }
 }
+
+@Serializable
+data class TacticalLoadout(
+    val id: String,
+    val name: String,
+    val formationMap: Map<String, FormationPosition>, // Character ID -> Position
+    val elementalConfigs: Map<String, String> // Character ID -> Element Name
+)

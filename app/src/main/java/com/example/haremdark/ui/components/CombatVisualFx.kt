@@ -19,6 +19,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import com.example.haremdark.models.Element
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -251,6 +252,26 @@ class CombatVisualFxState {
         activeTacticalType = type
         activeTacticalTitle = title ?: type.title
         activeTacticalKey = System.currentTimeMillis()
+    }
+
+    /**
+     * Trigger a visual effect based on elemental affinity.
+     */
+    fun triggerElementalEffect(
+        isWeakness: Boolean,
+        element: Element,
+        targetEnemyIndex: Int?,
+        scope: CoroutineScope
+    ) {
+        scope.launch {
+            val text = if (isWeakness) "EFEKTIVNÍ!" else "ODOLNOST!"
+            triggerFloatingText(
+                text = text,
+                isCrit = isWeakness,
+                isEnemyTarget = true,
+                scope = scope
+            )
+        }
     }
 
     /**

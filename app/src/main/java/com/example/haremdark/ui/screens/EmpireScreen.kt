@@ -44,7 +44,7 @@ fun EmpireScreen(
 ) {
     val context = LocalContext.current
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("🗡️ Mafie", "🏰 Budovy", "💰 Nájem", "📈 Produkce", "⛓️ Trh")
+    val tabs = listOf("🗡️ Mafie", "🏰 Budovy", "💰 Nájem", "📈 Produkce", "⛓️ Trh", "🔮 Dominium")
 
     Column(
         modifier = modifier
@@ -67,7 +67,7 @@ fun EmpireScreen(
                 Tab(
                     selected = selectedTab == index,
                     onClick = { selectedTab = index },
-                    text = { Text(title, fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal, fontSize = 11.sp) }
+                    text = { Text(title, fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal, fontSize = 10.sp) }
                 )
             }
         }
@@ -78,6 +78,7 @@ fun EmpireScreen(
             2 -> RentalsHubTab(gameState)
             3 -> StatisticsTab(gameState)
             4 -> RecruitmentTab(gameState, engine)
+            5 -> DomainExpansionScreen(gameState, engine)
         }
     }
 }

@@ -2,6 +2,7 @@ package com.example.haremdark.models
 
 import kotlinx.serialization.Serializable
 import com.example.haremdark.models.BestiaryEntry
+import com.example.haremdark.models.DailyBounty
 import com.example.haremdark.models.InfluenceLogEntry
 
 @Serializable
@@ -60,6 +61,7 @@ data class AlchemyRecipe(
     val description: String,
     val goldCost: Int,
     val darkCost: Int,
+    val materials: Map<String, Int> = emptyMap(), // MaterialId to amount
     val resultItem: InventoryItem
 )
 
@@ -153,6 +155,14 @@ data class DomainLocation(
     val environmentBonus: String = "+10% šance na průzkum",
     val pointsOfInterest: List<RegionPointOfInterest> = emptyList(),
     val loreChronicle: String = ""
+)
+
+@Serializable
+data class StatRecord(
+    val day: Int,
+    val strength: Int,
+    val defense: Int,
+    val hp: Int
 )
 
 @Serializable
@@ -257,6 +267,7 @@ data class Character(
     var breakthroughActive: Boolean = false,
     var breakthroughType: String? = null,
     var breakthroughExpiryDay: Int = 0,
+    var statHistory: MutableList<StatRecord> = mutableListOf(),
     var keyMemories: MutableList<KeyMemory> = mutableListOf(),
     var traits: MutableList<String> = mutableListOf(),
     var milestoneRewardsUnlocked: MutableSet<Int> = mutableSetOf(),
@@ -272,8 +283,21 @@ data class Character(
     var preferredFormation: String = "MID",
     var moodScore: Int = 50, // 0-100 scale
     var dailyInteractionsCount: Int = 0,
-    var unlockedSkins: MutableList<String> = mutableListOf("default")
+    var unlockedSkins: MutableList<String> = mutableListOf("default"),
+    var elementalMultipliers: MutableMap<String, Float> = mutableMapOf() // Store as String to avoid serialization issues with Enum if any
 ) {
+    fun checkAffinityMilestones() {
+        val total = elementalMultipliers.values.sum()
+        val newSkins = mutableListOf<String>()
+        if (total >= 5.0f && !unlockedSkins.contains("Elemental_Aura_I")) newSkins.add("Elemental_Aura_I")
+        if (total >= 10.0f && !unlockedSkins.contains("Elemental_Aura_II")) newSkins.add("Elemental_Aura_II")
+        if (total >= 15.0f && !unlockedSkins.contains("Elemental_Aura_III")) newSkins.add("Elemental_Aura_III")
+        
+        if (newSkins.isNotEmpty()) {
+            unlockedSkins.addAll(newSkins)
+        }
+    }
+
     var loyalty: Int
         get() = loajalita
         set(value) {
@@ -608,6 +632,7 @@ data class Player(
     var day: Int = 1,
     var skillPoints: Int = 2,
     var unlockedCodexIds: Set<String> = emptySet(),
+    var discoveredElementAffinities: MutableSet<String> = mutableSetOf(),
     var skills: MutableMap<String, Int> = mutableMapOf(
         "svadeni" to 0,
         "obchod" to 0,
@@ -676,7 +701,8 @@ data class CombatLogEntry(
     val actionName: String = "",
     val damageDealt: Int = 0,
     val damageCalculation: String? = null,
-    val narrativeText: String? = null
+    val narrativeText: String? = null,
+    val elementalBreakdown: ElementalDamageBreakdown? = null
 )
 
 @Serializable
@@ -804,9 +830,11 @@ data class GameSave(
     val savedLoadouts: List<EquipmentLoadout> = emptyList(),
     val activeLoadoutId: String? = null,
     val savedPartyFormations: List<PartyFormation> = emptyList(),
+    val activeCombatSession: PartyCombatSession? = null,
     val fogOfWarEnabled: Boolean = true,
     val mapBookmarks: List<MapBookmark> = emptyList(),
     val bestiaryEntries: List<BestiaryEntry> = emptyList(),
+    val dailyBounties: List<DailyBounty> = emptyList(),
     val influenceLog: List<InfluenceLogEntry> = emptyList()
 )
 

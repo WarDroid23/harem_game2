@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -48,6 +49,8 @@ fun PartyCombatScreen(
     val isMuted by SoundEffectManager.isMuted.collectAsState()
 
     var showLogsModal by remember { mutableStateOf(false) }
+    var showElementalLogsModal by remember { mutableStateOf(false) }
+    var showElementalSynergyModal by remember { mutableStateOf(false) }
     var selectedStatusEffectForDetail by remember { mutableStateOf<CombatStatusEffect?>(null) }
     var isAutoBattle by remember { mutableStateOf(false) }
 
@@ -234,6 +237,18 @@ fun PartyCombatScreen(
                         }
 
                         IconButton(
+                            onClick = { showElementalSynergyModal = true },
+                            modifier = Modifier.size(30.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Shield,
+                                contentDescription = "Elementární Synergie",
+                                tint = if (session.elementalSynergies.isNotEmpty()) Color(0xFF69F0AE) else Color(0xFFB388FF),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        IconButton(
                             onClick = { showLogsModal = true },
                             modifier = Modifier.size(30.dp)
                         ) {
@@ -256,6 +271,48 @@ fun PartyCombatScreen(
                                 modifier = Modifier.size(18.dp)
                             )
                         }
+                    }
+                }
+            }
+
+            // --- ELEMENTAL SYNERGY PASSIVE BUFFS BANNER ---
+            if (session.elementalSynergies.isNotEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xD8200D35),
+                    border = BorderStroke(1.dp, Color(0xFFAB47BC).copy(alpha = 0.6f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showElementalSynergyModal = true }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("🛡️", fontSize = 12.sp)
+                            Text(
+                                text = "Elementární Synergie: " + session.elementalSynergies.joinToString(" • ") { "${it.icon} ${it.name} (-${(it.damageResistancePercent * 100).toInt()}%)" },
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFFE1BEE7),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Text(
+                            text = "INFO ➔",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFFD54F)
+                        )
                     }
                 }
             }
@@ -340,7 +397,8 @@ fun PartyCombatScreen(
             // --- SCROLLABLE COMBAT LOG VIEW ---
             ScrollableCombatLogView(
                 logs = session.combatLogs,
-                onOpenFullModal = { showLogsModal = true }
+                onOpenFullModal = { showLogsModal = true },
+                onOpenElementalLogModal = { showElementalLogsModal = true }
             )
 
             // --- HAREM ULTIMATE COMBO GAUGE ---
@@ -498,6 +556,23 @@ fun PartyCombatScreen(
             logs = session.combatLogs,
             comboChainCount = session.comboChainCount,
             onDismiss = { showLogsModal = false }
+        )
+    }
+
+    // --- ELEMENTAL COMBAT LOG MODAL ---
+    if (showElementalLogsModal) {
+        ElementalCombatLogModal(
+            logs = session.combatLogs,
+            onDismiss = { showElementalLogsModal = false }
+        )
+    }
+
+    // --- ELEMENTAL SYNERGY MODAL ---
+    if (showElementalSynergyModal) {
+        ElementalSynergyModal(
+            activeSynergies = session.elementalSynergies,
+            combatLogs = session.combatLogs,
+            onDismiss = { showElementalSynergyModal = false }
         )
     }
 

@@ -2376,6 +2376,14 @@ class GameEngine(private val context: Context) {
         if (p.darkEnergy < recipe.darkCost) {
             return Pair(false, "Nedostatek temné energie (${p.darkEnergy}/${recipe.darkCost})!")
         }
+        
+        // Material check
+        for ((materialId, amount) in recipe.materials) {
+            val currentAmount = p.craftingResources[materialId] ?: 0
+            if (currentAmount < amount) {
+                return Pair(false, "Nedostatek materiálu $materialId ($currentAmount/$amount)!")
+            }
+        }
 
         val msg = "🧪 Uvařil jsi ${recipe.resultItem.name}!"
         SoundEffectManager.playHarem(HaremSound.CRAFTING_SUCCESS)
@@ -2387,11 +2395,17 @@ class GameEngine(private val context: Context) {
             } else {
                 newItems.add(recipe.resultItem.copy())
             }
+            
+            val newResources = state.player.craftingResources.toMutableMap()
+            for ((materialId, amount) in recipe.materials) {
+                newResources[materialId] = (newResources[materialId] ?: 0) - amount
+            }
 
             val newP = state.player.copy(
                 gold = (state.player.gold - recipe.goldCost).coerceAtLeast(0),
                 darkEnergy = (state.player.darkEnergy - recipe.darkCost).coerceAtLeast(0),
-                items = newItems
+                items = newItems,
+                craftingResources = newResources
             )
             val logs = (listOf(msg) + state.gameLog).take(30)
             state.copy(player = newP, gameLog = logs)
@@ -4827,15 +4841,18 @@ class GameEngine(private val context: Context) {
             encounterDef = encounter
         )
         _partyCombatSession.value = session
+        updateState { it.copy(activeCombatSession = session) }
         addLog("⚔️ Zahájen skupinový tahový boj: ${encounter.title} (${session.party.size} bojovníků)!")
     }
 
     fun updatePartyCombatSession(session: PartyCombatSession) {
         _partyCombatSession.value = session
+        updateState { it.copy(activeCombatSession = session) }
     }
 
     fun closePartyCombat() {
         _partyCombatSession.value = null
+        updateState { it.copy(activeCombatSession = null) }
         autoSave("Skupinový boj dokončen")
     }
 
@@ -4956,7 +4973,52 @@ class GameEngine(private val context: Context) {
         }
     }
 
+    fun performAffinityTraining(character: Character, element: Element): String {
+        val currentMultiplier = character.elementalMultipliers.getOrDefault(element.name, 1.0f)
+        val newMultiplier = currentMultiplier + 0.05f // Increase by 0.05
+        character.elementalMultipliers[element.name] = newMultiplier
+        character.totalTrainingSessions++
+        character.checkAffinityMilestones()
+
+        val isNewlyDiscovered = !_gameState.value.player.discoveredElementAffinities.contains(element.name) &&
+            !_gameState.value.player.unlockedCodexIds.contains("element_${element.name.lowercase()}")
+
+        updateState { state ->
+            val updatedDiscovered = state.player.discoveredElementAffinities.toMutableSet().apply {
+                add(element.name)
+            }
+            val updatedCodex = state.player.unlockedCodexIds.toMutableSet().apply {
+                add("element_${element.name.lowercase()}")
+            }
+            state.copy(
+                player = state.player.copy(
+                    discoveredElementAffinities = updatedDiscovered,
+                    unlockedCodexIds = updatedCodex
+                )
+            )
+        }
+
+        if (isNewlyDiscovered) {
+            addLog("📜 V Elementárním Kodexu byl odemčen nový záznam: Původ a lore živlu ${element.name}!")
+        }
+
+        autoSave("Affinity training completed for ${character.name}")
+        return "Trénink elementu ${element.name} dokončen! Multiplikátor zvýšen na ${"%.2f".format(newMultiplier)}x"
+    }
+
+    fun generateDailyBounties() {
+        val day = _gameState.value.player.day
+        if (_gameState.value.lastMissionUpdateDay < day) {
+            val newBounties = listOf(
+                DailyBounty("bounty_1", "Lov monster", "Zabijte 5 běžných nepřátel.", "Běžný", "PHYSICAL", "iron", 5),
+                DailyBounty("bounty_2", "Živelný dril", "Zabijte 3 ohnivé nepřátele.", "FIRE", "WATER", "wood", 10)
+            )
+            updateState { it.copy(dailyBounties = newBounties, lastMissionUpdateDay = day) }
+        }
+    }
+
     fun autoSave(reason: String = "Automatické uložení") {
+        generateDailyBounties()
         checkCodexUnlocks()
         if (!_isAutoSaveEnabled.value) return
         val state = _gameState.value

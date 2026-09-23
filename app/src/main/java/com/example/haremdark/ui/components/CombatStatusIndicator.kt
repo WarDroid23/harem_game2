@@ -242,6 +242,9 @@ fun CombatStatusEffectDetailDialog(
     val elementTag = when (effect.element) {
         Element.FIRE -> "🔥 Ohnivý žár"
         Element.ICE -> "❄️ Ledový chlad"
+        Element.WATER -> "💧 Vodní živel"
+        Element.EARTH -> "🪨 Zemní živel"
+        Element.AIR -> "🌪️ Vzdušný živel"
         Element.LIGHTNING -> "⚡ Blesková bouře"
         Element.DARK -> "🔮 Temná magie"
         Element.HOLY -> "✨ Svaté světlo"

@@ -1208,6 +1208,10 @@ fun PartyCombatLogModal(
     comboChainCount: Int,
     onDismiss: () -> Unit
 ) {
+    var selectedTab by remember { mutableStateOf(0) } // 0: All Logs, 1: Elemental Calculations
+    val elementalBreakdowns = remember(logs) { logs.mapNotNull { it.elementalBreakdown } }
+    val summary = remember(logs) { ElementalBattleSummary.fromLogs(logs) }
+
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(16.dp),
@@ -1215,7 +1219,7 @@ fun PartyCombatLogModal(
             border = BorderStroke(1.dp, Color(0xFFFF80AB).copy(alpha = 0.5f)),
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 540.dp)
+                .heightIn(max = 580.dp)
                 .padding(8.dp)
         ) {
             Column(
@@ -1228,7 +1232,7 @@ fun PartyCombatLogModal(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "📜 Záznam z probíhajícího boje",
+                        "📜 Bojový Záznam & Analytika",
                         fontWeight = FontWeight.Bold,
                         style = MaterialTheme.typography.titleMedium,
                         color = Color(0xFFFFD700)
@@ -1238,77 +1242,190 @@ fun PartyCombatLogModal(
                     }
                 }
 
-                // Combo Chain Tracker Banner inside Log Modal
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0x33FF9800),
-                    border = BorderStroke(1.dp, Color(0xFFFF9800).copy(alpha = 0.4f)),
-                    modifier = Modifier.fillMaxWidth()
+                // Tab Switcher
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF09040D), RoundedCornerShape(8.dp))
+                        .padding(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (selectedTab == 0) Color(0xFF4A148C) else Color.Transparent,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { selectedTab = 0 }
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text("🔥", fontSize = 16.sp)
-                            Column {
-                                Text(
-                                    text = "Kombo Řetězec: $comboChainCount úderů",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFFFB74D)
-                                )
-                                Text(
-                                    text = "Bonus: +${(comboChainCount * 4)}% Poškození | +${(comboChainCount * 2)}% Šance na Krit",
-                                    fontSize = 9.sp,
-                                    color = Color(0xFFFFE0B2)
-                                )
-                            }
-                        }
+                        Text(
+                            text = "📜 Události (${logs.size})",
+                            fontSize = 11.sp,
+                            fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal,
+                            color = if (selectedTab == 0) Color.White else Color.White.copy(alpha = 0.6f),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(vertical = 6.dp)
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (selectedTab == 1) Color(0xFF512DA8) else Color.Transparent,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { selectedTab = 1 }
+                    ) {
+                        Text(
+                            text = "⚡ Živly & Matematika (${elementalBreakdowns.size})",
+                            fontSize = 11.sp,
+                            fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal,
+                            color = if (selectedTab == 1) Color(0xFFFFD54F) else Color.White.copy(alpha = 0.6f),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(vertical = 6.dp)
+                        )
                     }
                 }
 
-                LazyColumn(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .background(Color(0xFF0C0610), RoundedCornerShape(8.dp))
-                        .padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    val reversedLogs = logs.reversed()
-                    items(reversedLogs) { entry ->
-                        val tacticalType = TacticalAnimationType.fromLogEntry(entry.type, entry.message, entry.actionName)
-                        val logColor = when (entry.type) {
-                            "player_attack", "player_spell" -> Color(0xFFFFCC80)
-                            "enemy_attack", "enemy_special" -> Color(0xFFFF8A80)
-                            "player_heal" -> Color(0xFFA5D6A7)
-                            "player_support" -> Color(0xFF80D8FF)
-                            "victory" -> Color(0xFFFFD700)
-                            "defeat" -> Color(0xFFE53935)
-                            else -> Color(0xFFE0E0E0)
-                        }
+                if (selectedTab == 0) {
+                    // Combo Chain Tracker Banner inside Log Modal
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0x33FF9800),
+                        border = BorderStroke(1.dp, Color(0xFFFF9800).copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth()
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            TacticalLottieMicroBadge(
-                                animationType = tacticalType,
-                                sizeDp = 18.dp,
-                                showBorder = false
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text("🔥", fontSize = 16.sp)
+                                Column {
+                                    Text(
+                                        text = "Kombo Řetězec: $comboChainCount úderů",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFFFB74D)
+                                    )
+                                    Text(
+                                        text = "Bonus: +${(comboChainCount * 4)}% Poškození | +${(comboChainCount * 2)}% Šance na Krit",
+                                        fontSize = 9.sp,
+                                        color = Color(0xFFFFE0B2)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    LazyColumn(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .background(Color(0xFF0C0610), RoundedCornerShape(8.dp))
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val reversedLogs = logs.reversed()
+                        items(reversedLogs) { entry ->
+                            val tacticalType = TacticalAnimationType.fromLogEntry(entry.type, entry.message, entry.actionName)
+                            val logColor = when (entry.type) {
+                                "player_attack", "player_spell" -> Color(0xFFFFCC80)
+                                "enemy_attack", "enemy_special" -> Color(0xFFFF8A80)
+                                "player_heal" -> Color(0xFFA5D6A7)
+                                "player_support" -> Color(0xFF80D8FF)
+                                "victory" -> Color(0xFFFFD700)
+                                "defeat" -> Color(0xFFE53935)
+                                else -> Color(0xFFE0E0E0)
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                TacticalLottieMicroBadge(
+                                    animationType = tacticalType,
+                                    sizeDp = 18.dp,
+                                    showBorder = false
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "[Kolo ${entry.turn}] ${entry.message}",
+                                        color = logColor,
+                                        fontSize = 11.sp,
+                                        lineHeight = 15.sp
+                                    )
+                                    if (entry.damageCalculation != null) {
+                                        Text(
+                                            text = entry.damageCalculation,
+                                            color = Color(0xFFB388FF).copy(alpha = 0.8f),
+                                            fontSize = 9.sp,
+                                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Tab 1: Elemental Calculations Breakdown
+                    if (elementalBreakdowns.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .background(Color(0xFF0C0610), RoundedCornerShape(8.dp))
+                                .padding(16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
-                                text = "[Kolo ${entry.turn}] ${entry.message}",
-                                color = logColor,
-                                fontSize = 11.sp,
-                                lineHeight = 15.sp,
-                                modifier = Modifier.weight(1f)
+                                text = "Zatím neproběhly žádné útoky s kalkulací živlů.",
+                                color = Color.White.copy(alpha = 0.6f),
+                                fontSize = 11.sp
                             )
+                        }
+                    } else {
+                        // Quick Stats Pill
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0x3369F0AE),
+                                border = BorderStroke(1.dp, Color(0xFF69F0AE).copy(alpha = 0.4f)),
+                                modifier = Modifier.weight(1f).padding(end = 4.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(6.dp)) {
+                                    Text("Afinita Extra DMG", fontSize = 9.sp, color = Color.White.copy(alpha = 0.7f))
+                                    Text("+${summary.totalAffinityBonusDamageGained} DMG", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF69F0AE))
+                                }
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0x33FF9800),
+                                border = BorderStroke(1.dp, Color(0xFFFF9800).copy(alpha = 0.4f)),
+                                modifier = Modifier.weight(1f).padding(start = 4.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(6.dp)) {
+                                    Text("Zásahy do slabin", fontSize = 9.sp, color = Color.White.copy(alpha = 0.7f))
+                                    Text("${summary.weaknessHitsTriggered}x 💥", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFAB40))
+                                }
+                            }
+                        }
+
+                        LazyColumn(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .background(Color(0xFF0C0610), RoundedCornerShape(8.dp))
+                                .padding(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            items(elementalBreakdowns.reversed()) { breakdown ->
+                                ElementalDamageBreakdownCard(breakdown = breakdown)
+                            }
                         }
                     }
                 }
@@ -1333,9 +1450,11 @@ fun PartyCombatLogModal(
 fun ScrollableCombatLogView(
     logs: List<CombatLogEntry>,
     onOpenFullModal: () -> Unit,
+    onOpenElementalLogModal: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var isExpanded by remember { mutableStateOf(true) }
+    val elementalCount = remember(logs) { logs.count { it.elementalBreakdown != null } }
 
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -1369,7 +1488,26 @@ fun ScrollableCombatLogView(
                         color = Color.White.copy(alpha = 0.6f)
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (elementalCount > 0) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0x33B388FF),
+                            border = BorderStroke(1.dp, Color(0xFFB388FF).copy(alpha = 0.5f)),
+                            modifier = Modifier.clickable { onOpenElementalLogModal() }
+                        ) {
+                            Text(
+                                text = "⚡ Živly ($elementalCount)",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFFD54F),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
                     TextButton(
                         onClick = onOpenFullModal,
                         contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
@@ -1414,7 +1552,15 @@ fun ScrollableCombatLogView(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (entry.elementalBreakdown != null) {
+                                        onOpenElementalLogModal()
+                                    } else {
+                                        onOpenFullModal()
+                                    }
+                                }
                         ) {
                             TacticalLottieMicroBadge(
                                 animationType = tacticalType,
@@ -1428,6 +1574,21 @@ fun ScrollableCombatLogView(
                                 maxLines = 1,
                                 modifier = Modifier.weight(1f)
                             )
+                            if (entry.elementalBreakdown != null) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color(entry.elementalBreakdown.matchupType.tagColorHex).copy(alpha = 0.2f),
+                                    border = BorderStroke(0.5.dp, Color(entry.elementalBreakdown.matchupType.tagColorHex))
+                                ) {
+                                    Text(
+                                        text = "${entry.elementalBreakdown.matchupType.icon} ${entry.elementalBreakdown.affinityPercentString}",
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(entry.elementalBreakdown.matchupType.tagColorHex),
+                                        modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
