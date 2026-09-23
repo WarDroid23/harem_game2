@@ -598,6 +598,7 @@ fun CharacterDetailDialog(
                             character = currentActiveCharacter,
                             player = player,
                             onExecuteInteraction = { inter ->
+                                com.example.haremdark.domain.SoundEffectManager.playHarem(com.example.haremdark.domain.HaremSound.GRUNT)
                                 if (inter.type == "odmena" || inter.type == "intimni") {
                                     triggerAffinityEffect(AffinityBurstType.HEARTS, 1.2f)
                                 }

@@ -27,7 +27,8 @@ enum class HaremSound {
     SECRET_WHISPER,
     FAIL,
     CRAFTING_SUCCESS,
-    SKILL_UNLOCK
+    SKILL_UNLOCK,
+    GRUNT
 }
 
 enum class EventSound {
@@ -450,11 +451,33 @@ object SoundEffectManager {
                         // Triumphant chime for skill unlock
                         playPcmTrack(synthesizeFanfare(listOf(659.25, 783.99, 1046.5, 1318.51), 0.15))
                     }
+                    HaremSound.GRUNT -> {
+                        // Short, breathy, randomized grunt (vocal texture)
+                        playPcmTrack(synthesizeGrunt())
+                    }
                 }
             } catch (e: Exception) {
                 fallbackTone(ToneGenerator.TONE_PROP_BEEP, 150)
             }
         }
+    }
+
+    private fun synthesizeGrunt(): ShortArray {
+        // Short, breathy, randomized "hmpf" or "ahh" sound
+        val durationSec = 0.15
+        val count = (SAMPLE_RATE * durationSec).toInt()
+        val buffer = ShortArray(count)
+        for (i in 0 until count) {
+            val progress = i.toDouble() / count
+            val t = i.toDouble() / SAMPLE_RATE
+            val env = sin(PI * progress) * exp(-5.0 * progress)
+            // Noise mixed with low vocal formant (150-200Hz base)
+            val noise = (Math.random() * 2.0 - 1.0) * 0.5
+            val vocal = sin(2.0 * PI * (180.0 + sin(10.0 * t) * 20.0) * t) * 0.5
+            val sample = (noise + vocal) * env * Short.MAX_VALUE * 0.7
+            buffer[i] = sample.toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
+        return buffer
     }
 
     fun playEvent(sound: EventSound) {

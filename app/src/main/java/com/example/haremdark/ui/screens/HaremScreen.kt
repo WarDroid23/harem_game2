@@ -328,6 +328,7 @@ fun HaremScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             
+            var showHaremCharacterManager by remember { mutableStateOf(false) }
             var showGlobalMilestonesDialog by remember { mutableStateOf(false) }
             var showSynergyDashboardDialog by remember { mutableStateOf(false) }
 
@@ -377,6 +378,15 @@ fun HaremScreen(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 OutlinedButton(
+                                    onClick = { showHaremCharacterManager = true },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(26.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFCE93D8))
+                                ) {
+                                    Text("👑 Správce", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                                OutlinedButton(
                                     onClick = { showGlobalMilestonesDialog = true },
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
                                     modifier = Modifier.height(26.dp),
@@ -421,6 +431,15 @@ fun HaremScreen(
                         }
                     }
                 }
+            }
+
+            if (showHaremCharacterManager) {
+                com.example.haremdark.ui.components.HaremCharacterManagerModal(
+                    repository = engine.haremCharacterRepository,
+                    onSell = { id -> engine.sellCharacter(id) },
+                    onLease = { id -> engine.leaseCharacter(id, 1) },
+                    onDismiss = { showHaremCharacterManager = false }
+                )
             }
 
             if (showGlobalMilestonesDialog) {

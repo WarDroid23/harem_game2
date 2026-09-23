@@ -76,6 +76,32 @@ fun SaveSettingsScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(top = 10.dp, bottom = 90.dp)
     ) {
+        // Quick Navigation / New Game
+        item {
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Nová hra", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Button(
+                        onClick = {
+                            SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
+                            engine.resetGame()
+                            Toast.makeText(context, "Hra byla restartována!", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Restartovat", fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+        
         // Theme Selector
         item {
             Card(

@@ -148,6 +148,15 @@ object HaremEventData {
                         affinityGain = 25,
                         statChanges = mapOf("loajalita" to 22, "duvera" to 16, "gold" to -15),
                         outcomeSummary = "+25 Náklonnost, +22 Loajalita, +16 Důvěra"
+                    ),
+                    DialogueChoice(
+                        id = "t2_mysterious",
+                        text = "„Vím, že toužíš po něčem víc než jen po službě. Přinesl jsem ti artefakt z hlubin Podsvětí.“",
+                        style = "graceful",
+                        reactionText = "„Pane... to je neuvěřitelné. Cítím z něj zvláštní energii. Můžeš mě učit, jak ji ovládnout?“",
+                        affinityGain = 20,
+                        statChanges = mapOf("darkEnergy" to 20, "loajalita" to 10, "duvera" to 10),
+                        outcomeSummary = "+20 Náklonnost, +20 Temná energie, +10 Loajalita, +10 Důvěra"
                     )
                 )
             )

@@ -99,6 +99,108 @@ class GameEngine(private val context: Context) {
     private val _gameState = MutableStateFlow(GameContent.createInitialSave())
     val gameState: StateFlow<GameSave> = _gameState.asStateFlow()
 
+    private val _dailyEvents = MutableStateFlow<List<com.example.haremdark.models.DailyEvent>>(emptyList())
+    val dailyEvents = _dailyEvents.asStateFlow()
+
+    init {
+        generateNewDailyEvents()
+    }
+
+    fun generateNewDailyEvents() {
+        _dailyEvents.value = com.example.haremdark.models.DailyEventSystem.generateDailyEvents()
+    }
+
+    fun resetGame() {
+        _gameState.value = GameContent.createInitialSave()
+        generateNewDailyEvents()
+    }
+
+    val encounterRepository = com.example.haremdark.data.EncounterRepository()
+
+    fun sellResource(type: String, amount: Int, pricePerUnit: Int) {
+        val player = _gameState.value.player
+        val currentAmount = when(type) {
+            "wood" -> player.wood
+            "stone" -> player.stone
+            "iron" -> player.iron
+            else -> 0
+        }
+        if (currentAmount >= amount) {
+            val revenue = amount * pricePerUnit
+            when(type) {
+                "wood" -> player.wood -= amount
+                "stone" -> player.stone -= amount
+                "iron" -> player.iron -= amount
+            }
+            player.gold += revenue
+        }
+    }
+
+    fun resolveEncounter(card: com.example.haremdark.models.EncounterCard) {
+        val currentSave = _gameState.value
+        val player = currentSave.player
+        val newPlayer = player.copy(
+            hp = (player.hp + card.healthChange).coerceIn(0, player.maxHp),
+            influence = (player.influence + card.influenceChange).coerceIn(0, player.maxInfluence)
+        )
+        _gameState.value = currentSave.copy(player = newPlayer)
+        encounterRepository.removeCard(card)
+    }
+
+    fun sellCharacter(id: String): Boolean {
+        val character = haremCharacterRepository.getById(id) ?: return false
+        if (character.isWife) return false
+        
+        val currentSave = _gameState.value
+        val player = currentSave.player
+        
+        // Calculate gains/penalties
+        val salePrice = (character.powerLevel * 2) + (character.affection * 5)
+        val influencePenalty = if (character.affection > 50) 20 else 5
+        
+        val newPlayer = player.copy(
+            gold = player.gold + salePrice,
+            influence = (player.influence - influencePenalty).coerceAtLeast(0)
+        )
+        
+        _gameState.value = currentSave.copy(player = newPlayer)
+        haremCharacterRepository.remove(id)
+        return true
+    }
+    
+    fun leaseCharacter(id: String, duration: Int): Boolean {
+        val character = haremCharacterRepository.getById(id) ?: return false
+        if (character.isWife) return false
+        
+        val currentSave = _gameState.value
+        val player = currentSave.player
+        
+        // Income based on power and affection
+        val income = (character.powerLevel / 2) * duration
+        
+        val newPlayer = player.copy(
+            gold = player.gold + income
+        )
+        
+        // Penalty: Affection decreases
+        haremCharacterRepository.updateAffection(id, -10 * duration)
+        
+        _gameState.value = currentSave.copy(player = newPlayer)
+        return true
+    }
+
+    val haremCharacterRepository: com.example.haremdark.data.HaremCharacterRepository = com.example.haremdark.data.HaremCharacterRepositoryImpl(
+        initialCharacters = _gameState.value.characters.map { it.toHaremCharacter() }
+    ) { updatedHaremCharacters ->
+        val currentSave = _gameState.value
+        val updatedCharacters = currentSave.characters.map { char ->
+            val matching = updatedHaremCharacters.find { it.id == char.id }
+            matching?.applyToCharacter(char)
+            char
+        }.toMutableList()
+        _gameState.value = currentSave.copy(characters = updatedCharacters)
+    }
+
     private val _combatState = MutableStateFlow<CombatSession?>(null)
     val combatState: StateFlow<CombatSession?> = _combatState.asStateFlow()
 
@@ -219,6 +321,7 @@ class GameEngine(private val context: Context) {
                 _gameState.value = savedState
                 _currentTheme.value = savedState.currentTheme
                 _isLightMode.value = savedState.isLightMode
+                haremCharacterRepository.sync(savedState.characters.map { it.toHaremCharacter() })
             }
             
             checkDailyLogin()
@@ -368,6 +471,7 @@ class GameEngine(private val context: Context) {
             territories = transformed.territories.map { it.copy() }
         )
         _gameState.value = finalState
+        haremCharacterRepository.sync(finalState.characters.map { it.toHaremCharacter() })
     }
 
     fun spendGold(amount: Int, reason: String? = null): Boolean {
