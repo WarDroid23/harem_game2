@@ -100,6 +100,16 @@ interface HaremCharacterRepository {
     fun levelUp(id: String): HaremCharacter?
 
     /**
+     * Update skills.
+     */
+    fun updateSkills(id: String, skills: List<String>): HaremCharacter?
+
+    /**
+     * Update skill points.
+     */
+    fun updateSkillPoints(id: String, points: Int): HaremCharacter?
+
+    /**
      * Filter characters matching specific criteria.
      */
     fun filter(
@@ -338,6 +348,36 @@ class HaremCharacterRepositoryImpl(
                         maxMana = char.maxMana + 10,
                         currentMana = char.currentMana + 10
                     )
+                    updated = result
+                    result
+                } else char
+            }
+        }
+        if (updated != null) notifyStateChanged()
+        return updated
+    }
+
+    override fun updateSkills(id: String, skills: List<String>): HaremCharacter? {
+        var updated: HaremCharacter? = null
+        _characters.update { current ->
+            current.map { char ->
+                if (char.id == id) {
+                    val result = char.copy(unlockedSkills = skills)
+                    updated = result
+                    result
+                } else char
+            }
+        }
+        if (updated != null) notifyStateChanged()
+        return updated
+    }
+
+    override fun updateSkillPoints(id: String, points: Int): HaremCharacter? {
+        var updated: HaremCharacter? = null
+        _characters.update { current ->
+            current.map { char ->
+                if (char.id == id) {
+                    val result = char.copy(availableSkillPoints = points)
                     updated = result
                     result
                 } else char

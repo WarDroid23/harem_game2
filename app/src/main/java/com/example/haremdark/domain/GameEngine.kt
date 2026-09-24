@@ -189,6 +189,29 @@ class GameEngine(private val context: Context) {
         return true
     }
 
+    fun purchaseSkillNode(characterId: String, nodeId: String): Boolean {
+        val character = haremCharacterRepository.getById(characterId) ?: return false
+        val skillNode = com.example.haremdark.models.SkillTreeData.nodes.find { it.id == nodeId } ?: return false
+        
+        if (character.availableSkillPoints < skillNode.cost) return false
+        if (character.unlockedSkills.contains(nodeId)) return false
+        if (skillNode.requiresId != null && !character.unlockedSkills.contains(skillNode.requiresId)) return false
+        
+        val newSkills = character.unlockedSkills.toMutableList()
+        newSkills.add(nodeId)
+        
+        haremCharacterRepository.updateSkills(characterId, newSkills)
+        haremCharacterRepository.updateSkillPoints(characterId, character.availableSkillPoints - skillNode.cost)
+        
+        addLog("✨ ${character.name} odemkla novou schopnost: ${skillNode.title}")
+        return true
+    }
+    
+    fun earnSkillPoints(characterId: String, points: Int) {
+        val character = haremCharacterRepository.getById(characterId) ?: return
+        haremCharacterRepository.updateSkillPoints(characterId, character.availableSkillPoints + points)
+    }
+
     val haremCharacterRepository: com.example.haremdark.data.HaremCharacterRepository = com.example.haremdark.data.HaremCharacterRepositoryImpl(
         initialCharacters = _gameState.value.characters.map { it.toHaremCharacter() }
     ) { updatedHaremCharacters ->
@@ -788,12 +811,24 @@ class GameEngine(private val context: Context) {
                 // Reset daily interaction count for the new day
                 c.dailyInteractionsCount = 0
 
-                // Update string-based nalada based on moodScore
+                // Update morale based on interaction frequency or other factors
+                // (Simplified: decays if neglected, recovers if interacted)
+                if (daysSinceInteraction > 0) {
+                    c.morale = (c.morale - 2).coerceIn(0, 100)
+                    // If morale is very low, loyalty starts to decrease
+                    if (c.morale < 30) {
+                        c.loajalita = (c.loajalita - 1).coerceAtLeast(0)
+                    }
+                } else {
+                    c.morale = (c.morale + 1).coerceIn(0, 100)
+                }
+
+                // Update string-based nalada based on moodScore and morale
                 c.nalada = when {
-                    c.moodScore >= 85 -> "Šťastná"
-                    c.moodScore >= 65 -> "Veselá"
-                    c.moodScore >= 40 -> "Neutrální"
-                    c.moodScore >= 20 -> "Znuděná"
+                    c.moodScore >= 85 || c.morale >= 80 -> "Šťastná"
+                    c.moodScore >= 65 || c.morale >= 60 -> "Veselá"
+                    c.moodScore >= 40 || c.morale >= 40 -> "Neutrální"
+                    c.moodScore >= 20 || c.morale >= 20 -> "Znuděná"
                     else -> "Rozzlobená"
                 }
                 c.statusIcon = when(c.nalada) {
@@ -854,21 +889,22 @@ class GameEngine(private val context: Context) {
                 
                 // Process Daily Assignments
                 if (copy.dailyAssignment != null && !copy.naNajmu) {
+                    val multiplier = copy.moraleMultiplier
                     when (copy.dailyAssignment) {
                         "cooking" -> {
-                            assignmentSexEnergy += 5
+                            assignmentSexEnergy += (5 * multiplier).toInt()
                             addLog("🍲 ${copy.name} vařila a doplnila tvou sexuální energii.")
                         }
                         "alchemy" -> {
-                            assignmentDarkEnergy += 3
+                            assignmentDarkEnergy += (3 * multiplier).toInt()
                             addLog("🧪 ${copy.name} sbírala alchymistické ingredience, tvá temná energie roste.")
                         }
                         "library" -> {
-                            copy.xp += 10
+                            copy.xp += (10 * multiplier).toInt()
                             addLog("📚 ${copy.name} organizovala knihovnu a získala trochu zkušeností.")
                         }
                         "cleaning" -> {
-                            assignmentGold += 10
+                            assignmentGold += (10 * multiplier).toInt()
                             addLog("🧹 ${copy.name} uklízela panství. Našla jsi nějaké zatoulané zlaté.")
                         }
                     }

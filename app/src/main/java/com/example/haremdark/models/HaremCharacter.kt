@@ -67,9 +67,20 @@ data class HaremCharacter(
     var bio: String = "",
     var avatarIcon: String = "👑",
     var unlockedSkills: List<String> = emptyList(),
+    var availableSkillPoints: Int = 0,
     var statBonuses: Map<String, Int> = emptyMap(),
-    var interactionHistory: MutableList<InteractionLogEntry> = mutableListOf()
+    var interactionHistory: MutableList<InteractionLogEntry> = mutableListOf(),
+    var morale: Int = 50
 ) {
+    val moraleMultiplier: Float
+        get() = when {
+            morale >= 80 -> 1.2f
+            morale >= 60 -> 1.1f
+            morale >= 40 -> 1.0f
+            morale >= 20 -> 0.9f
+            else -> 0.8f
+        }
+
     val bondingLevel: BondingLevel
         get() = BondingLevel.fromAffinity(affection)
 

@@ -373,6 +373,15 @@ data class Character(
     val dailyGiftsRemaining: Int
         get() = (maxDailyGifts - dailyGiftsCount).coerceAtLeast(0)
 
+    val moraleMultiplier: Float
+        get() = when {
+            morale >= 80 -> 1.2f
+            morale >= 60 -> 1.1f
+            morale >= 40 -> 1.0f
+            morale >= 20 -> 0.9f
+            else -> 0.8f
+        }
+
     val canTalkToday: Boolean
         get() = dailyTalksRemaining > 0
 
