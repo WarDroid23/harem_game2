@@ -85,33 +85,40 @@ object StaticData {
 
     fun getPortraitForArchetype(archetypeId: String): Int {
         return when (archetypeId) {
-            "subka", "ustrasena", "ticha_panenka" -> R.drawable.portrait_submissive
-            "slechticna", "manipulativni", "chladna" -> R.drawable.portrait_noble
-            "touha", "nymfomanka", "posedla", "hysterialni", "sukuba" -> R.drawable.portrait_sorceress
-            "odvazna", "vzdorna", "krvava_subka", "zlomena", "draci_divka" -> R.drawable.portrait_warrior
-            else -> R.drawable.portrait_submissive
+            "draci_divka", "odvazna", "krvava_subka" -> R.drawable.img_slave_aurelia_portrait_1790459410403
+            "sukuba", "touha", "nymfomanka", "posedla" -> R.drawable.img_slave_lilith_portrait_1790459422573
+            "slechticna", "manipulativni", "chladna" -> R.drawable.img_slave_vampire_queen_1790459434350
+            "subka", "ustrasena", "ticha_panenka", "zlomena", "vzdorna" -> R.drawable.img_slave_elena_portrait_1790459398016
+            else -> R.drawable.img_slave_elena_portrait_1790459398016
         }
+    }
+
+    fun getPortraitForCharacter(character: com.example.haremdark.models.Character): Int {
+        if (character.equippedSkin != "default") {
+            return PrestigeSkinsCatalog.getSkinDrawable(character.equippedSkin, character.archetypeId)
+        }
+        return getPortraitForArchetype(character.archetypeId)
     }
 
     val GALLERY_ENTRIES = listOf(
         GalleryArchetypeEntry(
             archetypeId = "subka",
-            title = "Submisivní dívka",
-            subtitle = "Křehká služka toužící po pevném objetí pána",
-            drawableRes = R.drawable.portrait_submissive,
+            title = "Submisivní otrokyně",
+            subtitle = "Křehká služka v obojku toužící po pevném vedení pána",
+            drawableRes = R.drawable.img_slave_elena_portrait_1790459398016,
             accentColor = 0xFFEC407A,
             loreDescription = "Vychována k absolutní poslušnosti. Její duše rozkvétá pod pánovým dohledem a nalézá bezpečí v podřízenosti.",
             favoriteGifts = listOf("Zlatý obojek", "Hedvábné prádlo", "Kytice nočních růží"),
             quote = "„Můj pane, tvoje vůle je mým jediným zákonem...“",
-            recruitmentHint = "Lov v Mlžném hvozdu nebo nákup na dražbě",
+            recruitmentHint = "Lov v Mlžném hvozdu nebo nákup na dražbě otrokyň",
             difficulty = "Lehká",
             perk = "+20% zisk loajality z odměn"
         ),
         GalleryArchetypeEntry(
             archetypeId = "slechticna",
-            title = "Zlomená šlechtična",
-            subtitle = "Bývalá princezna zvrhnutého rodu",
-            drawableRes = R.drawable.portrait_noble,
+            title = "Zlomená šlechtična (Upíří krev)",
+            subtitle = "Bývalá princezna zvrhnutého rodu v hedvábí",
+            drawableRes = R.drawable.img_slave_vampire_queen_1790459434350,
             accentColor = 0xFFFFD700,
             loreDescription = "Zvyklá na zlaté sály a dvořany. Její pýcha byla sražena do prachu, ale její vznešené způsoby dodávají harému prestiž.",
             favoriteGifts = listOf("Diamantový prsten", "Rubínový přívěsek", "Vzácné víno"),
@@ -122,9 +129,9 @@ object StaticData {
         ),
         GalleryArchetypeEntry(
             archetypeId = "touha",
-            title = "Toužící čarodějka",
+            title = "Démonická sukuba touhy",
             subtitle = "Mistryně temné magie poháněná nenasytnou vášní",
-            drawableRes = R.drawable.portrait_sorceress,
+            drawableRes = R.drawable.img_slave_lilith_portrait_1790459422573,
             accentColor = 0xFFAB47BC,
             loreDescription = "Její tělo pulzuje magickou energií a neuhasitelným žárem. Čím více se noří do rozkoše, tím silnější kouzla dokáže sesílat.",
             favoriteGifts = listOf("Elixír touhy", "Noční parfém", "Rubínový přívěsek"),
@@ -135,9 +142,9 @@ object StaticData {
         ),
         GalleryArchetypeEntry(
             archetypeId = "odvazna",
-            title = "Bojovná gladiátorka",
-            subtitle = "Nepoddajná válečnice se zbraní v ruce",
-            drawableRes = R.drawable.portrait_warrior,
+            title = "Dračí gladiátorka",
+            subtitle = "Nepoddajná válečnice se žhnoucí dračí krví",
+            drawableRes = R.drawable.img_slave_aurelia_portrait_1790459410403,
             accentColor = 0xFFEF5350,
             loreDescription = "Zocelená arénou a krvavými souboji. Pohrdá slabostí, ale jakmile uzná tvou nadřazenost, bude bojovat do posledního dechu.",
             favoriteGifts = listOf("Hojivý balzám", "Ocelový náramek", "Silné víno"),

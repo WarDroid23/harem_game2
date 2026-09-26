@@ -1760,6 +1760,55 @@ fun HaremWardrobeTab(gameState: GameSave, engine: GameEngine) {
             }
         }
 
+        item {
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF281035)),
+                border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.5f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text("👑", fontSize = 16.sp)
+                            Text(
+                                "Mýtické Vizuální Skíny (Klenotnice Prestiže)",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = Color(0xFFFFD700)
+                            )
+                        }
+                        Text(
+                            "Vybavuj odemčené epické portréty pro Elenu, Aurelii, Lilith a další!",
+                            fontSize = 10.sp,
+                            color = Color(0xFFE1BEE7)
+                        )
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFFFFD700)
+                    ) {
+                        Text(
+                            "🏆 ${gameState.player.prestige} Prestiže",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.Black,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        )
+                    }
+                }
+            }
+        }
+
         items(wardrobeItems) { (name, desc, price) ->
             Card(
                 shape = RoundedCornerShape(12.dp),

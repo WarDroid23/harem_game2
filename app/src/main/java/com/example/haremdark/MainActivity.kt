@@ -50,6 +50,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         com.example.haremdark.domain.VoiceManager.init(applicationContext)
         com.example.haremdark.domain.HapticManager.init(applicationContext)
+        com.example.haremdark.domain.SoundEffectManager.init(applicationContext)
         val engine = GameEngine(applicationContext)
 
         setContent {
@@ -99,7 +100,20 @@ class MainActivity : ComponentActivity() {
             var showRestDialog by remember { mutableStateOf(false) }
             val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
  
-            HaremDarkTheme(themeName = currentTheme, isLightMode = isLightMode) {
+            val activeGirl = gameState.characters.firstOrNull { it.oblibena }
+                ?: gameState.characters.firstOrNull { it.isPinned }
+                ?: gameState.characters.firstOrNull { it.jeManzelkou }
+                ?: gameState.characters.firstOrNull { it.partnerka }
+                ?: gameState.characters.firstOrNull()
+
+            val activeDomainId = gameState.currentDomainId
+
+            HaremDarkTheme(
+                themeName = currentTheme,
+                isLightMode = isLightMode,
+                activeCharacter = activeGirl,
+                activeDomainId = activeDomainId
+            ) {
                 ModalNavigationDrawer(
                     drawerState = drawerState,
                     drawerContent = {
@@ -194,6 +208,54 @@ class MainActivity : ComponentActivity() {
                                             fontWeight = FontWeight.SemiBold,
                                             color = Color(0xFF03A9F4)
                                         )
+                                    }
+                                }
+
+                                // Active Dark Fantasy Aura Indicator
+                                val activeAura = com.example.haremdark.ui.theme.LocalThemeAura.current
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = activeAura.accentColor.copy(alpha = 0.12f),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, activeAura.accentColor.copy(alpha = 0.35f)),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 4.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Text(activeAura.icon, fontSize = 16.sp)
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = activeAura.name,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = activeAura.accentColor
+                                            )
+                                            Text(
+                                                text = activeAura.subtitle,
+                                                fontSize = 9.sp,
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                            )
+                                        }
+                                        if (activeAura.isDynamic) {
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = activeAura.accentColor.copy(alpha = 0.25f)
+                                            ) {
+                                                Text(
+                                                    text = "DYN",
+                                                    fontSize = 8.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = activeAura.accentColor,
+                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                 }
 
@@ -763,9 +825,14 @@ class MainActivity : ComponentActivity() {
                                 ArenaScreen(gameState = gameState, engine = engine)
                             }
                             composable("domain_management") {
-                                BuildingManagementScreen(
+                                DomainExpansionScreen(
+                                    gameState = gameState,
                                     engine = engine,
-                                    onBack = null
+                                    onBack = {
+                                        if (!navController.popBackStack()) {
+                                            navController.navigate("dashboard") { launchSingleTop = true }
+                                        }
+                                    }
                                 )
                             }
                             composable("formation_management") {

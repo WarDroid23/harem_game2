@@ -197,19 +197,58 @@ object SoundEffectManager {
     private val _sfxVolume = MutableStateFlow(0.8f)
     val sfxVolume = _sfxVolume.asStateFlow()
 
+    private const val PREFS_NAME = "audio_prefs"
+    private const val KEY_MUTED = "sound_muted"
+    private const val KEY_BGM_VOL = "bgm_volume"
+    private const val KEY_SFX_VOL = "sfx_volume"
+    private const val KEY_VOICE_VOL = "voice_volume"
+    private var appContext: android.content.Context? = null
+
     private val _voiceVolume = MutableStateFlow(0.8f)
     val voiceVolume = _voiceVolume.asStateFlow()
 
+    fun init(context: android.content.Context) {
+        appContext = context.applicationContext
+        try {
+            val prefs = appContext?.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
+            if (prefs != null) {
+                _isMuted.value = prefs.getBoolean(KEY_MUTED, false)
+                _bgmVolume.value = prefs.getFloat(KEY_BGM_VOL, 0.8f)
+                _sfxVolume.value = prefs.getFloat(KEY_SFX_VOL, 0.8f)
+                _voiceVolume.value = prefs.getFloat(KEY_VOICE_VOL, 0.8f)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading audio preferences", e)
+        }
+    }
+
+    private fun savePreferences() {
+        try {
+            appContext?.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
+                ?.edit()
+                ?.putBoolean(KEY_MUTED, _isMuted.value)
+                ?.putFloat(KEY_BGM_VOL, _bgmVolume.value)
+                ?.putFloat(KEY_SFX_VOL, _sfxVolume.value)
+                ?.putFloat(KEY_VOICE_VOL, _voiceVolume.value)
+                ?.apply()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving audio preferences", e)
+        }
+    }
+
     fun setBgmVolume(volume: Float) {
         _bgmVolume.value = volume.coerceIn(0f, 1f)
+        savePreferences()
     }
 
     fun setSfxVolume(volume: Float) {
         _sfxVolume.value = volume.coerceIn(0f, 1f)
+        savePreferences()
     }
 
     fun setVoiceVolume(volume: Float) {
         _voiceVolume.value = volume.coerceIn(0f, 1f)
+        savePreferences()
     }
 
     init {
@@ -350,10 +389,12 @@ object SoundEffectManager {
 
     fun toggleMute() {
         _isMuted.value = !_isMuted.value
+        savePreferences()
     }
 
     fun setMuted(muted: Boolean) {
         _isMuted.value = muted
+        savePreferences()
     }
 
     fun playEventTrigger() {
@@ -362,6 +403,56 @@ object SoundEffectManager {
 
     fun playAffinityGain() {
         playHarem(HaremSound.AFFINITY_UP)
+    }
+
+    fun playRelationshipTier(tierLevel: Int) {
+        if (_isMuted.value) return
+        scope.launch {
+            try {
+                val durationSec = when (tierLevel) {
+                    1 -> 0.35
+                    2 -> 0.50
+                    3 -> 0.70
+                    4 -> 0.85
+                    5 -> 1.05
+                    else -> 1.30
+                }
+                val count = (SAMPLE_RATE * durationSec).toInt()
+                val buffer = ShortArray(count)
+                val freqs = when (tierLevel) {
+                    1 -> doubleArrayOf(330.0, 392.0) // E4 -> G4 (Cold, distant chime)
+                    2 -> doubleArrayOf(440.0, 554.37, 659.25) // A4 -> C#5 -> E5 (Friendly warm triad)
+                    3 -> doubleArrayOf(523.25, 659.25, 783.99, 1046.50) // C5 -> E5 -> G5 -> C6 (Romantic arpeggio)
+                    4 -> doubleArrayOf(440.0, 554.37, 659.25, 880.0, 1108.73) // Intimate soulmate resonance
+                    5 -> doubleArrayOf(392.0, 523.25, 659.25, 783.99, 1046.50, 1318.51) // Royal devotion flourish
+                    else -> doubleArrayOf(523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98, 2093.00) // Celestial Eternal Sovereign crescendo
+                }
+                for (i in 0 until count) {
+                    val t = i.toDouble() / SAMPLE_RATE
+                    val progress = i.toDouble() / count
+                    var sampleSum = 0.0
+                    val noteDuration = durationSec / freqs.size
+                    for (idx in freqs.indices) {
+                        val noteStart = idx * (noteDuration * 0.65)
+                        if (t >= noteStart) {
+                            val noteT = t - noteStart
+                            val noteEnv = kotlin.math.exp(-6.5 * noteT)
+                            val f = freqs[idx]
+                            val harmonic = kotlin.math.sin(2.0 * kotlin.math.PI * f * noteT) * 0.7 +
+                                    kotlin.math.sin(4.0 * kotlin.math.PI * f * noteT) * 0.25 +
+                                    kotlin.math.sin(6.0 * kotlin.math.PI * f * noteT) * 0.1
+                            sampleSum += harmonic * noteEnv
+                        }
+                    }
+                    val overallEnv = if (progress < 0.05) progress / 0.05 else (1.0 - progress).coerceIn(0.0, 1.0)
+                    val sample = (sampleSum * overallEnv * Short.MAX_VALUE * 0.65).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+                    buffer[i] = sample
+                }
+                playPcmTrack(buffer)
+            } catch (e: Exception) {
+                fallbackTone(ToneGenerator.TONE_PROP_ACK, 200)
+            }
+        }
     }
 
     fun playLevelUp() {

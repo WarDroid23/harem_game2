@@ -6,14 +6,51 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.Log
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 object HapticManager {
     private const val TAG = "HapticManager"
+    private const val PREFS_NAME = "haptic_prefs"
+    private const val KEY_HAPTICS_ENABLED = "haptics_enabled"
     private var appContext: Context? = null
-    var isHapticsEnabled = true
+    
+    private val _isHapticsEnabledFlow = MutableStateFlow(true)
+    val isHapticsEnabledFlow: StateFlow<Boolean> = _isHapticsEnabledFlow.asStateFlow()
+
+    var isHapticsEnabled: Boolean
+        get() = _isHapticsEnabledFlow.value
+        set(value) {
+            _isHapticsEnabledFlow.value = value
+            savePreference(value)
+        }
 
     fun init(context: Context) {
         appContext = context.applicationContext
+        try {
+            val prefs = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val enabled = prefs?.getBoolean(KEY_HAPTICS_ENABLED, true) ?: true
+            _isHapticsEnabledFlow.value = enabled
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading haptic preferences", e)
+        }
+    }
+
+    fun toggleHaptics(): Boolean {
+        isHapticsEnabled = !isHapticsEnabled
+        return isHapticsEnabled
+    }
+
+    private fun savePreference(enabled: Boolean) {
+        try {
+            appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                ?.edit()
+                ?.putBoolean(KEY_HAPTICS_ENABLED, enabled)
+                ?.apply()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving haptic preference", e)
+        }
     }
 
     /**

@@ -307,6 +307,54 @@ object GameContent {
                 c.strach = (c.strach - 8).coerceAtLeast(0)
                 "${c.name} si s nadšením užila každý moment luxusní večeře a její oči zářily štěstím z tvé plné pozornosti."
             }
+        ),
+        GameInteraction(
+            id = "obojek_vlastnictvi",
+            name = "Rituál obojku vlastnictví 👑",
+            type = "odmena",
+            description = "Slavnostní připnutí pánova obojku s rodovým erbem, stvrzující její postavení chráněné otrokyně dominia.",
+            energyCost = 15,
+            goldCost = 60,
+            effectDescription = "+25 Loajalita, +20 Submisivita, +18 Důvěra, +15 Pocit bezpečí",
+            applyEffect = { c, _ ->
+                c.loajalita = (c.loajalita + 25).coerceAtMost(100)
+                c.submisivita = (c.submisivita + 20).coerceAtMost(100)
+                c.duvera = (c.duvera + 18).coerceAtMost(100)
+                c.strach = (c.strach - 15).coerceAtLeast(0)
+                "${c.name} se chvěla pohnutím, když jsi jí na krk uzamkl zlatý obojek. Poklekla a s vděčností políbila tvůj pečetní prsten."
+            }
+        ),
+        GameInteraction(
+            id = "pokrevni_svazek",
+            name = "Pokrevní rituál stínů 🩸",
+            type = "odmena",
+            description = "Temný mystický obřad prolnutí krve posilující magické pouto mezi pánem a konkubínou.",
+            energyCost = 20,
+            darkCost = 10,
+            minPhase = 2,
+            effectDescription = "+30 Loajalita, +25 Touha, +20 Srdce, +15 Magická rezonance",
+            applyEffect = { c, _ ->
+                c.loajalita = (c.loajalita + 30).coerceAtMost(100)
+                c.touha = (c.touha + 25).coerceAtMost(100)
+                c.srdce = (c.srdce + 20).coerceAtMost(100)
+                c.duvera = (c.duvera + 15).coerceAtMost(100)
+                "🩸 Kapky vaší společné krve se spojily v rudé záři. ${c.name} vykřikla v extatickém vytržení a její oči zazářily temnou mocí."
+            }
+        ),
+        GameInteraction(
+            id = "hypnoticky_vycvik",
+            name = "Hypnotický výcvik rozkoše 🌀",
+            type = "odmena",
+            description = "Hluboká meditace v omamném kouři lilií prohlubující její instinktivní odevzdanost tvému hlasu.",
+            energyCost = 18,
+            goldCost = 45,
+            effectDescription = "+22 Submisivita, +20 Touha, +15 Důvěra, -10 Vzdor",
+            applyEffect = { c, _ ->
+                c.submisivita = (c.submisivita + 22).coerceAtMost(100)
+                c.touha = (c.touha + 20).coerceAtMost(100)
+                c.duvera = (c.duvera + 15).coerceAtMost(100)
+                "${c.name} s rozšířenými zorničkami vnímá každé tvé slovo jako absolutní pravdu a tiskne se k tobě v hlubokém transu."
+            }
         )
     )
 

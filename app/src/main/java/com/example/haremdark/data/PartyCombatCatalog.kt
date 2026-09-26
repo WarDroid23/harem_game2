@@ -437,7 +437,139 @@ object PartyCombatCatalog {
         val rewardXp: Int,
         val rewardPrestige: Int,
         val lootTable: List<String>,
-        val description: String
+        val description: String,
+        val totalWaves: Int = 1,
+        val wavesList: List<List<CombatEnemy>> = emptyList(),
+        val isWaveGauntlet: Boolean = false
+    )
+
+    val WAVE_ARENA_ENCOUNTERS = listOf(
+        PartyEncounterDefinition(
+            id = "wave_gauntlet_gladiator_3",
+            title = "Krvavý Gauntlet Kolosea (3 Vlny)",
+            tierName = "Aréna • 3 Vlny",
+            icon = "⚔️",
+            location = "Krvavé koloseum dominia",
+            recommendedLevel = 1,
+            backgroundRes = R.drawable.img_arena_battle,
+            enemies = listOf(
+                CombatEnemy("glad_1", "Gladiátorský novic", "🗡️", "Bojovník", "Běžný", 85, 85, 14, 6, 10, rewardGold = 25, rewardXp = 20),
+                CombatEnemy("hound_1", "Bojový vlčák", "🐕", "Bestie", "Rychlý", 65, 65, 16, 4, 15, rewardGold = 20, rewardXp = 15)
+            ),
+            totalWaves = 3,
+            wavesList = listOf(
+                listOf(
+                    CombatEnemy("glad_1", "Gladiátorský novic", "🗡️", "Bojovník", "Běžný", 85, 85, 14, 6, 10, rewardGold = 25, rewardXp = 20),
+                    CombatEnemy("hound_1", "Bojový vlčák", "🐕", "Bestie", "Rychlý", 65, 65, 16, 4, 15, rewardGold = 20, rewardXp = 15)
+                ),
+                listOf(
+                    CombatEnemy("glad_spear", "Krvavý kopiník arény", "🔱", "Bojovník", "DPS", 110, 110, 18, 8, 12, rewardGold = 35, rewardXp = 30),
+                    CombatEnemy("arena_archer", "Kušinice ze stínů", "🏹", "Střelec", "Rychlý", 90, 90, 20, 5, 16, rewardGold = 30, rewardXp = 25)
+                ),
+                listOf(
+                    CombatEnemy("colosseum_champ", "Šampion Kolosea: Gorgar Krvavý", "👑", "Šampion Arény", "Boss", 260, 260, 26, 16, 11, isBoss = true, bossPhase = 1, rewardGold = 80, rewardXp = 70),
+                    CombatEnemy("slave_master", "Arénový bičovník", "⛓️", "Dozorce", "Tank", 130, 130, 16, 12, 8, rewardGold = 40, rewardXp = 35)
+                )
+            ),
+            isWaveGauntlet = true,
+            rewardGold = 350,
+            rewardXp = 200,
+            rewardPrestige = 6,
+            lootTable = listOf("hojivy_balzam", "gift_roses", "klenot_presteze"),
+            description = "Třívlnová gladiátorská zkouška ohněm. Porazte nováčky, přepadovou vlnu a mocného Šampiona Kolosea za štědré prestižní body!"
+        ),
+        PartyEncounterDefinition(
+            id = "wave_gauntlet_abyss_5",
+            title = "Astrální Propast & Démonická Horda (5 Vln)",
+            tierName = "Aréna • 5 Vln",
+            icon = "🌌",
+            location = "Trhlina temné astrální dimenze",
+            recommendedLevel = 3,
+            backgroundRes = R.drawable.img_arena_domain_4,
+            enemies = listOf(
+                CombatEnemy("cult_1", "Kultista Černého slunce", "🕯️", "Kultista", "Mág", 120, 120, 22, 8, 10, rewardGold = 40, rewardXp = 35),
+                CombatEnemy("imp_1", "Ohnivý rarášek", "🔥", "Démon", "DPS", 95, 95, 24, 6, 18, rewardGold = 35, rewardXp = 30)
+            ),
+            totalWaves = 5,
+            wavesList = listOf(
+                listOf(
+                    CombatEnemy("cult_1", "Kultista Černého slunce", "🕯️", "Kultista", "Mág", 120, 120, 22, 8, 10, rewardGold = 40, rewardXp = 35),
+                    CombatEnemy("imp_1", "Ohnivý rarášek", "🔥", "Démon", "DPS", 95, 95, 24, 6, 18, rewardGold = 35, rewardXp = 30)
+                ),
+                listOf(
+                    CombatEnemy("undead_knight", "Rytíř zatracených", "🛡️", "Nemrtvý", "Tank", 180, 180, 20, 18, 8, rewardGold = 50, rewardXp = 45),
+                    CombatEnemy("succubus_scout", "Zákeřná sukubí zvědka", "💋", "Démonka", "DPS", 130, 130, 26, 8, 17, rewardGold = 45, rewardXp = 40)
+                ),
+                listOf(
+                    CombatEnemy("void_caster", "Astrální zaříkávač nicoty", "🔮", "Kouzelník", "Mág", 160, 160, 28, 10, 12, rewardGold = 60, rewardXp = 50),
+                    CombatEnemy("abyss_hound", "Pekelný trojhlavý pes", "🐕‍🦺", "Bestie", "Rychlý", 150, 150, 27, 9, 16, rewardGold = 55, rewardXp = 45)
+                ),
+                listOf(
+                    CombatEnemy("shadow_executioner", "Stínový popravčí propasti", "🪓", "Zabiják", "DPS", 220, 220, 32, 14, 14, rewardGold = 75, rewardXp = 65),
+                    CombatEnemy("succubus_matron", "Vznešená matrona rozkoše", "👑", "Démonka", "Mág", 190, 190, 30, 12, 15, rewardGold = 70, rewardXp = 60)
+                ),
+                listOf(
+                    CombatEnemy("abyss_archdemon", "Archidémon Malgok: Pán Temnoty", "👿", "Pán Propasti", "Boss", 420, 420, 38, 22, 14, isBoss = true, bossPhase = 1, rewardGold = 150, rewardXp = 140),
+                    CombatEnemy("void_core", "Krystal astrální zhouby", "💎", "Totem", "Mág", 160, 160, 15, 25, 6, rewardGold = 60, rewardXp = 50)
+                )
+            ),
+            isWaveGauntlet = true,
+            rewardGold = 900,
+            rewardXp = 550,
+            rewardPrestige = 14,
+            lootTable = listOf("elixir_touhy", "gift_diamond_ring", "draha_latka", "klenot_presteze"),
+            description = "Pětivlnový astrální masakr proti hordám démonů a kultistů. Každá vlna zvyšuje získanou prestiž a prověří složení tvého týmu."
+        ),
+        PartyEncounterDefinition(
+            id = "wave_gauntlet_endless_survival",
+            title = "Císařský Nekonečný Gauntlet (7 Vln Božské zkoušky)",
+            tierName = "Mýtická Aréna • 7 Vln",
+            icon = "👑",
+            location = "Svatyně Věčného Trůnu",
+            recommendedLevel = 5,
+            backgroundRes = R.drawable.img_arena_domain_5,
+            enemies = listOf(
+                CombatEnemy("paladin_1", "Svatý inkvizitor", "⚔️", "Inkvizitor", "Tank", 200, 200, 28, 20, 10, rewardGold = 60, rewardXp = 50),
+                CombatEnemy("cleric_1", "Svatá léčitelka řádu", "✨", "Léčitelka", "Mág", 170, 170, 20, 12, 12, rewardGold = 50, rewardXp = 45)
+            ),
+            totalWaves = 7,
+            wavesList = listOf(
+                listOf(
+                    CombatEnemy("paladin_1", "Svatý inkvizitor", "⚔️", "Inkvizitor", "Tank", 200, 200, 28, 20, 10, rewardGold = 60, rewardXp = 50),
+                    CombatEnemy("cleric_1", "Svatá léčitelka řádu", "✨", "Léčitelka", "Mág", 170, 170, 20, 12, 12, rewardGold = 50, rewardXp = 45)
+                ),
+                listOf(
+                    CombatEnemy("valkyrie_guard", "Fallen Valkyrie Strážkyně", "🛡️", "Valkýra", "Tank", 240, 240, 32, 22, 14, rewardGold = 75, rewardXp = 60),
+                    CombatEnemy("astral_witch", "Astrální čarodějka hvězd", "🔮", "Čarodějka", "DPS", 200, 200, 36, 12, 16, rewardGold = 70, rewardXp = 55)
+                ),
+                listOf(
+                    CombatEnemy("dragon_knight", "Dračí rytíř plamene", "🐲", "Drakobijec", "DPS", 280, 280, 38, 24, 13, rewardGold = 90, rewardXp = 75),
+                    CombatEnemy("flame_siren", "Ohnivá siréna inferna", "🔥", "Siréna", "Mág", 220, 220, 34, 14, 18, rewardGold = 80, rewardXp = 65)
+                ),
+                listOf(
+                    CombatEnemy("blood_titan", "Krvavý titán z podsvětí", "👹", "Kolos", "Tank", 350, 350, 36, 26, 8, rewardGold = 110, rewardXp = 90),
+                    CombatEnemy("shadow_assassin", "Stínová mistryně dýk", "🗡️", "Vražedkyně", "DPS", 210, 210, 44, 14, 22, rewardGold = 95, rewardXp = 80)
+                ),
+                listOf(
+                    CombatEnemy("high_inquisitor", "Nejvyšší inkvizitor Malakor", "👑", "Vládce řádu", "Boss", 380, 380, 42, 28, 14, isBoss = true, bossPhase = 1, rewardGold = 140, rewardXp = 120),
+                    CombatEnemy("seraph_healer", "Seraphimská andělská kněžka", "👼", "Anděl", "Mág", 240, 240, 22, 18, 15, rewardGold = 100, rewardXp = 85)
+                ),
+                listOf(
+                    CombatEnemy("void_leviathan", "Astrální Leviatan z Hlubin", "🐉", "Astrální bestie", "Boss", 460, 460, 46, 30, 12, isBoss = true, bossPhase = 1, rewardGold = 180, rewardXp = 150),
+                    CombatEnemy("void_shard", "Střep temné energie", "⚡", "Totem", "Mág", 190, 190, 25, 20, 20, rewardGold = 80, rewardXp = 70)
+                ),
+                listOf(
+                    CombatEnemy("emperor_of_light", "Císař Světla a Soudce Bohů: Aurelius Magnus", "👑", "Bůh Války", "Boss", 600, 600, 52, 34, 18, isBoss = true, bossPhase = 1, rewardGold = 300, rewardXp = 250),
+                    CombatEnemy("valkyrie_champion", "Šampionka Zlaté Valkýry", "✨", "Valkýra", "DPS", 280, 280, 40, 26, 17, rewardGold = 150, rewardXp = 120)
+                )
+            ),
+            isWaveGauntlet = true,
+            rewardGold = 2500,
+            rewardXp = 1600,
+            rewardPrestige = 25,
+            lootTable = listOf("gift_necklace", "kniha_stinovych_kouzel", "klenot_presteze", "elixir_touhy"),
+            description = "Vrcholná sedmivlnová zkouška pro nejmocnější harémové sestavy! Získejte masivní zásobu prestiže a otevřete nejvyšší patra Klenotnice Skínů."
+        )
     )
 
     val ENCOUNTERS = listOf(

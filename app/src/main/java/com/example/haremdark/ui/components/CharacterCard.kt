@@ -31,6 +31,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
 import com.example.haremdark.data.AffinityData
 import com.example.haremdark.data.StaticData
+import com.example.haremdark.domain.HapticManager
+import com.example.haremdark.domain.SoundEffectManager
 import com.example.haremdark.models.Character
 import com.example.haremdark.models.getRelationship
 
@@ -127,7 +129,12 @@ fun CharacterCard(
         Card(
             modifier = modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp),
+                .padding(vertical = 4.dp)
+                .clickable {
+                    SoundEffectManager.playRelationshipTier(affinityTier.level)
+                    HapticManager.vibrateClick()
+                    onDetailClick()
+                },
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -151,7 +158,7 @@ fun CharacterCard(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     // Avatar with Coil
-                    val portraitRes = StaticData.getPortraitForArchetype(character.archetypeId)
+                    val portraitRes = StaticData.getPortraitForCharacter(character)
                     SubcomposeAsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(portraitRes)
@@ -601,7 +608,11 @@ fun CharacterCard(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 OutlinedButton(
-                    onClick = onDetailClick,
+                    onClick = {
+                        SoundEffectManager.playRelationshipTier(affinityTier.level)
+                        HapticManager.vibrateClick()
+                        onDetailClick()
+                    },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp),
                     contentPadding = PaddingValues(vertical = 8.dp)
@@ -629,7 +640,11 @@ fun CharacterCard(
                 }
 
                 Button(
-                    onClick = onInteractClick,
+                    onClick = {
+                        SoundEffectManager.playRelationshipTier(affinityTier.level)
+                        HapticManager.vibrateClick()
+                        onInteractClick()
+                    },
                     modifier = Modifier.weight(1.2f),
                     shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(

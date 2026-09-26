@@ -19,6 +19,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.haremdark.domain.GameEngine
+import com.example.haremdark.domain.SoundEffectManager
+import com.example.haremdark.domain.HapticManager
 
 @Composable
 fun DashboardScreen(engine: GameEngine) {
@@ -173,6 +175,95 @@ fun DashboardScreen(engine: GameEngine) {
                 StatRow("Zdraví (HP)", player.hp, player.maxHp, Color(0xFFEF5350))
                 StatRow("Mana", player.mana, player.maxMana, Color(0xFF42A5F5))
                 StatRow("Vliv", player.influence, player.maxInfluence.coerceAtLeast(100), Color(0xFF66BB6A))
+            }
+        }
+
+        // Global Audio & Haptic Feedback Settings Card
+        val isMuted by SoundEffectManager.isMuted.collectAsState()
+        val isHaptics by HapticManager.isHapticsEnabledFlow.collectAsState()
+
+        Card(
+            modifier = Modifier.fillMaxWidth().testTag("audio_haptics_settings_card"),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "🔊 Zvuk & Haptická odezva",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = if (!isMuted && isHaptics) "Aktivní" else "Částečně vypnuto",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Sound Toggle Button
+                    Button(
+                        onClick = {
+                            SoundEffectManager.toggleMute()
+                            HapticManager.vibrateClick()
+                        },
+                        modifier = Modifier.weight(1f).testTag("sound_toggle_btn"),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (!isMuted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error.copy(alpha = 0.2f),
+                            contentColor = if (!isMuted) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.error
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (!isMuted) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(if (!isMuted) "Zvuky: ZAP" else "Zvuky: VYP", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    // Haptic Toggle Button
+                    Button(
+                        onClick = {
+                            HapticManager.toggleHaptics()
+                            HapticManager.vibrateClick()
+                        },
+                        modifier = Modifier.weight(1f).testTag("haptic_toggle_btn"),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isHaptics) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error.copy(alpha = 0.2f),
+                            contentColor = if (isHaptics) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.error
+                        ),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isHaptics) Icons.Default.Vibration else Icons.Default.DoNotDisturbOn,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(if (isHaptics) "Vibrace: ZAP" else "Vibrace: VYP", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
 

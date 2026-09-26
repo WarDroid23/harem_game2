@@ -3082,6 +3082,62 @@ class GameEngine(private val context: Context) {
         return Pair(true, msg)
     }
 
+    fun harvestDomainEconomy(assignedWorkers: Map<String, String?> = emptyMap()): Pair<Boolean, String> {
+        val current = _gameState.value
+        val rates = DomainEconomyManager.calculateProduction(current, assignedWorkers)
+        val harvest = DomainEconomyManager.harvestResources(current.player, rates)
+        val msg = "🌾 Vybráno z dominia: +${harvest.woodGained}🪵 Dřeva, +${harvest.stoneGained}🪨 Kamene, +${harvest.manaGained}🔮 Many, +${harvest.goldGained}💰 Zlata, +${harvest.sexEnergyGained}⚡ Energie!"
+        updateState { state ->
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = state.player, gameLog = logs)
+        }
+        autoSave()
+        return Pair(true, msg)
+    }
+
+    fun upgradeEconomyBuilding(buildingType: String): Pair<Boolean, String> {
+        val structureDef = DomainEconomyManager.STRUCTURES.find { it.type == buildingType }
+        val current = _gameState.value
+        val existing = current.buildings.find { it.type == buildingType }
+        val currentLevel = existing?.level ?: 0
+        val nextLevel = currentLevel + 1
+
+        val woodCost = structureDef?.requiredWoodCost?.invoke(nextLevel) ?: (nextLevel * 35)
+        val stoneCost = structureDef?.requiredStoneCost?.invoke(nextLevel) ?: (nextLevel * 30)
+        val goldCost = structureDef?.requiredGoldCost?.invoke(nextLevel) ?: (nextLevel * 120)
+        val darkCost = structureDef?.requiredDarkCost?.invoke(nextLevel) ?: 0
+
+        if (current.player.wood < woodCost || current.player.stone < stoneCost || current.player.gold < goldCost || current.player.darkEnergy < darkCost) {
+            return Pair(false, "Nedostatek zdrojů! Potřebuješ: $woodCost🪵 dřeva, $stoneCost🪨 kamene, $goldCost💰 zlata" + (if (darkCost > 0) ", $darkCost⚡ energie" else ""))
+        }
+
+        val bName = structureDef?.name ?: buildingType
+        val msg = "🏰 Budova $bName vylepšena na úroveň $nextLevel!"
+        updateState { state ->
+            val p = state.player
+            p.wood = (p.wood - woodCost).coerceAtLeast(0)
+            p.stone = (p.stone - stoneCost).coerceAtLeast(0)
+            p.gold = (p.gold - goldCost).coerceAtLeast(0)
+            p.darkEnergy = (p.darkEnergy - darkCost).coerceAtLeast(0)
+
+            val updatedBuildings = if (state.buildings.any { it.type == buildingType }) {
+                state.buildings.map { b ->
+                    if (b.type == buildingType) {
+                        val c = b.copy()
+                        c.level = nextLevel
+                        c
+                    } else b
+                }
+            } else {
+                state.buildings + com.example.haremdark.models.Building(buildingType, nextLevel, bName, structureDef?.description ?: "")
+            }
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = p, buildings = updatedBuildings, gameLog = logs)
+        }
+        autoSave()
+        return Pair(true, msg)
+    }
+
     fun activateDrugBuff(drugId: String, targetType: String, characterId: String? = null, autoRenew: Boolean = true): Pair<Boolean, String> {
         val drug = DrugData.getDrugById(drugId) ?: return Pair(false, "Neznámá substance.")
         val current = _gameState.value
@@ -5575,6 +5631,79 @@ class GameEngine(private val context: Context) {
         addHaremExp(xp / 2)
         addLog("🏆 Vítězství v týmovém souboji! Získáno: +$gold zlatých, +$xp XP, +$prestige prestiže a +$affinityGain náklonnosti pro zúčastněné dívky.")
         autoSave()
+    }
+
+    fun unlockVisualSkin(characterId: String, skinId: String): Boolean {
+        val skinDef = com.example.haremdark.data.PrestigeSkinsCatalog.getSkinById(skinId) ?: return false
+        val state = _gameState.value
+        val playerPrestige = state.player.prestige
+
+        if (playerPrestige < skinDef.prestigeCost) {
+            addLog("⚠️ Nedostatek prestiže! Potřebuješ ${skinDef.prestigeCost} 🏆 Prestiže (Máš: $playerPrestige). Získej ji v Aréně.")
+            return false
+        }
+
+        val targetChar = state.characters.find { it.id == characterId } ?: state.characters.firstOrNull() ?: return false
+        if (targetChar.unlockedSkins.contains(skinId)) {
+            // Already unlocked, just equip
+            equipVisualSkin(targetChar.id, skinId)
+            return true
+        }
+
+        updateState { current ->
+            val updatedPlayer = current.player.copy(
+                prestige = current.player.prestige - skinDef.prestigeCost
+            )
+            val updatedChars = current.characters.map { c ->
+                if (c.id == targetChar.id) {
+                    val newUnlocked = c.unlockedSkins.toMutableList().apply {
+                        if (!contains(skinId)) add(skinId)
+                    }
+                    c.copy(
+                        unlockedSkins = newUnlocked,
+                        equippedSkin = skinId
+                    )
+                } else c
+            }
+            current.copy(
+                player = updatedPlayer,
+                characters = updatedChars
+            )
+        }
+
+        SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
+        HapticManager.triggerHeavyClick()
+        addLog("👑 Odemčen a vybaven exkluzivní vizuální skin [${skinDef.name}] za ${skinDef.prestigeCost} 🏆 Prestiže!")
+        autoSave("Odemčení skinu")
+        return true
+    }
+
+    fun equipVisualSkin(characterId: String, skinId: String) {
+        updateState { current ->
+            val updatedChars = current.characters.map { c ->
+                if (c.id == characterId) {
+                    c.copy(equippedSkin = skinId)
+                } else c
+            }
+            current.copy(characters = updatedChars)
+        }
+        HapticManager.triggerLightClick()
+        addLog("✨ Vybaven vizuální skin pro postavu.")
+        autoSave("Vybavení skinu")
+    }
+
+    fun unequipVisualSkin(characterId: String) {
+        updateState { current ->
+            val updatedChars = current.characters.map { c ->
+                if (c.id == characterId) {
+                    c.copy(equippedSkin = "default")
+                } else c
+            }
+            current.copy(characters = updatedChars)
+        }
+        HapticManager.triggerLightClick()
+        addLog("🔄 Obnoven výchozí vzhled postavy.")
+        autoSave("Odebrání skinu")
     }
 
     private fun addPlayerXp(amount: Int) {

@@ -244,6 +244,21 @@ fun PartyCombatScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
+                        if (session.totalWaves > 1) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFF7B1FA2),
+                                border = BorderStroke(1.dp, Color(0xFFFFD700))
+                            ) {
+                                Text(
+                                    "🌊 VLNA ${session.currentWave}/${session.totalWaves}",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFFFFD700),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                         Surface(
                             shape = RoundedCornerShape(6.dp),
                             color = Color(0xFFC2185B)

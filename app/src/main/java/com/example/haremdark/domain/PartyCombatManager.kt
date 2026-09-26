@@ -372,13 +372,25 @@ object PartyCombatManager {
             )
         }
 
+        val initialEnemies = if (encounterDef.wavesList.isNotEmpty()) {
+            encounterDef.wavesList.first().mapIndexed { idx, enemy ->
+                val enemyFormation = if (enemy.isBoss || idx == 0) FormationPosition.FRONT_LINE else if (idx % 2 == 1) FormationPosition.MID_LINE else FormationPosition.BACK_LINE
+                enemy.copy(
+                    formationPosition = enemyFormation,
+                    statusEffects = mutableListOf()
+                )
+            }
+        } else {
+            clonedEnemies
+        }
+
         return PartyCombatSession(
             id = "combat_${System.currentTimeMillis()}",
             encounterTitle = encounterDef.title,
             encounterLocation = encounterDef.location,
             backgroundDrawableRes = backgroundRes,
             party = partyList,
-            enemies = clonedEnemies,
+            enemies = initialEnemies,
             currentTurnIndex = 0,
             currentRound = 1,
             isEnemyPhase = false,
@@ -392,6 +404,12 @@ object PartyCombatManager {
             hazardCountdown = environmentalHazard.triggerIntervalTurns,
             teamFormationSynergy = teamFormationSynergy,
             combatLogs = initialLogs,
+            currentWave = 1,
+            totalWaves = encounterDef.totalWaves.coerceAtLeast(1),
+            waveEnemiesPool = encounterDef.wavesList,
+            isWaveArenaMode = encounterDef.isWaveGauntlet || encounterDef.totalWaves > 1,
+            wavePrestigeBonus = 0,
+            completedWavesCount = 0,
             isFinished = false,
             isVictory = false
         )
@@ -503,15 +521,18 @@ object PartyCombatManager {
         val comboLoyaltyBonus = if (activeMember.loyaltyValue >= 95) 1.5f else 1.0f
         val newCombo = (session.haremComboGauge + ((if (isCrit) 18 else 10) * comboLoyaltyBonus).toInt()).coerceAtMost(session.maxHaremComboGauge)
 
-        // Sound effect
+        // Sound & Haptic effect
         if (isCrit) {
             if (newChain >= 3) {
                 SoundEffectManager.playCombat(CombatSound.CRITICAL_SUPERNOVA)
+                HapticManager.vibrateCritical()
             } else {
                 SoundEffectManager.playCombat(CombatSound.CRITICAL_HIT)
+                HapticManager.vibrateHeavy()
             }
         } else {
             SoundEffectManager.playCombat(CombatSound.PLAYER_SLASH)
+            HapticManager.vibrateClick()
         }
 
         val critTag = if (isCrit) " 💥 KRITICKÝ ZÁSAH!" else ""
@@ -1379,12 +1400,58 @@ object PartyCombatManager {
     }
 
     private fun handleVictory(session: PartyCombatSession): Pair<PartyCombatSession, String> {
+        // Multi-wave Gauntlet progression check
+        if (session.totalWaves > 1 && session.currentWave < session.totalWaves && session.waveEnemiesPool.isNotEmpty()) {
+            val nextWaveIndex = session.currentWave + 1
+            val nextEnemiesRaw = session.waveEnemiesPool.getOrNull(nextWaveIndex - 1) ?: emptyList()
+            val nextEnemies = nextEnemiesRaw.mapIndexed { idx, enemy ->
+                val enemyFormation = if (enemy.isBoss || idx == 0) FormationPosition.FRONT_LINE else if (idx % 2 == 1) FormationPosition.MID_LINE else FormationPosition.BACK_LINE
+                enemy.copy(
+                    formationPosition = enemyFormation,
+                    statusEffects = mutableListOf()
+                )
+            }
+            val wavePrestigeGain = nextWaveIndex * 3
+            val healedParty = session.party.map { member ->
+                if (member.isAlive) {
+                    val hpHeal = (member.maxHp * 0.35f).toInt().coerceAtLeast(15)
+                    val mpHeal = (member.maxMana * 0.40f).toInt().coerceAtLeast(20)
+                    member.copy(
+                        hp = (member.hp + hpHeal).coerceAtMost(member.maxHp),
+                        mana = (member.mana + mpHeal).coerceAtMost(member.maxMana),
+                        statusEffects = member.statusEffects.filter { it.durationTurns > 1 }.toMutableList()
+                    )
+                } else member
+            }
+            SoundEffectManager.playCombat(CombatSound.CRITICAL_HIT)
+            val waveVictoryLog = CombatLogEntry(
+                turn = session.currentRound,
+                type = "victory",
+                message = "🌊 VLNA ${session.currentWave}/${session.totalWaves} POKOŘENA! Přichází VLNA $nextWaveIndex! Obnoveno 35% HP a 40% MP družiny. Získáno +$wavePrestigeGain 🏆 Prestiže!",
+                actor = "Aréna Vln",
+                actionName = "Vlna $nextWaveIndex"
+            )
+            val waveSession = session.copy(
+                currentWave = nextWaveIndex,
+                completedWavesCount = session.completedWavesCount + 1,
+                wavePrestigeBonus = session.wavePrestigeBonus + wavePrestigeGain,
+                party = healedParty,
+                enemies = nextEnemies,
+                currentTurnIndex = 0,
+                currentRound = session.currentRound + 1,
+                isEnemyPhase = false,
+                haremComboGauge = (session.haremComboGauge + 30).coerceAtMost(session.maxHaremComboGauge),
+                combatLogs = listOf(waveVictoryLog) + session.combatLogs
+            )
+            return Pair(waveSession, "Vlna ${session.currentWave} pokořena! Přichází Vlna $nextWaveIndex!")
+        }
+
         SoundEffectManager.playCombat(CombatSound.VICTORY)
 
-        val totalGoldBase = session.enemies.sumOf { it.rewardGold }
-        val totalXpBase = session.enemies.sumOf { it.rewardXp }
-        val isBossFight = session.enemies.any { it.isBoss }
-        val basePrestige = if (isBossFight) 20 else 8
+        val totalGoldBase = session.enemies.sumOf { it.rewardGold } + (session.wavePrestigeBonus * 20)
+        val totalXpBase = session.enemies.sumOf { it.rewardXp } + (session.wavePrestigeBonus * 15)
+        val isBossFight = session.enemies.any { it.isBoss } || session.isWaveArenaMode
+        val basePrestige = (if (isBossFight) 20 else 8) + session.wavePrestigeBonus + (session.totalWaves * 3)
 
         // Calculate performance metrics
         val roundsTaken = session.currentRound

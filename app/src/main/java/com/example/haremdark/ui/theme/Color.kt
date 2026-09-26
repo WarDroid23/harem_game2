@@ -2,7 +2,7 @@ package com.example.haremdark.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Theme 1: Temné dominium (Crimson & Obsidian)
+// Base Default Theme: Temné dominium (Crimson & Obsidian)
 val DominionPrimary = Color(0xFFB71C1C)
 val DominionOnPrimary = Color(0xFFFFFFFF)
 val DominionPrimaryContainer = Color(0xFF4A0E17)
@@ -47,3 +47,109 @@ val MonoSecondary = Color(0xFF9E9E9E)
 val MonoBackground = Color(0xFF121212)
 val MonoSurface = Color(0xFF1E1E1E)
 val MonoSurfaceVariant = Color(0xFF2C2C2C)
+
+// =========================================================================
+// Dynamic Character Archetype & Element Color Palettes (Dark Fantasy)
+// =========================================================================
+
+// 1. Dračí oheň (Dragon Fire - Aurelia / Fire Element)
+val DragonFirePrimary = Color(0xFFFF3D00)
+val DragonFireSecondary = Color(0xFFFFC107)
+val DragonFireBackground = Color(0xFF120705)
+val DragonFireSurface = Color(0xFF1E0E0A)
+val DragonFireSurfaceVariant = Color(0xFF2F1610)
+
+// 2. Sukuba & Touha (Succubus Velvet - Lilith / Seductive Shadow)
+val SuccubusPrimary = Color(0xFFAB47BC)
+val SuccubusSecondary = Color(0xFFFF4081)
+val SuccubusBackground = Color(0xFF100717)
+val SuccubusSurface = Color(0xFF1B0F24)
+val SuccubusSurfaceVariant = Color(0xFF2C163C)
+
+// 3. Měsíční kněžka (Lunar Priestess - Elena / Astral & Holy)
+val PriestessPrimary = Color(0xFF7C4DFF)
+val PriestessSecondary = Color(0xFFFFD54F)
+val PriestessBackground = Color(0xFF0A0B16)
+val PriestessSurface = Color(0xFF131525)
+val PriestessSurfaceVariant = Color(0xFF1E2138)
+
+// 4. Siréna & Ledová panna (Siren & Frost - Ice / Water)
+val SirenPrimary = Color(0xFF00E5FF)
+val SirenSecondary = Color(0xFF80D8FF)
+val SirenBackground = Color(0xFF051117)
+val SirenSurface = Color(0xFF0A1B24)
+val SirenSurfaceVariant = Color(0xFF122C3B)
+
+// 5. Zmije & Lovkyně (Viper & Shadow Hunter - Earth / Herbs / Nature)
+val ViperPrimary = Color(0xFF00E676)
+val ViperSecondary = Color(0xFFAEEA00)
+val ViperBackground = Color(0xFF06140A)
+val ViperSurface = Color(0xFF0D2213)
+val ViperSurfaceVariant = Color(0xFF15331E)
+
+// 6. Aristokratka & Koruna (Imperial Noble - Royal Gold & Crimson)
+val NoblePrimary = Color(0xFFFFD700)
+val NobleSecondary = Color(0xFFE53935)
+val NobleBackground = Color(0xFF140D04)
+val NobleSurface = Color(0xFF211608)
+val NobleSurfaceVariant = Color(0xFF33230E)
+
+// =========================================================================
+// Dynamic Region & Domain Color Palettes (Dark Fantasy)
+// =========================================================================
+
+// 1. Temný hvozd (Forest of Shadows)
+val RegionHvozdPrimary = Color(0xFF4CAF50)
+val RegionHvozdSecondary = Color(0xFF81C784)
+val RegionHvozdBackground = Color(0xFF061108)
+val RegionHvozdSurface = Color(0xFF0D1E10)
+val RegionHvozdSurfaceVariant = Color(0xFF162E1A)
+
+// 2. Hostinec U Krvavé Panny (Bloody Tavern)
+val RegionTavernPrimary = Color(0xFFFF5722)
+val RegionTavernSecondary = Color(0xFFFFB74D)
+val RegionTavernBackground = Color(0xFF150A06)
+val RegionTavernSurface = Color(0xFF24120C)
+val RegionTavernSurfaceVariant = Color(0xFF381D14)
+
+// 3. Ruiny starého chrámu (Temple Ruins)
+val RegionTemplePrimary = Color(0xFF9C27B0)
+val RegionTempleSecondary = Color(0xFFE1BEE7)
+val RegionTempleBackground = Color(0xFF0F0816)
+val RegionTempleSurface = Color(0xFF1A1024)
+val RegionTempleSurfaceVariant = Color(0xFF2A1A3B)
+
+// 4. Městské podsvětí & Stoky (Underworld & Sewers)
+val RegionSewersPrimary = Color(0xFFFF9800)
+val RegionSewersSecondary = Color(0xFFFFCC80)
+val RegionSewersBackground = Color(0xFF120E06)
+val RegionSewersSurface = Color(0xFF1E170B)
+val RegionSewersSurfaceVariant = Color(0xFF2F2412)
+
+// 5. Měsíční přístav (Moonlit Harbor)
+val RegionHarborPrimary = Color(0xFF00BCD4)
+val RegionHarborSecondary = Color(0xFF80DEEA)
+val RegionHarborBackground = Color(0xFF041014)
+val RegionHarborSurface = Color(0xFF0A1B22)
+val RegionHarborSurfaceVariant = Color(0xFF112B36)
+
+// 6. Tábor Černých Růží (Mercenary Camp)
+val RegionCampPrimary = Color(0xFF90A4AE)
+val RegionCampSecondary = Color(0xFFEF5350)
+val RegionCampBackground = Color(0xFF101315)
+val RegionCampSurface = Color(0xFF181C1E)
+val RegionCampSurfaceVariant = Color(0xFF252A2E)
+
+// 7. Šlechtické panství (Noble Palace)
+val RegionPalacePrimary = Color(0xFFFFD700)
+val RegionPalaceSecondary = Color(0xFFE57373)
+val RegionPalaceBackground = Color(0xFF130E04)
+val RegionPalaceSurface = Color(0xFF201808)
+val RegionPalaceSurfaceVariant = Color(0xFF31250E)
+
+// 8. Krvavé katakomby (Vampire Catacombs)
+val RegionCatacombsPrimary = Color(0xFFE53935)
+val RegionCatacombsSecondary = Color(0xFFB71C1C)
+val RegionCatacombsBackground = Color(0xFF140506)
+val RegionCatacombsSurface = Color(0xFF20090A)
+val RegionCatacombsSurfaceVariant = Color(0xFF320F12)

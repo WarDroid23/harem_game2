@@ -104,13 +104,126 @@ fun SaveSettingsScreen(
         
         // Theme Selector
         item {
+            val currentAura = com.example.haremdark.ui.theme.LocalThemeAura.current
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Vizuální téma dominia", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Zvol si atmosféru a barevnou paletu rozhraní hry:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Vizuální téma & Dynamické aury", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("Přizpůsob barvy podle aktivní dívky, regionu nebo zvol stálé téma:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                        }
+                    }
+
+                    // Active Aura Showcase Card
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = currentAura.accentColor.copy(alpha = 0.15f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, currentAura.accentColor.copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(currentAura.icon, fontSize = 24.sp)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(
+                                        text = currentAura.name,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = currentAura.accentColor
+                                    )
+                                    if (currentAura.isDynamic) {
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = currentAura.accentColor.copy(alpha = 0.25f)
+                                        ) {
+                                            Text(
+                                                "DYNAMICKÉ",
+                                                fontSize = 8.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = currentAura.accentColor,
+                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                Text(
+                                    text = currentAura.subtitle,
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                                )
+                            }
+                        }
+                    }
+
+                    // Dynamic Mode Chips
+                    Text("⚡ Dynamické režimy (automatické přizpůsobení):", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+
+                    val dynamicModes = listOf(
+                        Triple("Dynamický (Aktivní dívka)", "👸 Podle dívky", "Mění atmosféru podle vybrané/oblíbené dívky"),
+                        Triple("Dynamický (Aktivní region)", "🌲 Podle provincie", "Mění atmosféru podle aktuálního území dominia"),
+                        Triple("Dynamický (Chytrý mix)", "🌌 Chytrý mix", "Kombinuje auru dívky s pozadím provincie")
+                    )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        dynamicModes.forEach { (modeId, modeLabel, modeDesc) ->
+                            val isSelected = currentTheme == modeId
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    width = if (isSelected) 1.5.dp else 0.5.dp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        SoundEffectManager.playNavigation(com.example.haremdark.domain.NavSound.MENU_CLICK)
+                                        engine.setTheme(modeId)
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = modeLabel,
+                                            fontSize = 12.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = modeDesc,
+                                            fontSize = 10.sp,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                        )
+                                    }
+                                    RadioButton(
+                                        selected = isSelected,
+                                        onClick = {
+                                            SoundEffectManager.playNavigation(com.example.haremdark.domain.NavSound.MENU_CLICK)
+                                            engine.setTheme(modeId)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Static Themes
+                    Text("🎨 Stálá temná témata:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -120,11 +233,14 @@ fun SaveSettingsScreen(
                             val isSelected = currentTheme == themeName
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.clickable { engine.setTheme(themeName) }
+                                modifier = Modifier.clickable {
+                                    SoundEffectManager.playNavigation(com.example.haremdark.domain.NavSound.MENU_CLICK)
+                                    engine.setTheme(themeName)
+                                }
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(40.dp)
+                                        .size(36.dp)
                                         .clip(CircleShape)
                                         .background(color)
                                         .border(
@@ -136,7 +252,7 @@ fun SaveSettingsScreen(
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = themeName.split(" ").first(),
-                                    fontSize = 10.sp,
+                                    fontSize = 9.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                     color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                 )
@@ -165,7 +281,10 @@ fun SaveSettingsScreen(
                         }
                         Switch(
                             checked = isLightMode,
-                            onCheckedChange = { engine.setLightMode(it) },
+                            onCheckedChange = {
+                                SoundEffectManager.playNavigation(com.example.haremdark.domain.NavSound.MENU_CLICK)
+                                engine.setLightMode(it)
+                            },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = MaterialTheme.colorScheme.primary,
                                 checkedTrackColor = MaterialTheme.colorScheme.primaryContainer

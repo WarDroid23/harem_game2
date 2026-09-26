@@ -295,6 +295,7 @@ data class Character(
     var moodScore: Int = 50, // 0-100 scale
     var dailyInteractionsCount: Int = 0,
     var unlockedSkins: MutableList<String> = mutableListOf("default"),
+    var equippedSkin: String = "default",
     var elementalMultipliers: MutableMap<String, Float> = mutableMapOf() // Store as String to avoid serialization issues with Enum if any
 ) {
     val rarityEnum: Rarity

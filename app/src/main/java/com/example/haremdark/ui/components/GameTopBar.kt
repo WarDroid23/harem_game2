@@ -345,6 +345,44 @@ fun GameTopBar(
 
                         HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f))
 
+                        // Active Theme Aura Indicator
+                        val currentAura = com.example.haremdark.ui.theme.LocalThemeAura.current
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = currentAura.accentColor.copy(alpha = 0.12f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, currentAura.accentColor.copy(alpha = 0.35f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(currentAura.icon, fontSize = 14.sp)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = currentAura.name,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = currentAura.accentColor
+                                    )
+                                    Text(
+                                        text = currentAura.subtitle,
+                                        fontSize = 9.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                    )
+                                }
+                                if (currentAura.isDynamic) {
+                                    Text(
+                                        text = "AURA",
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = currentAura.accentColor
+                                    )
+                                }
+                            }
+                        }
+
                         // Stats Grid Breakdown
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             // Row A: HP & SE explanation
