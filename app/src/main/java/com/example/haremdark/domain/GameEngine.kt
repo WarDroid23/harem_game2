@@ -58,6 +58,7 @@ data class MoodNotification(
 
 class GameEngine(private val context: Context) {
     private val saveManager = com.example.haremdark.data.SaveManager(context)
+    val gameStateManager = com.example.haremdark.data.GameStateManager(context)
 
     val resourceStateManager: ResourceStateManager = ResourceStateManager()
 
@@ -104,6 +105,7 @@ class GameEngine(private val context: Context) {
 
     init {
         generateNewDailyEvents()
+        gameStateManager.generateDailyObjectives(_gameState.value.player.day)
     }
 
     fun generateNewDailyEvents() {
@@ -1017,8 +1019,29 @@ class GameEngine(private val context: Context) {
                     c.morale = (c.morale + 1).coerceIn(0, 100)
                 }
 
-                // Update string-based nalada based on moodScore and morale
+                // Fatigue and Stress updates from GameStateManager
+                val currentFatigue = gameStateManager.getFatigue(c.id)
+                val currentStress = gameStateManager.getStress(c.id)
+                
+                val (fatigueDelta, stressDelta) = when {
+                    c.naNajmu -> Pair(15, 10) // High gain on mission
+                    c.dailyAssignment != null -> Pair(8, 5) // Moderate gain on assignment
+                    else -> Pair(-20, -15) // Recovery on idle/rest day
+                }
+                
+                val finalFatigue = (currentFatigue + fatigueDelta).coerceIn(0, 100)
+                val finalStress = (currentStress + stressDelta).coerceIn(0, 100)
+                gameStateManager.setFatigueAndStress(c.id, finalFatigue, finalStress)
+                
+                // Stress/Fatigue impact on loyalty:
+                if (finalStress > 60 || finalFatigue > 60) {
+                    c.loajalita = (c.loajalita - 2).coerceAtLeast(0)
+                }
+
+                // Update string-based nalada based on moodScore, morale, and fatigue/stress
                 c.nalada = when {
+                    finalFatigue > 70 -> "Vyčerpaná"
+                    finalStress > 70 -> "Stresovaná"
                     c.moodScore >= 85 || c.morale >= 80 -> "Šťastná"
                     c.moodScore >= 65 || c.morale >= 60 -> "Veselá"
                     c.moodScore >= 40 || c.morale >= 40 -> "Neutrální"
@@ -1026,6 +1049,8 @@ class GameEngine(private val context: Context) {
                     else -> "Rozzlobená"
                 }
                 c.statusIcon = when(c.nalada) {
+                    "Vyčerpaná" -> "😴"
+                    "Stresovaná" -> "😰"
                     "Šťastná" -> "✨"
                     "Veselá" -> "😊"
                     "Znuděná" -> "😑"
@@ -1371,6 +1396,7 @@ class GameEngine(private val context: Context) {
                 resourceHistory = newHistory
             )
         }
+        gameStateManager.generateDailyObjectives(_gameState.value.player.day)
         autoSave("Nový den (Den ${_gameState.value.player.day})")
     }
 
@@ -3413,10 +3439,11 @@ class GameEngine(private val context: Context) {
         if (p.sexEnergy < costSex) return Pair(false, "Nedostatek sexuální energie ($costSex SE)!")
         if (current.characters.isEmpty()) return Pair(false, "V harému nemáš žádné dívky!")
 
-        val msg = "🥂 Uspořádal jsi velkolepou noční hostinu plnou vína a vybraných lahůdek pro celý svůj harém. Harmonie vzrostla na maximum (+20 harmonie, +6 loajalita všech dívek)!"
+        val msg = "🥂 Uspořádal jsi velkolepou noční hostinu plnou vína a vybraných lahůdek pro celý svůj harém. Harmonie vzrostla na maximum (+20 harmonie, +6 loajalita všech dívek, -15 stres, -10 únava)!"
 
         updateState { state ->
             val updatedCharacters = state.characters.map { c ->
+                gameStateManager.updateFatigueAndStress(c.id, -10, -15)
                 c.copy(
                     loajalita = (c.loajalita + 6).coerceAtMost(100),
                     touha = (c.touha + 6).coerceAtMost(100),
@@ -3433,6 +3460,195 @@ class GameEngine(private val context: Context) {
             state.copy(player = newPlayer, characters = updatedCharacters, gameLog = logs)
         }
         addPlayerXp(25)
+        gameStateManager.incrementObjectiveProgress("banquet", 1)
+        return Pair(true, msg)
+    }
+
+    fun executeMassGreeting(): Pair<Boolean, String> {
+        val current = _gameState.value
+        if (current.characters.isEmpty()) return Pair(false, "V harému nemáš žádné dívky!")
+        val msg = "💬 Hromadný pozdrav: Osobně jsi pozdravil všechny dívky v harému. Jejich nálada i morálka se zlepšily a stres opadl (-5 stres)!"
+        val day = current.player.day
+        updateState { state ->
+            val updated = state.characters.map { c ->
+                gameStateManager.updateFatigueAndStress(c.id, 0, -5)
+                val newAttr = c.attributes.copy(
+                    affection = (c.attributes.affection + 2).coerceAtMost(100),
+                    morale = (c.attributes.morale + 5).coerceAtMost(100)
+                )
+                c.copy(
+                    attributes = newAttr,
+                    affinityPoints = (c.affinityPoints + 2).coerceAtMost(100),
+                    morale = (c.morale + 5).coerceAtMost(100),
+                    nalada = "Spokojená",
+                    interactionLogs = (c.interactionLogs + com.example.haremdark.models.InteractionLogEntry(
+                        day = day,
+                        type = "rozhovor",
+                        title = "Hromadný pozdrav pána",
+                        description = "Pán osobně navštívil komnaty a pozdravil celý harém.",
+                        statChanges = "+2 Náklonnost, +5 Morálka, -5 Stres"
+                    )).toMutableList()
+                )
+            }
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(characters = updated, gameLog = logs)
+        }
+        addPlayerXp(5)
+        gameStateManager.incrementObjectiveProgress("interact", 1)
+        return Pair(true, msg)
+    }
+
+    fun executeMassTraining(): Pair<Boolean, String> {
+        val current = _gameState.value
+        val p = current.player
+        val costSex = 15
+        if (p.sexEnergy < costSex) return Pair(false, "Nedostatek sexuální energie ($costSex SE)!")
+        if (current.characters.isEmpty()) return Pair(false, "V harému nemáš žádné dívky!")
+        val msg = "⚡ Hromadný trénink: Provedl jsi společný rituál poslušnosti. Všechny dcery posílily svou oddanost a disciplínu (+10 únava, +2 stres)!"
+        val day = p.day
+        updateState { state ->
+            val updated = state.characters.map { c ->
+                gameStateManager.updateFatigueAndStress(c.id, 10, 2)
+                val newAttr = c.attributes.copy(
+                    obedience = (c.attributes.obedience + 8).coerceAtMost(100),
+                    morale = (c.attributes.morale + 6).coerceAtMost(100),
+                    loyalty = (c.attributes.loyalty + 4).coerceAtMost(100)
+                )
+                c.copy(
+                    attributes = newAttr,
+                    poslusnost = (c.poslusnost + 8).coerceAtMost(100),
+                    loajalita = (c.loajalita + 4).coerceAtMost(100),
+                    morale = (c.morale + 6).coerceAtMost(100),
+                    interactionLogs = (c.interactionLogs + com.example.haremdark.models.InteractionLogEntry(
+                        day = day,
+                        type = "výcvik",
+                        title = "Hromadný výcvik kázně",
+                        description = "Intenzivní společný dril a testování reflexů pod dohledem pána.",
+                        statChanges = "+8 Poslušnost, +4 Loajalita, +6 Morálka, +10 Únava"
+                    )).toMutableList()
+                )
+            }
+            val newPlayer = state.player.copy(sexEnergy = (state.player.sexEnergy - costSex).coerceAtLeast(0))
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newPlayer, characters = updated, gameLog = logs)
+        }
+        addPlayerXp(15)
+        gameStateManager.incrementObjectiveProgress("train", 1)
+        return Pair(true, msg)
+    }
+
+    fun executeMassGifts(): Pair<Boolean, String> {
+        val current = _gameState.value
+        val p = current.player
+        val costGold = 100
+        if (p.gold < costGold) return Pair(false, "Nedostatek zlata na nákup dárků ($costGold zlatých)!")
+        if (current.characters.isEmpty()) return Pair(false, "V harému nemáš žádné dívky!")
+        val msg = "🎁 Hromadné obdarování: Rozdal jsi drobné dárky a pamlsky všem členkám harému. V komnatách zavládlo nadšení a stres opadl (-12 stres)!"
+        val day = p.day
+        updateState { state ->
+            val updated = state.characters.map { c ->
+                gameStateManager.updateFatigueAndStress(c.id, 0, -12)
+                val newAttr = c.attributes.copy(
+                    affection = (c.attributes.affection + 12).coerceAtMost(100),
+                    morale = (c.attributes.morale + 10).coerceAtMost(100)
+                )
+                c.copy(
+                    attributes = newAttr,
+                    affinityPoints = (c.affinityPoints + 12).coerceAtMost(100),
+                    morale = (c.morale + 10).coerceAtMost(100),
+                    nalada = "Nadšená",
+                    interactionLogs = (c.interactionLogs + com.example.haremdark.models.InteractionLogEntry(
+                        day = day,
+                        type = "dar",
+                        title = "Hromadná distribuce dárků",
+                        description = "Rozdávání dárků a osobních pozorností pro potěšení celého harému.",
+                        statChanges = "+12 Náklonnost, +10 Morálka, -12 Stres"
+                    )).toMutableList()
+                )
+            }
+            val newPlayer = state.player.copy(gold = (state.player.gold - costGold).coerceAtLeast(0))
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newPlayer, characters = updated, gameLog = logs)
+        }
+        addPlayerXp(12)
+        gameStateManager.incrementObjectiveProgress("gift", 1)
+        return Pair(true, msg)
+    }
+
+    fun executeMassHealing(): Pair<Boolean, String> {
+        val current = _gameState.value
+        val p = current.player
+        val costGold = 40
+        if (p.gold < costGold) return Pair(false, "Nedostatek zlata na masti a lektvary ($costGold zlatých)!")
+        if (current.characters.isEmpty()) return Pair(false, "V harému nemáš žádné dívky!")
+        val msg = "🧪 Hromadné léčení: Použil jsi alchymistické masti a elixíry k ošetření celého harému. Všechny rány se zacelily a únava klesla (-15 únava, -8 stres)!"
+        val day = p.day
+        updateState { state ->
+            val updated = state.characters.map { c ->
+                gameStateManager.updateFatigueAndStress(c.id, -15, -8)
+                val newAttr = c.attributes.copy(
+                    morale = (c.attributes.morale + 8).coerceAtMost(100)
+                )
+                val healedHp = (c.hp + 35).coerceAtMost(c.maxHp)
+                c.copy(
+                    attributes = newAttr,
+                    morale = (c.morale + 8).coerceAtMost(100),
+                    hp = healedHp,
+                    interactionLogs = (c.interactionLogs + com.example.haremdark.models.InteractionLogEntry(
+                        day = day,
+                        type = "výcvik",
+                        title = "Hromadné ošetření a péče",
+                        description = "Aplikace léčivých mastí a tonik pro uzdravení těl i myslí všech dívek.",
+                        statChanges = "+35 HP, +8 Morálka, -15 Únava, -8 Stres"
+                    )).toMutableList()
+                )
+            }
+            val newPlayer = state.player.copy(gold = (state.player.gold - costGold).coerceAtLeast(0))
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newPlayer, characters = updated, gameLog = logs)
+        }
+        addPlayerXp(10)
+        gameStateManager.incrementObjectiveProgress("heal", 1)
+        return Pair(true, msg)
+    }
+
+    fun executeMassRest(): Pair<Boolean, String> {
+        val current = _gameState.value
+        val p = current.player
+        val costGold = 50
+        val costSex = 10
+        if (p.gold < costGold) return Pair(false, "Nedostatek zlata na lázně ($costGold zlatých)!")
+        if (p.sexEnergy < costSex) return Pair(false, "Nedostatek sexuální energie ($costSex SE)!")
+        if (current.characters.isEmpty()) return Pair(false, "V harému nemáš žádné dívky!")
+        val msg = "🧖 Hromadný odpočinek a lázně: Dopřál jsi všem dívkám volný den s termálními lázněmi a vonnými oleji. Únava i stres prudce klesly (-30 únava, -25 stres)!"
+        val day = p.day
+        updateState { state ->
+            val updated = state.characters.map { c ->
+                gameStateManager.updateFatigueAndStress(c.id, -30, -25)
+                val newAttr = c.attributes.copy(
+                    morale = (c.attributes.morale + 15).coerceAtMost(100)
+                )
+                c.copy(
+                    attributes = newAttr,
+                    morale = (c.morale + 15).coerceAtMost(100),
+                    interactionLogs = (c.interactionLogs + com.example.haremdark.models.InteractionLogEntry(
+                        day = day,
+                        type = "výcvik",
+                        title = "Hromadné lázně a odpočinek",
+                        description = "Společný den odpočinku v zámeckých termálních lázních.",
+                        statChanges = "+15 Morálka, -30 Únava, -25 Stres"
+                    )).toMutableList()
+                )
+            }
+            val newPlayer = state.player.copy(
+                gold = (state.player.gold - costGold).coerceAtLeast(0),
+                sexEnergy = (state.player.sexEnergy - costSex).coerceAtLeast(0)
+            )
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newPlayer, characters = updated, gameLog = logs)
+        }
+        addPlayerXp(12)
+        gameStateManager.incrementObjectiveProgress("rest", 1)
         return Pair(true, msg)
     }
 
@@ -4613,6 +4829,100 @@ class GameEngine(private val context: Context) {
                     damageCalculation = "Aktivní blokování: redukce příchozího zranění o 65% • Obnova: +$gainedDark TE",
                     narrativeText = "Pevný kryt a magická bariéra vytvořily neprostupnou hradbu. Hrdina se připravil absorbovat a odrazit nadcházející nápor útoků."
                 ))
+            }
+            "player_skill_fireball" -> {
+                if (player.darkEnergy >= 15) {
+                    player.darkEnergy -= 15
+                    newPlayerDark = player.darkEnergy
+                    val basePower = (weaponDamage * 1.5f) + (player.skills["temnota"] ?: 0) * 6
+                    val rawDmg = (basePower + Random.nextInt(5, 15)) * totalAffinityMultiplier
+                    val finalDmg = (rawDmg - (session.boss.defense * 0.2f)).toInt().coerceAtLeast(15)
+                    newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
+                    newBleedTurns = 2
+
+                    SoundEffectManager.playCombat(CombatSound.DARK_SPELL)
+
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "player_spell",
+                        message = "🔥 Ohnivá koule zasáhla nepřítele za $finalDmg poškození a zapálila ho na 2 kola (-15 TE)!",
+                        actor = combatHeroName,
+                        actionName = "Ohnivá koule",
+                        damageDealt = finalDmg,
+                        damageCalculation = "[Magie: $basePower] * [Pouto: x${"%.2f".format(totalAffinityMultiplier)}] - [Obrana: ${"%.1f".format(session.boss.defense * 0.2f)}] = $finalDmg DMG (-15 TE)",
+                        narrativeText = "Koncentrovaný proud plamenné temné síly explodoval na hrudi nepřítele a zahalil ho do spalujících stínů!"
+                    ))
+                } else {
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "system",
+                        message = "❌ Nemáš dostatek temné energie na Ohnivou kouli (vyžaduje 15)!",
+                        actor = "Systém",
+                        actionName = "Nedostatek energie"
+                    ))
+                }
+            }
+            "player_skill_shadow_shield" -> {
+                if (player.darkEnergy >= 10) {
+                    player.darkEnergy -= 10
+                    newPlayerDark = player.darkEnergy
+                    val healAmt = 50
+                    newPlayerHp = (newPlayerHp + healAmt).coerceAtMost(session.playerMaxHp)
+                    activeBuff = "🛡️ Stínový štít (+50% Obrana)"
+
+                    SoundEffectManager.playCombat(CombatSound.SHIELD_BLOCK)
+
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "player_heal",
+                        message = "🛡️ Aktivoval jsi Stínový štít, obdržel +$healAmt HP a zvýšil obranu o +50% (-10 TE)!",
+                        actor = combatHeroName,
+                        actionName = "Stínový štít",
+                        damageDealt = 0,
+                        damageCalculation = "Uzdravení: +$healAmt HP • Obranná aura aktivní",
+                        narrativeText = "Průsvitná kupole stínové energie obklopila tvé tělo, zacelila šrámy a vytvořila neprostupný štít."
+                    ))
+                } else {
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "system",
+                        message = "❌ Nemáš dostatek temné energie na Stínový štít (vyžaduje 10)!",
+                        actor = "Systém",
+                        actionName = "Nedostatek energie"
+                    ))
+                }
+            }
+            "player_skill_dark_harvest" -> {
+                if (player.darkEnergy >= 20) {
+                    player.darkEnergy -= 20
+                    newPlayerDark = player.darkEnergy
+                    val basePower = (weaponDamage * 1.2f) + (player.skills["temnota"] ?: 0) * 8
+                    val rawDmg = (basePower + Random.nextInt(5, 15)) * totalAffinityMultiplier
+                    val finalDmg = (rawDmg - (session.boss.defense * 0.15f)).toInt().coerceAtLeast(18)
+                    newBossHp = (newBossHp - finalDmg).coerceAtLeast(0)
+                    newPlayerHp = (newPlayerHp + finalDmg).coerceAtMost(session.playerMaxHp)
+
+                    SoundEffectManager.playCombat(CombatSound.DARK_SPELL)
+
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "player_spell",
+                        message = "🌾 Sklizeň duší vysála z nepřítele $finalDmg HP a plně tě o tuto hodnotu uzdravila (-20 TE)!",
+                        actor = combatHeroName,
+                        actionName = "Sklizeň duší",
+                        damageDealt = finalDmg,
+                        damageCalculation = "[Sklizeň: $finalDmg DMG] -> Konverze: +$finalDmg HP (100% přeměna)",
+                        narrativeText = "Zasáhl jsi samotné jádro nepřítele. Proud jasně fialové vitální energie vyrazil z oponenta přímo do tvého nitra!"
+                    ))
+                } else {
+                    newLogEntries.add(0, CombatLogEntry(
+                        turn = currentTurn,
+                        type = "system",
+                        message = "❌ Nemáš dostatek temné energie na Sklizeň duší (vyžaduje 20)!",
+                        actor = "Systém",
+                        actionName = "Nedostatek energie"
+                    ))
+                }
             }
             "harem_support" -> {
                 val characters = _gameState.value.characters

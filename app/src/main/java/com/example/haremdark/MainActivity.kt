@@ -384,6 +384,17 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                                 QuickNavDrawerItem(
+                                    icon = Icons.Default.Bolt,
+                                    title = "Hromadné akce",
+                                    subtitle = "Rychlá správa & hromadné dary",
+                                    isSelected = currentRoute == "mass_interaction",
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
+                                        navController.navigate("mass_interaction") { launchSingleTop = true }
+                                    }
+                                )
+                                QuickNavDrawerItem(
                                     icon = Icons.Default.Groups,
                                     title = "Roster Postav",
                                     subtitle = "Detailní statistiky & náklonnost",
@@ -735,6 +746,17 @@ class MainActivity : ComponentActivity() {
                                     gameState = gameState,
                                     engine = engine,
                                     onNavigateToHunt = { navController.navigate("activities") }
+                                )
+                            }
+                            composable("mass_interaction") {
+                                MassInteractionScreen(
+                                    gameState = gameState,
+                                    engine = engine,
+                                    onBack = {
+                                        if (!navController.popBackStack()) {
+                                            navController.navigate("dashboard") { launchSingleTop = true }
+                                        }
+                                    }
                                 )
                             }
                             composable("combat_arena") {

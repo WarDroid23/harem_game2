@@ -46,6 +46,12 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.graphicsLayer
+import com.patrykandpatrick.vico.compose.axis.horizontal.rememberBottomAxis
+import com.patrykandpatrick.vico.compose.axis.vertical.rememberStartAxis
+import com.patrykandpatrick.vico.compose.chart.Chart
+import com.patrykandpatrick.vico.compose.chart.column.columnChart
+import com.patrykandpatrick.vico.core.entry.FloatEntry
+import com.patrykandpatrick.vico.core.entry.entryModelOf
 
 @Composable
 fun TurnBasedCombatModule(
@@ -401,6 +407,68 @@ fun ActiveCombatView(
             }
         }
 
+        // Vico Chart for Dual Health Status Monitoring
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1428)),
+            border = BorderStroke(1.dp, Color(0xFFFF80AB).copy(alpha = 0.25f))
+        ) {
+            Column(
+                modifier = Modifier.padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "📊 VICO GRAFICKÉ MONITOROVÁNÍ HP STATUSU",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFFFD700)
+                    )
+                    Text(
+                        text = "Kolo ${session.turnCount}",
+                        fontSize = 9.sp,
+                        color = Color.LightGray
+                    )
+                }
+
+                val playerHpPercent = if (session.playerMaxHp > 0) (session.playerHp.toFloat() / session.playerMaxHp.toFloat() * 100f).coerceIn(0f, 100f) else 0f
+                val enemyHpPercent = if (session.bossMaxHp > 0) (session.bossHp.toFloat() / session.bossMaxHp.toFloat() * 100f).coerceIn(0f, 100f) else 0f
+
+                val playerEntry = FloatEntry(0f, playerHpPercent)
+                val enemyEntry = FloatEntry(1f, enemyHpPercent)
+                val model = entryModelOf(listOf(playerEntry), listOf(enemyEntry))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(80.dp)
+                        .background(Color(0xFF0C0610), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                ) {
+                    Chart(
+                        chart = columnChart(),
+                        model = model,
+                        startAxis = rememberStartAxis(title = "% HP"),
+                        bottomAxis = rememberBottomAxis(
+                            valueFormatter = { value, _ ->
+                                when (value.toInt()) {
+                                    0 -> "Můj Stav"
+                                    1 -> "Oponent"
+                                    else -> ""
+                                }
+                            }
+                        ),
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+
         // Status effect detail dialog with countdown timer
         val activeSelectedStatus = selectedStatusForDetailDialog
         if (activeSelectedStatus != null) {
@@ -656,33 +724,80 @@ fun ActiveCombatView(
                             }
                         }
                         4 -> {
-                            // Character Skills from Skill Tree
-                            if (deployedChar == null) {
+                            val context = androidx.compose.ui.platform.LocalContext.current
+                            val stateManager = remember { com.example.haremdark.data.GameStateManager(context) }
+
+                            // Load or initialize default player skills
+                            var managerState by remember { mutableStateOf(stateManager.loadState()) }
+
+                            // Initialize default skills if they don't exist yet
+                            LaunchedEffect(Unit) {
+                                if (managerState.playerSkills.isEmpty()) {
+                                    val defaultSkills = mapOf(
+                                        "pils_fireball" to com.example.haremdark.data.PlayerSkillState(
+                                            id = "pils_fireball",
+                                            name = "Ohnivá koule",
+                                            description = "Sežehne nepřítele silou pekelných stínů a zapálí ho na 2 kola.",
+                                            icon = "🔥",
+                                            manaCost = 15,
+                                            baseCooldownTurns = 3
+                                        ),
+                                        "pils_shadow_shield" to com.example.haremdark.data.PlayerSkillState(
+                                            id = "pils_shadow_shield",
+                                            name = "Stínový štít",
+                                            description = "Obklopí tě auru stínů: okamžitě doplní +50 HP a zvýší obranu.",
+                                            icon = "🛡️",
+                                            manaCost = 10,
+                                            baseCooldownTurns = 4
+                                        ),
+                                        "pils_dark_harvest" to com.example.haremdark.data.PlayerSkillState(
+                                            id = "pils_dark_harvest",
+                                            name = "Sklizeň duší",
+                                            description = "Vysaje život nepřítele a plně tě o tuto hodnotu uzdraví.",
+                                            icon = "🌾",
+                                            manaCost = 20,
+                                            baseCooldownTurns = 5
+                                        )
+                                    )
+                                    val newState = managerState.copy(playerSkills = defaultSkills)
+                                    stateManager.saveState(newState)
+                                    managerState = newState
+                                }
+                            }
+
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                // Section A: Harem Companion Skills
                                 Text(
-                                    "Musíš nasadit dívku do boje, abys mohl používat její dovednosti.",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                    modifier = Modifier.padding(vertical = 8.dp)
+                                    text = "✨ AKTIVNÍ DOVEDNOSTI SPROVODKYNĚ",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFF80AB)
                                 )
-                            } else {
-                                val unlockedSkills = com.example.haremdark.data.CharacterSkillCatalog.getUnlockedActiveSkills(deployedChar)
-                                if (unlockedSkills.isEmpty()) {
+                                if (deployedChar == null) {
                                     Text(
-                                        "Tato dívka zatím nemá odemčené žádné aktivní dovednosti ve stromu dovedností.",
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                                        modifier = Modifier.padding(vertical = 8.dp)
+                                        "Není nasazena žádná dívka, její dovednosti jsou nedostupné.",
+                                        fontSize = 11.sp,
+                                        color = Color.LightGray.copy(alpha = 0.6f),
+                                        modifier = Modifier.padding(bottom = 6.dp)
                                     )
                                 } else {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    val unlockedSkills = com.example.haremdark.data.CharacterSkillCatalog.getUnlockedActiveSkills(deployedChar)
+                                    if (unlockedSkills.isEmpty()) {
+                                        Text(
+                                            "Tato dívka nemá odemčené žádné aktivní dovednosti.",
+                                            fontSize = 11.sp,
+                                            color = Color.LightGray.copy(alpha = 0.6f),
+                                            modifier = Modifier.padding(bottom = 6.dp)
+                                        )
+                                    } else {
                                         unlockedSkills.forEach { skill ->
                                             val cooldown = session.skillCooldowns[skill.id] ?: 0
                                             val hasMana = deployedChar.mana >= skill.manaCost
                                             val hasEssence = player.manaEssence >= skill.manaEssenceCost
-                                            
+
                                             ActionRowButton(
                                                 title = "${skill.icon} ${skill.name}" + if (cooldown > 0) " ($cooldown kol)" else "",
-                                                subtitle = skill.description + if (skill.manaEssenceCost > 0) "\nNáklady: ${skill.manaEssenceCost} Esence many" else "",
+                                                subtitle = skill.description + if (skill.manaEssenceCost > 0) "\nNáklady: ${skill.manaEssenceCost} Esence" else "",
                                                 icon = if (skill.category == com.example.haremdark.models.SkillCategory.DARK_MAGIC) Icons.Default.AutoAwesome else Icons.Default.Bolt,
                                                 buttonColor = when(skill.category) {
                                                     com.example.haremdark.models.SkillCategory.PHYSICAL_ATTACK -> Color(0xFFD32F2F)
@@ -700,6 +815,65 @@ fun ActiveCombatView(
                                             )
                                         }
                                     }
+                                }
+
+                                HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+
+                                // Section B: Player skills with persistent cooldowns
+                                Text(
+                                    text = "🔮 BOJOVÉ UMĚNÍ VLÁDCE (COOLDOWNY)",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFFD700)
+                                )
+
+                                managerState.playerSkills.values.forEach { skill ->
+                                    // Cooldown turns are persisted inside GameStateManager.skillCooldowns
+                                    val currentCooldown = managerState.skillCooldowns[skill.id] ?: 0
+                                    val hasTE = player.darkEnergy >= skill.manaCost // TE acts as player mana
+
+                                    ActionRowButton(
+                                        title = "${skill.icon} ${skill.name}" + if (currentCooldown > 0) " ($currentCooldown kol)" else "",
+                                        subtitle = skill.description + "\nNáklady: ${skill.manaCost} Temné Energie",
+                                        icon = Icons.Default.AutoAwesome,
+                                        buttonColor = when (skill.id) {
+                                            "pils_fireball" -> Color(0xFFE65100)
+                                            "pils_shadow_shield" -> Color(0xFF1565C0)
+                                            "pils_dark_harvest" -> Color(0xFF4A148C)
+                                            else -> Color(0xFF37474F)
+                                        },
+                                        enabled = currentCooldown == 0 && hasTE && !session.isOver,
+                                        onClick = {
+                                            // 1. Set the persistent cooldown in GameStateManager
+                                            val updatedCooldowns = managerState.skillCooldowns.toMutableMap()
+                                            updatedCooldowns[skill.id] = skill.baseCooldownTurns
+                                            val newState = managerState.copy(skillCooldowns = updatedCooldowns)
+                                            stateManager.saveState(newState)
+                                            managerState = newState
+
+                                            // 2. Trigger the custom combat turn
+                                            val abilityType = when (skill.id) {
+                                                "pils_fireball" -> CombatAbilityType.HEAVY_STRIKE
+                                                "pils_shadow_shield" -> CombatAbilityType.DEFEND
+                                                "pils_dark_harvest" -> CombatAbilityType.SOUL_DRAIN
+                                                else -> CombatAbilityType.SLASH
+                                            }
+                                            fxState.triggerAbility(abilityType, skill.name, coroutineScope) {
+                                                engine.executeCombatTurn("player_skill_${skill.id}")
+                                            }
+                                        }
+                                    )
+                                }
+
+                                // Hook into turn ends to reduce player cooldowns!
+                                // Each time turn count advances, we decrement persistent cooldowns
+                                LaunchedEffect(session.turnCount) {
+                                    val updatedCooldowns = managerState.skillCooldowns.mapValues { (_, cooldown) ->
+                                        (cooldown - 1).coerceAtLeast(0)
+                                    }.filterValues { it > 0 }
+                                    val newState = managerState.copy(skillCooldowns = updatedCooldowns)
+                                    stateManager.saveState(newState)
+                                    managerState = newState
                                 }
                             }
                         }

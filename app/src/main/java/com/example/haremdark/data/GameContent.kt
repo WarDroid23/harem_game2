@@ -526,6 +526,88 @@ object GameContent {
                 c.duvera = (c.duvera + 10).coerceAtMost(100)
                 "${c.name} se ti při měsíčním svitu zcela poddala, její horká kůže žhne a její vzdechy plní stíny komnaty."
             }
+        ),
+        GameInteraction(
+            id = "afrodiziakalni_liker",
+            name = "Afrodiziakální likér 🧪",
+            type = "intimni",
+            description = "Podání silného alchymistického likéru lásky pro snížení zábran a probuzení spalující touhy.",
+            energyCost = 10,
+            goldCost = 30,
+            effectDescription = "+25 Touha, +15 Submisivita, +10 Poslušnost, +12 Závislost",
+            applyEffect = { c, _ ->
+                c.touha = (c.touha + 25).coerceAtMost(100)
+                c.submisivita = (c.submisivita + 15).coerceAtMost(100)
+                c.poslusnost = (c.poslusnost + 10).coerceAtMost(100)
+                c.zavislost = (c.zavislost + 12).coerceAtMost(100)
+                c.typZavislosti = "Bylinný afrodiziakální extrakt"
+                "Po vypití likéru se tváře ${c.name} zalily rudí. Její dech se zrychlil a třeštivě se dožaduje tvé pozornosti."
+            }
+        ),
+        GameInteraction(
+            id = "mentalni_manipulace",
+            name = "Mentální sugesce a manipulace 🧠",
+            type = "intimni",
+            description = "Využití psychologických slabostí, pocitů viny a pochybností k přepsání její vůle a upevnění tvé role jako jejího jediného pána.",
+            energyCost = 12,
+            darkCost = 5,
+            effectDescription = "+20 Poslušnost, +15 Loajalita, +12 Strach, +10 Zlomení",
+            applyEffect = { c, _ ->
+                c.poslusnost = (c.poslusnost + 20).coerceAtMost(100)
+                c.loajalita = (c.loajalita + 15).coerceAtMost(100)
+                c.strach = (c.strach + 12).coerceAtMost(100)
+                c.broken = (c.broken + 10).coerceAtMost(100)
+                "Pomalým, přesvědčivým našeptáváním jsi nalomil zbytky vůle ${c.name}. Hledí na tebe s odevzdaným výrazem a uznává tvé právo ji vlastnit."
+            }
+        ),
+        GameInteraction(
+            id = "serum_odevzdani",
+            name = "Sérum absolutního odevzdání 💉",
+            type = "intimni",
+            description = "Vstříknutí alchymistického séra stínů, které paralyzuje duševní odpor a činí dívku bezmezně povolnou.",
+            energyCost = 15,
+            darkCost = 8,
+            goldCost = 40,
+            effectDescription = "+35 Poslušnost, +25 Submisivita, +15 Závislost, -15 Morálka",
+            applyEffect = { c, _ ->
+                c.poslusnost = (c.poslusnost + 35).coerceAtMost(100)
+                c.submisivita = (c.submisivita + 25).coerceAtMost(100)
+                c.zavislost = (c.zavislost + 15).coerceAtMost(100)
+                c.morale = (c.morale - 15).coerceAtLeast(0)
+                c.typZavislosti = "Sérum stínů"
+                "Sérum se okamžitě rozlilo v žilách ${c.name}. Její zorničky se rozšířily, pohled má skelný a bezvýhradně plní jakýkoli tvůj příkaz."
+            }
+        ),
+        GameInteraction(
+            id = "shibari_spoutani",
+            name = "Umění hedvábného poutání 🎗️",
+            type = "intimni",
+            description = "Tradiční rituál spoutání hedvábnými provazy k upevnění pocitu bezmocnosti a úplného odevzdání do tvých rukou.",
+            energyCost = 14,
+            effectDescription = "+22 Submisivita, +18 Touha, +15 Strach, +12 Poslušnost",
+            applyEffect = { c, _ ->
+                c.submisivita = (c.submisivita + 22).coerceAtMost(100)
+                c.touha = (c.touha + 18).coerceAtMost(100)
+                c.strach = (c.strach + 15).coerceAtMost(100)
+                c.poslusnost = (c.poslusnost + 12).coerceAtMost(100)
+                "${c.name} byla mistrně spoutána do složité sítě provazů. Její bezmocnost v ní probudila hluboké vzrušení a submisivní slast."
+            }
+        ),
+        GameInteraction(
+            id = "dominantni_rozkoš",
+            name = "Dominantní tělesné podmanění ⚔️",
+            type = "intimni",
+            description = "Nespoutaná, dravá sexuální praktika podtrhující tvou absolutní nadvládu a fyzickou sílu.",
+            energyCost = 22,
+            darkCost = 5,
+            effectDescription = "+30 Touha, +25 Submisivita, +18 Poslušnost, +20 Rozkoš",
+            applyEffect = { c, _ ->
+                c.touha = (c.touha + 30).coerceAtMost(100)
+                c.submisivita = (c.submisivita + 25).coerceAtMost(100)
+                c.poslusnost = (c.poslusnost + 18).coerceAtMost(100)
+                c.touha = (c.touha + 20).coerceAtMost(100)
+                "Prostřednictvím dominantní rozkoše jsi zcela ovládl tělo ${c.name}. Po divoké a vášnivé noci ti leží u nohou, dychtivá po každém pohlazení."
+            }
         )
     )
 

@@ -1287,6 +1287,48 @@ fun HaremScreen(
         )
     }
 
+    // Comprehensive Interactive Dialog for quick and deep bonding/intimacies/subjugations
+    selectedCharacterForInteraction?.let { character ->
+        val currentConcubine = gameState.characters.firstOrNull { it.id == character.id } ?: character
+        com.example.haremdark.ui.components.InteractionDialog(
+            character = currentConcubine,
+            player = gameState.player,
+            onDismiss = { haremViewModel.openInteraction(null) },
+            onExecuteInteraction = { interaction ->
+                val (success, msg) = engine.executeInteraction(currentConcubine.id, interaction)
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                if (interaction.id == "drobna") {
+                    VoiceManager.speakPet(currentConcubine)
+                } else if (interaction.id == "pochvala") {
+                    VoiceManager.speakPraise(currentConcubine)
+                } else {
+                    VoiceManager.speak(msg, currentConcubine.archetypeId)
+                }
+            },
+            onCourtRomance = {
+                val (success, msg) = engine.courtRomance(currentConcubine.id)
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                VoiceManager.speak(msg, currentConcubine.archetypeId)
+            },
+            onMarry = {
+                val (success, msg) = engine.marryConcubine(currentConcubine.id)
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                VoiceManager.speak(msg, currentConcubine.archetypeId)
+            },
+            onRent = { client, days ->
+                val (success, msg) = engine.rentSlave(currentConcubine.id, client, days)
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                VoiceManager.speak(msg, currentConcubine.archetypeId)
+                if (success) haremViewModel.openInteraction(null)
+            },
+            onUpgradeSkill = { skill ->
+                val (success, msg) = engine.upgradeCharacterSkill(currentConcubine.id, skill)
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                VoiceManager.speak(msg, currentConcubine.archetypeId)
+            }
+        )
+    }
+
     // Time-Limited Special Dialogue Sequence Dialog
     activeEvent?.let { evt ->
         if (isEventDialogueOpen) {
