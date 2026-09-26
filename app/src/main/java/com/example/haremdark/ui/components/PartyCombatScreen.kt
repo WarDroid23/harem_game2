@@ -224,6 +224,25 @@ fun PartyCombatScreen(
                             )
                         }
 
+                        // Animation Speed Toggle
+                        var speedIdx by remember { mutableStateOf(0) }
+                        val speeds = listOf(1.0f, 2.0f, 4.0f)
+                        val speedLabels = listOf("1x", "2x", "4x")
+                        IconButton(
+                            onClick = {
+                                speedIdx = (speedIdx + 1) % speeds.size
+                                onSessionUpdated(session.copy(animationSpeedMultiplier = speeds[speedIdx]))
+                            },
+                            modifier = Modifier.size(30.dp)
+                        ) {
+                            Text(
+                                text = speedLabels[speedIdx],
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFC2185B)
+                            )
+                        }
+
                         IconButton(
                             onClick = { SoundEffectManager.toggleMute() },
                             modifier = Modifier.size(30.dp)

@@ -6,6 +6,14 @@ import com.example.haremdark.models.DailyBounty
 import com.example.haremdark.models.InfluenceLogEntry
 
 @Serializable
+enum class Rarity(val title: String, val color: Long, val statMultiplier: Float) {
+    COMMON("Běžná", 0xFF9E9E9E, 1.0f),
+    RARE("Vzácná", 0xFF4CAF50, 1.2f),
+    EPIC("Epická", 0xFF9C27B0, 1.5f),
+    LEGENDARY("Legendární", 0xFFFFC107, 2.0f)
+}
+
+@Serializable
 enum class CombatStrategy(val displayName: String, val icon: String, val description: String) {
     BALANCED("Vyvážená", "⚖️", "Standardní přístup k boji bez specifických bonusů."),
     AGGRESSIVE("Agresivní", "⚔️", "Zaměřuje se na útok. +20% poškození, ale -15% obrana."),
@@ -279,6 +287,7 @@ data class Character(
     var completedBondStories: MutableSet<String> = mutableSetOf(),
     var unlockedVoiceLines: MutableSet<String> = mutableSetOf(),
     var unlockedEmotions: MutableSet<String> = mutableSetOf("BLUSH", "CHEER", "LOVE", "SHY", "SPARKLE"),
+    var voicePackId: String = "default",
     var favorBoostActive: Boolean = false,
     var favorBoostDaysRemaining: Int = 0,
     var preferredCombatRole: CombatStrategy = CombatStrategy.BALANCED,
@@ -288,6 +297,14 @@ data class Character(
     var unlockedSkins: MutableList<String> = mutableListOf("default"),
     var elementalMultipliers: MutableMap<String, Float> = mutableMapOf() // Store as String to avoid serialization issues with Enum if any
 ) {
+    val rarityEnum: Rarity
+        get() = when (rarity) {
+            1 -> Rarity.COMMON
+            2 -> Rarity.RARE
+            3 -> Rarity.EPIC
+            else -> Rarity.LEGENDARY
+        }
+
     fun checkAffinityMilestones() {
         val total = elementalMultipliers.values.sum()
         val newSkins = mutableListOf<String>()
@@ -921,7 +938,9 @@ data class GameSave(
     val bestiaryEntries: List<BestiaryEntry> = emptyList(),
     val dailyBounties: List<DailyBounty> = emptyList(),
     val influenceLog: List<InfluenceLogEntry> = emptyList(),
-    val alliances: List<com.example.haremdark.models.Alliance> = emptyList()
+    val alliances: List<com.example.haremdark.models.Alliance> = emptyList(),
+    val guild: com.example.haremdark.models.Guild? = null,
+    val materials: List<com.example.haremdark.models.CraftingMaterial> = emptyList()
 )
 
 @Serializable

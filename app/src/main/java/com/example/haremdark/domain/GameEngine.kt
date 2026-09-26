@@ -212,6 +212,30 @@ class GameEngine(private val context: Context) {
         haremCharacterRepository.updateSkillPoints(characterId, character.availableSkillPoints + points)
     }
 
+    fun levelUpCharacter(characterId: String): Pair<Boolean, String> {
+        val player = _gameState.value.player
+        val costGold = 75
+        val costGems = 10
+        if (player.gold < costGold && player.darkEnergy < costGems) {
+            return Pair(false, "Nedostatek zdrojů (vyžadováno $costGold zlata nebo $costGems temné energie/gemů).")
+        }
+        if (player.gold >= costGold) {
+            spendGold(costGold, "Vylepšení úrovně členky harému")
+        } else {
+            updateState { state ->
+                val p = state.player
+                state.copy(player = p.copy(darkEnergy = (p.darkEnergy - costGems).coerceAtLeast(0)))
+            }
+        }
+        val updated = haremCharacterRepository.levelUp(characterId)
+        if (updated != null) {
+            autoSave()
+            addLog("⭐ ${updated.name} postoupila na úroveň ${updated.level}! Síla a statistiky vzrostly.")
+            return Pair(true, "Úspěšně vylepšeno na úroveň ${updated.level}!")
+        }
+        return Pair(false, "Členka harému nebyla nalezena.")
+    }
+
     fun executeBondingInteraction(characterId: String, interactionType: String): Pair<Boolean, String> {
         val character = haremCharacterRepository.getById(characterId)
             ?: return Pair(false, "Členka harému nebyla nalezena.")
@@ -585,6 +609,86 @@ class GameEngine(private val context: Context) {
             state.copy(alliances = state.alliances + newAlliance)
         }
         addLog("🤝 Ujednána aliance s ${faction.title}: ${type.title} na $duration dní.")
+    }
+
+    // --- GUILD SYSTEM ---
+    fun createGuild(name: String) {
+        updateState { state ->
+            val newGuild = com.example.haremdark.models.Guild(
+                id = UUID.randomUUID().toString(),
+                name = name
+            )
+            state.copy(guild = newGuild)
+        }
+    }
+
+    // --- CRAFTING SYSTEM ---
+    // --- GUILD SYSTEM ---
+    fun sendGuildMessage(sender: String, message: String) {
+        updateState { state ->
+            val guild = state.guild
+            if (guild != null) {
+                val newMessage = com.example.haremdark.models.GuildMessage(sender, message)
+                guild.messages.add(newMessage)
+                // Keep last 50 messages
+                if (guild.messages.size > 50) guild.messages.removeAt(0)
+            }
+            state
+        }
+    }
+
+    // --- CRAFTING SYSTEM ---
+    fun quickSalvage() {
+        updateState { state ->
+            val p = state.player
+            val commonItems = p.items.filter { it.category == "equipment" && it.rarity == "Běžný" }
+            
+            if (commonItems.isEmpty()) return@updateState state
+            
+            val newItems = p.items.toMutableList()
+            val newMaterials = state.materials.toMutableList()
+            
+            commonItems.forEach { item ->
+                // Salvage each item
+                newItems.remove(item)
+                val materialId = "scrap_common"
+                val existingMat = newMaterials.find { it.id == materialId }
+                if (existingMat != null) {
+                    existingMat.count += 5
+                } else {
+                    newMaterials.add(com.example.haremdark.models.CraftingMaterial(materialId, "Šrot (Běžný)", 5))
+                }
+            }
+            
+            state.copy(player = p.copy(items = newItems), materials = newMaterials)
+        }
+    }
+
+    fun craftItem(recipe: com.example.haremdark.models.CraftingRecipe) {
+        updateState { state ->
+            val p = state.player
+            
+            // Check resources
+            val hasGold = p.gold >= recipe.goldCost
+            val hasMaterials = recipe.materialsRequired.all { (matId, amount) ->
+                state.materials.find { it.id == matId }?.count ?: 0 >= amount
+            }
+            
+            if (hasGold && hasMaterials) {
+                // Deduct
+                val newMaterials = state.materials.toMutableList()
+                recipe.materialsRequired.forEach { (matId, amount) ->
+                    val mat = newMaterials.find { it.id == matId }
+                    if (mat != null) mat.count -= amount
+                }
+                
+                // Add item
+                val newItems = p.items.toMutableList()
+                // ... (add result item logic)
+                
+                state.copy(player = p.copy(gold = p.gold - recipe.goldCost, items = newItems), materials = newMaterials)
+            } else state
+        }
     }
 
     fun spendGold(amount: Int, reason: String? = null): Boolean {

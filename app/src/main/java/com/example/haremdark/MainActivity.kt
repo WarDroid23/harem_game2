@@ -632,24 +632,24 @@ class MainActivity : ComponentActivity() {
                             tonalElevation = 8.dp
                         ) {
                             val items = listOf(
-                                NavigationDestination("Character List", Icons.Default.Groups, "character_list"),
-                                NavigationDestination("Combat Arena", Icons.Default.SportsMartialArts, "combat_arena"),
-                                NavigationDestination("Domain Management", Icons.Default.Castle, "domain_management")
+                                NavigationDestination("Dashboard", Icons.Default.Dashboard, "dashboard"),
+                                NavigationDestination("Combat", Icons.Default.SportsMartialArts, "combat_arena"),
+                                NavigationDestination("Harem Mgmt", Icons.Default.Groups, "harem_management")
                             )
 
                             items.forEach { dest ->
                                 val isSelected = when (dest.route) {
-                                    "character_list" -> currentRoute in listOf("character_list", "harem", "roster")
-                                    "combat_arena" -> currentRoute in listOf("combat_arena", "arena")
-                                    "domain_management" -> currentRoute in listOf("domain_management", "building_management", "empire")
+                                    "dashboard" -> currentRoute == "dashboard"
+                                    "combat_arena" -> currentRoute in listOf("combat_arena", "arena", "combat")
+                                    "harem_management" -> currentRoute in listOf("harem_management", "character_list", "harem", "roster")
                                     else -> currentRoute == dest.route
                                 }
                                 NavigationBarItem(
                                     modifier = Modifier.testTag(
                                         when (dest.route) {
-                                            "character_list" -> "nav_character_list"
+                                            "dashboard" -> "nav_dashboard"
+                                            "harem_management" -> "nav_harem_management"
                                             "combat_arena" -> "nav_combat_arena"
-                                            "domain_management" -> "nav_domain_management"
                                             else -> "nav_${dest.route}"
                                         }
                                     ),
@@ -698,7 +698,7 @@ class MainActivity : ComponentActivity() {
                     ) {
                         NavHost(
                             navController = navController,
-                            startDestination = "character_list",
+                            startDestination = "dashboard",
                             enterTransition = {
                                 fadeIn(animationSpec = tween(500)) + slideIntoContainer(
                                     towards = AnimatedContentTransitionScope.SlideDirection.Start,
@@ -724,6 +724,12 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         ) {
+                            composable("dashboard") {
+                                DashboardScreen(engine = engine)
+                            }
+                            composable("harem_management") {
+                                HaremManagementScreen(gameState = gameState, engine = engine)
+                            }
                             composable("character_list") {
                                 HaremScreen(
                                     gameState = gameState,
@@ -739,6 +745,9 @@ class MainActivity : ComponentActivity() {
                                     engine = engine,
                                     onBack = null
                                 )
+                            }
+                            composable("formation_management") {
+                                FormationManagementScreen(engine = engine)
                             }
                             composable("home") {
                                 HomeScreen(
@@ -790,6 +799,9 @@ class MainActivity : ComponentActivity() {
                             composable("achievements") {
                                 com.example.haremdark.ui.screens.AchievementScreen(gameState = gameState, engine = engine, onMenuClick = { coroutineScope.launch { drawerState.open() } })
                             }
+                            composable("guild") {
+                                GuildScreen(engine = engine)
+                            }
                             composable("codex") {
                                 CodexScreen(player = gameState.player, onBack = { navController.popBackStack() })
                             }
@@ -838,6 +850,13 @@ class MainActivity : ComponentActivity() {
                             composable("skill_tree") {
                                 SkillTreeScreen(
                                     engine = engine
+                                )
+                            }
+                            composable("daily_quests") {
+                                DailyQuestScreen(
+                                    gameState = gameState,
+                                    engine = engine,
+                                    onBack = { navController.popBackStack() }
                                 )
                             }
                         }

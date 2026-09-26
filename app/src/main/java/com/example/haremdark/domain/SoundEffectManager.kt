@@ -623,10 +623,12 @@ object SoundEffectManager {
         }
     }
 
-    fun playCharacterVoice(voiceType: CharacterVoiceType) {
+    fun playCharacterVoice(voicePackId: String, voiceType: CharacterVoiceType) {
         if (_isMuted.value) return
         scope.launch {
             try {
+                // Logic to select audio clip based on voicePackId and voiceType
+                // For now, mapping some predefined voice packs or using the existing logic
                 when (voiceType) {
                     CharacterVoiceType.TAP_GREETING -> {
                         playPcmTrack(synthesizeArpeggio(listOf(784.0, 987.77, 1174.66), 0.1, 0.6f))
@@ -649,6 +651,8 @@ object SoundEffectManager {
             }
         }
     }
+
+    fun playCharacterVoice(voiceType: CharacterVoiceType) = playCharacterVoice("default", voiceType)
 
     private fun fallbackTone(toneType: Int, durationMs: Int) {
         try {

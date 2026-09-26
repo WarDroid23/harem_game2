@@ -451,7 +451,8 @@ data class PartyCombatSession(
     var isFinished: Boolean = false,
     var isVictory: Boolean = false,
     var rewards: PartyCombatRewards? = null,
-    var autoBattleEnabled: Boolean = false
+    var autoBattleEnabled: Boolean = false,
+    var animationSpeedMultiplier: Float = 1.0f
 ) {
     val aliveParty: List<PartyMember> get() = party.filter { it.isAlive }
     val aliveEnemies: List<CombatEnemy> get() = enemies.filter { it.isAlive }

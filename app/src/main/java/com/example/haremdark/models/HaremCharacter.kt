@@ -2,6 +2,9 @@ package com.example.haremdark.models
 
 import kotlinx.serialization.Serializable
 import java.util.UUID
+import com.example.haremdark.models.Equipment
+import com.example.haremdark.models.EquipmentSlot
+import com.example.haremdark.models.Rarity
 
 /**
  * Combat and thematic roles for characters in the Lord's harem.
@@ -49,6 +52,7 @@ data class HaremCharacter(
     var name: String,
     var affection: Int = 50,
     var powerLevel: Int = 100,
+    var rarity: Rarity = Rarity.COMMON,
     var role: HaremRole = HaremRole.COMPANION,
     var archetypeId: String = "draci_divka",
     var title: String = "",
@@ -71,7 +75,9 @@ data class HaremCharacter(
     var statBonuses: Map<String, Int> = emptyMap(),
     var interactionHistory: MutableList<InteractionLogEntry> = mutableListOf(),
     var morale: Int = 50,
-    var statHistory: MutableList<StatRecord> = mutableListOf()
+    var statHistory: MutableList<StatRecord> = mutableListOf(),
+    var equippedItems: Map<EquipmentSlot, Equipment> = emptyMap(),
+    var voicePackId: String = "default"
 ) {
     val moraleMultiplier: Float
         get() = when {
@@ -142,7 +148,14 @@ fun Character.toHaremCharacter(): HaremCharacter {
         else -> HaremRole.fromString(role)
     }
 
-    val calculatedPower = (strength * 4) + (level * 15) + (hp / 2) + (attributes.strength * 2)
+    val rarityEnum = when (rarity) {
+        1 -> Rarity.COMMON
+        2 -> Rarity.RARE
+        3 -> Rarity.EPIC
+        else -> Rarity.LEGENDARY
+    }
+
+    val calculatedPower = ((strength * 4) + (level * 15) + (hp / 2) + (attributes.strength * 2)) * rarityEnum.statMultiplier.toInt()
 
     val charElement = when (archetypeId) {
         "sukuba", "krvava_subka" -> Element.DARK
@@ -187,7 +200,13 @@ fun Character.toHaremCharacter(): HaremCharacter {
         },
         unlockedSkills = unlockedCombatSkills.toList(),
         morale = morale,
-        statHistory = statHistory.toMutableList()
+        statHistory = statHistory.toMutableList(),
+        rarity = when {
+            level >= 10 -> Rarity.LEGENDARY
+            level >= 6 -> Rarity.EPIC
+            level >= 3 -> Rarity.RARE
+            else -> Rarity.COMMON
+        }
     )
 }
 
