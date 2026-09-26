@@ -32,6 +32,8 @@ import com.example.haremdark.models.GameSave
 import com.example.haremdark.models.PartyCombatSession
 import com.example.haremdark.models.SkillCategory
 import com.example.haremdark.models.SkillTargetType
+import com.example.haremdark.models.FormationPosition
+import com.example.haremdark.models.CombatRole
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -66,27 +68,87 @@ fun PartyCombatScreen(
     val shakeRot = fxState.shakeRotation.value
     val camScale = fxState.cameraScale.value
 
-    // Auto-Battle AI loop
-    LaunchedEffect(isAutoBattle, session.currentTurnIndex, session.isFinished) {
-        if (isAutoBattle && !session.isFinished && session.currentActiveMember != null) {
-            kotlinx.coroutines.delay(700)
-            if (!session.isFinished && session.currentActiveMember != null) {
+    // Smart Tactical Auto-Battle AI loop
+    LaunchedEffect(isAutoBattle, session.currentTurnIndex, session.isFinished, session.haremComboGauge) {
+        if (isAutoBattle && !session.isFinished) {
+            kotlinx.coroutines.delay(800)
+            if (session.isFinished) return@LaunchedEffect
+
+            // 1. Ultimate Combo priority
+            if (session.isComboReady) {
+                val (next, _) = PartyCombatManager.executeHaremComboUltimate(session)
+                onSessionUpdated(next)
+                return@LaunchedEffect
+            }
+
+            if (session.currentActiveMember != null) {
                 val member = session.currentActiveMember!!
-                val targetIdx = session.selectedTargetEnemyIndex.coerceIn(0, session.enemies.size - 1)
-                val bestSkill = member.skills.firstOrNull { skill ->
-                    member.mana >= skill.manaCost
+
+                // A. Assess teammate health (prioritize healing/shields)
+                val lowestHpAlly = session.party.filter { it.isAlive }.minByOrNull { it.hp.toFloat() / it.maxHp.toFloat() }
+                val lowestHpPercent = lowestHpAlly?.let { it.hp.toFloat() / it.maxHp.toFloat() } ?: 1.0f
+
+                val healSkill = member.skills.firstOrNull { it.healAmount > 0 && member.mana >= it.manaCost }
+                if (lowestHpPercent < 0.60f && healSkill != null && lowestHpAlly != null) {
+                    val allyIdx = session.party.indexOf(lowestHpAlly).coerceIn(0, session.party.size - 1)
+                    val targetId = if (healSkill.targetType == SkillTargetType.SINGLE_ALLY) allyIdx else session.selectedTargetAllyIndex
+                    val (next, _) = PartyCombatManager.executeSkill(session, healSkill.id, targetId)
+                    onSessionUpdated(next)
+                    return@LaunchedEffect
                 }
-                if (bestSkill != null) {
-                    val targetId = if (bestSkill.targetType == SkillTargetType.SINGLE_ALLY || bestSkill.targetType == SkillTargetType.ALL_ALLIES) {
-                        session.selectedTargetAllyIndex
+
+                // B. Active Vanguard/Tank self-defense strategy
+                if (member.formationPosition == FormationPosition.FRONT_LINE && member.hp.toFloat() / member.maxHp.toFloat() < 0.35f) {
+                    val shieldSkill = member.skills.firstOrNull { it.category == SkillCategory.SUPPORT_BUFF && member.mana >= it.manaCost }
+                    if (shieldSkill != null) {
+                        val (next, _) = PartyCombatManager.executeSkill(session, shieldSkill.id, session.selectedTargetAllyIndex)
+                        onSessionUpdated(next)
+                        return@LaunchedEffect
                     } else {
-                        targetIdx
+                        val (next, _) = PartyCombatManager.executeDefend(session)
+                        onSessionUpdated(next)
+                        return@LaunchedEffect
                     }
-                    val (next, _) = PartyCombatManager.executeSkill(session, bestSkill.id, targetId)
-                    onSessionUpdated(next)
-                } else {
-                    val (next, _) = PartyCombatManager.executeBasicAttack(session, targetIdx)
-                    onSessionUpdated(next)
+                }
+
+                // C. Active Priestess/Buff support strategy
+                if (member.role == CombatRole.HEALER_PRIESTESS || member.formationPosition == FormationPosition.BACK_LINE) {
+                    val buffSkill = member.skills.firstOrNull { it.category == SkillCategory.SUPPORT_BUFF && member.mana >= it.manaCost }
+                    if (buffSkill != null) {
+                        val (next, _) = PartyCombatManager.executeSkill(session, buffSkill.id, session.selectedTargetAllyIndex)
+                        onSessionUpdated(next)
+                        return@LaunchedEffect
+                    }
+                }
+
+                // D. Select optimal offensive skills
+                val damageSkill = member.skills
+                    .filter { it.manaCost <= member.mana && it.powerMultiplier > 1.1f && it.healAmount == 0 }
+                    .maxByOrNull { it.powerMultiplier }
+
+                // E. Element system targeting (focus on weaknesses or lowest HP)
+                val aliveEnemies = session.enemies.filter { it.isAlive }
+                if (aliveEnemies.isNotEmpty()) {
+                    val weakEnemies = aliveEnemies.filter { enemy ->
+                        PartyCombatManager.getElementMultiplier(member.element, enemy.element) > 1.1f
+                    }
+                    val targetEnemy = if (weakEnemies.isNotEmpty()) {
+                        weakEnemies.minByOrNull { it.hp }!!
+                    } else {
+                        aliveEnemies.minByOrNull { it.hp }!!
+                    }
+                    val targetEnemyIdx = session.enemies.indexOf(targetEnemy).coerceIn(0, session.enemies.size - 1)
+
+                    if (damageSkill != null) {
+                        val targetId = if (damageSkill.targetType == SkillTargetType.ALL_ENEMIES) 0 else targetEnemyIdx
+                        val updatedSession = session.copy(selectedTargetEnemyIndex = targetEnemyIdx)
+                        val (next, _) = PartyCombatManager.executeSkill(updatedSession, damageSkill.id, targetId)
+                        onSessionUpdated(next)
+                    } else {
+                        val updatedSession = session.copy(selectedTargetEnemyIndex = targetEnemyIdx)
+                        val (next, _) = PartyCombatManager.executeBasicAttack(updatedSession, targetEnemyIdx)
+                        onSessionUpdated(next)
+                    }
                 }
             }
         }
@@ -145,6 +207,12 @@ fun PartyCombatScreen(
                 modifier = Modifier.fillMaxSize()
             )
         }
+
+        // Global Weather Subtle Particle Overlay
+        CombatWeatherParticles(
+            weatherId = session.weather.id,
+            modifier = Modifier.fillMaxSize()
+        )
 
         // Main Combat Layout with Screen Shake and Camera Impact Scale
         Column(

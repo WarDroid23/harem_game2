@@ -65,6 +65,18 @@ object PartyCombatManager {
         }
     }
 
+    fun getEffectiveAffinityMultiplier(member: PartyMember, weather: CombatWeather): Float {
+        val baseMultiplier = member.elementalMultipliers[member.element.name] ?: member.affinityBonusDmg
+        val weatherBonus = when (weather.id) {
+            "storm" -> if (member.element == Element.LIGHTNING || member.element == Element.WATER) 1.25f else 1.0f
+            "blizzard" -> if (member.element == Element.ICE || member.element == Element.AIR) 1.25f else 1.0f
+            "sunny" -> if (member.element == Element.FIRE || member.element == Element.HOLY) 1.25f else 1.0f
+            "fog" -> if (member.element == Element.DARK || member.element == Element.EARTH) 1.25f else 1.0f
+            else -> 1.0f
+        }
+        return baseMultiplier * weatherBonus
+    }
+
     private fun tryApplyStatusEffect(attacker: PartyMember, target: Any, isCrit: Boolean) {
         if (!isCrit) return
 
@@ -411,8 +423,7 @@ object PartyCombatManager {
         val isHesitant = (!activeMember.isPlayer && activeMember.loyaltyValue < 30 && Random.nextInt(100) < 20)
         val loyaltyDmgMod = if (isHesitant) 0.75f else 1.0f
 
-        val affinityMultiplier = activeMember.elementalMultipliers[activeMember.element.name]
-            ?: activeMember.affinityBonusDmg
+        val affinityMultiplier = getEffectiveAffinityMultiplier(activeMember, session.weather)
 
         val elementMult = getElementMultiplier(activeMember.element, target.element)
         val matchupType = getMatchupType(elementMult)
@@ -588,8 +599,7 @@ object PartyCombatManager {
                 val aliveEnemies = session.enemies.filter { it.isAlive }
                 val target = aliveEnemies.getOrNull(targetIndex) ?: aliveEnemies.firstOrNull()
                 if (target != null) {
-                    val affinityMultiplier = activeMember.elementalMultipliers[activeMember.element.name]
-                        ?: activeMember.affinityBonusDmg
+                    val affinityMultiplier = getEffectiveAffinityMultiplier(activeMember, session.weather)
                     val elementMult = getElementMultiplier(activeMember.element, target.element)
                     val matchupType = getMatchupType(elementMult)
 
@@ -707,9 +717,10 @@ object PartyCombatManager {
             SkillTargetType.ALL_ENEMIES -> {
                 val aliveEnemies = session.enemies.filter { it.isAlive }
                 var totalDmg = 0
+                val affinityMultiplier = getEffectiveAffinityMultiplier(activeMember, session.weather)
                 aliveEnemies.forEach { enemy ->
                     val elementMult = getElementMultiplier(activeMember.element, enemy.element)
-                    val rawDmg = ((activeMember.attack * skill.powerMultiplier) + skill.baseDamageBonus) * activeMember.affinityBonusDmg * synergyAtk * elementMult
+                    val rawDmg = ((activeMember.attack * skill.powerMultiplier) + skill.baseDamageBonus) * affinityMultiplier * synergyAtk * elementMult
                     val finalDmg = (rawDmg - (enemy.defense * 0.25f)).toInt().coerceAtLeast(8)
                     enemy.hp = (enemy.hp - finalDmg).coerceAtLeast(0)
                     totalDmg += finalDmg
