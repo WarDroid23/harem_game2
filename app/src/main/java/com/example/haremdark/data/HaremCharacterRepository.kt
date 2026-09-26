@@ -110,6 +110,11 @@ interface HaremCharacterRepository {
     fun updateSkillPoints(id: String, points: Int): HaremCharacter?
 
     /**
+     * Update character morale (clamped 0..100).
+     */
+    fun updateMorale(id: String, delta: Int): HaremCharacter?
+
+    /**
      * Filter characters matching specific criteria.
      */
     fun filter(
@@ -378,6 +383,22 @@ class HaremCharacterRepositoryImpl(
             current.map { char ->
                 if (char.id == id) {
                     val result = char.copy(availableSkillPoints = points)
+                    updated = result
+                    result
+                } else char
+            }
+        }
+        if (updated != null) notifyStateChanged()
+        return updated
+    }
+
+    override fun updateMorale(id: String, delta: Int): HaremCharacter? {
+        var updated: HaremCharacter? = null
+        _characters.update { current ->
+            current.map { char ->
+                if (char.id == id) {
+                    val newMorale = (char.morale + delta).coerceIn(0, 100)
+                    val result = char.copy(morale = newMorale)
                     updated = result
                     result
                 } else char

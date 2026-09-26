@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -92,7 +93,7 @@ class MainActivity : ComponentActivity() {
             
             val navController = rememberNavController()
             val navBackStackEntry by navController.currentBackStackEntryAsState()
-            val currentRoute = navBackStackEntry?.destination?.route ?: "home"
+            val currentRoute = navBackStackEntry?.destination?.route ?: "character_list"
             val coroutineScope = rememberCoroutineScope()
             
             var showRestDialog by remember { mutableStateOf(false) }
@@ -372,14 +373,14 @@ class MainActivity : ComponentActivity() {
                                 )
                                 QuickNavDrawerItem(
                                     icon = Icons.Default.Favorite,
-                                    title = "Harém",
+                                    title = "Harém (Character List)",
                                     subtitle = "Dívky, komnaty & vztahy",
                                     badgeText = "${gameState.characters.size} dívek",
-                                    isSelected = currentRoute == "harem",
+                                    isSelected = currentRoute in listOf("character_list", "harem"),
                                     onClick = {
                                         coroutineScope.launch { drawerState.close() }
                                         SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
-                                        navController.navigate("harem") { launchSingleTop = true }
+                                        navController.navigate("character_list") { launchSingleTop = true }
                                     }
                                 )
                                 QuickNavDrawerItem(
@@ -419,6 +420,39 @@ class MainActivity : ComponentActivity() {
                                         coroutineScope.launch { drawerState.close() }
                                         SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
                                         navController.navigate("empire") { launchSingleTop = true }
+                                    }
+                                )
+                                QuickNavDrawerItem(
+                                    icon = Icons.Default.Apartment,
+                                    title = "Správa Budov (Domain)",
+                                    subtitle = "Obrana dominia & násobiče produkce",
+                                    isSelected = currentRoute in listOf("domain_management", "building_management"),
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
+                                        navController.navigate("domain_management") { launchSingleTop = true }
+                                    }
+                                )
+                                QuickNavDrawerItem(
+                                    icon = Icons.Default.ShowChart,
+                                    title = "Analýza Výkonu (30 dní)",
+                                    subtitle = "Trendy produkce a morálka harému",
+                                    isSelected = currentRoute == "dashboard_charts",
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
+                                        navController.navigate("dashboard_charts") { launchSingleTop = true }
+                                    }
+                                )
+                                QuickNavDrawerItem(
+                                    icon = Icons.Default.AccountTree,
+                                    title = "Strom Dovedností Harému",
+                                    subtitle = "Bojové & produkční perky členek",
+                                    isSelected = currentRoute == "skill_tree",
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
+                                        navController.navigate("skill_tree") { launchSingleTop = true }
                                     }
                                 )
 
@@ -461,13 +495,13 @@ class MainActivity : ComponentActivity() {
                                 )
                                 QuickNavDrawerItem(
                                     icon = Icons.Default.SportsMartialArts,
-                                    title = "Aréna & Souboje",
+                                    title = "Aréna & Souboje (Combat Arena)",
                                     subtitle = "Gladiátorské zápasy & turnaje",
-                                    isSelected = currentRoute == "arena",
+                                    isSelected = currentRoute in listOf("combat_arena", "arena"),
                                     onClick = {
                                         coroutineScope.launch { drawerState.close() }
                                         SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
-                                        navController.navigate("arena") { launchSingleTop = true }
+                                        navController.navigate("combat_arena") { launchSingleTop = true }
                                     }
                                 )
                                 QuickNavDrawerItem(
@@ -593,21 +627,32 @@ class MainActivity : ComponentActivity() {
                         },
                     bottomBar = {
                         NavigationBar(
+                            modifier = Modifier.testTag("bottom_navigation_bar"),
                             containerColor = MaterialTheme.colorScheme.surface,
                             tonalElevation = 8.dp
                         ) {
                             val items = listOf(
-                                NavigationDestination("Dominium", Icons.Default.Castle, "home"),
-                                NavigationDestination("Harém", Icons.Default.Favorite, "harem"),
-                                NavigationDestination("Mapa", Icons.Default.Map, "map"),
-                                NavigationDestination("Pevnost", Icons.Default.LocationCity, "empire"),
-                                NavigationDestination("Aktivity", Icons.Default.Explore, "activities"),
-                                NavigationDestination("Pán", Icons.Default.Person, "progression")
+                                NavigationDestination("Character List", Icons.Default.Groups, "character_list"),
+                                NavigationDestination("Combat Arena", Icons.Default.SportsMartialArts, "combat_arena"),
+                                NavigationDestination("Domain Management", Icons.Default.Castle, "domain_management")
                             )
 
                             items.forEach { dest ->
-                                val isSelected = currentRoute == dest.route
+                                val isSelected = when (dest.route) {
+                                    "character_list" -> currentRoute in listOf("character_list", "harem", "roster")
+                                    "combat_arena" -> currentRoute in listOf("combat_arena", "arena")
+                                    "domain_management" -> currentRoute in listOf("domain_management", "building_management", "empire")
+                                    else -> currentRoute == dest.route
+                                }
                                 NavigationBarItem(
+                                    modifier = Modifier.testTag(
+                                        when (dest.route) {
+                                            "character_list" -> "nav_character_list"
+                                            "combat_arena" -> "nav_combat_arena"
+                                            "domain_management" -> "nav_domain_management"
+                                            else -> "nav_${dest.route}"
+                                        }
+                                    ),
                                     selected = isSelected,
                                     onClick = {
                                         SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
@@ -623,13 +668,13 @@ class MainActivity : ComponentActivity() {
                                         Icon(
                                             dest.icon, 
                                             contentDescription = dest.title,
-                                            modifier = Modifier.size(22.dp)
+                                            modifier = Modifier.size(24.dp)
                                         ) 
                                     },
                                     label = { 
                                         Text(
                                             dest.title, 
-                                            fontSize = 10.sp, 
+                                            fontSize = 11.sp, 
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                             maxLines = 1
                                         ) 
@@ -653,7 +698,7 @@ class MainActivity : ComponentActivity() {
                     ) {
                         NavHost(
                             navController = navController,
-                            startDestination = "home",
+                            startDestination = "character_list",
                             enterTransition = {
                                 fadeIn(animationSpec = tween(500)) + slideIntoContainer(
                                     towards = AnimatedContentTransitionScope.SlideDirection.Start,
@@ -679,13 +724,29 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         ) {
+                            composable("character_list") {
+                                HaremScreen(
+                                    gameState = gameState,
+                                    engine = engine,
+                                    onNavigateToHunt = { navController.navigate("activities") }
+                                )
+                            }
+                            composable("combat_arena") {
+                                ArenaScreen(gameState = gameState, engine = engine)
+                            }
+                            composable("domain_management") {
+                                BuildingManagementScreen(
+                                    engine = engine,
+                                    onBack = null
+                                )
+                            }
                             composable("home") {
                                 HomeScreen(
                                     gameState = gameState,
                                     engine = engine,
-                                    onNavigateToHarem = { navController.navigate("harem") },
+                                    onNavigateToHarem = { navController.navigate("character_list") },
                                     onNavigateToActivities = { navController.navigate("activities") },
-                                    onNavigateToEmpire = { navController.navigate("empire") },
+                                    onNavigateToEmpire = { navController.navigate("domain_management") },
                                     onNavigateToProgression = { navController.navigate("progression") },
                                     onNavigateToMap = { navController.navigate("map") }
                                 )
@@ -703,7 +764,7 @@ class MainActivity : ComponentActivity() {
                                     engine = engine,
                                     onBack = {
                                         if (!navController.popBackStack()) {
-                                            navController.navigate("home") { launchSingleTop = true }
+                                            navController.navigate("character_list") { launchSingleTop = true }
                                         }
                                     }
                                 )
@@ -760,6 +821,23 @@ class MainActivity : ComponentActivity() {
                                             launchSingleTop = true
                                         }
                                     }
+                                )
+                            }
+                            composable("building_management") {
+                                BuildingManagementScreen(
+                                    engine = engine,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable("dashboard_charts") {
+                                DashboardChartScreen(
+                                    engine = engine,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable("skill_tree") {
+                                SkillTreeScreen(
+                                    engine = engine
                                 )
                             }
                         }

@@ -70,7 +70,8 @@ data class HaremCharacter(
     var availableSkillPoints: Int = 0,
     var statBonuses: Map<String, Int> = emptyMap(),
     var interactionHistory: MutableList<InteractionLogEntry> = mutableListOf(),
-    var morale: Int = 50
+    var morale: Int = 50,
+    var statHistory: MutableList<StatRecord> = mutableListOf()
 ) {
     val moraleMultiplier: Float
         get() = when {
@@ -184,7 +185,9 @@ fun Character.toHaremCharacter(): HaremCharacter {
             "krvava_subka" -> "🩸"
             else -> "👑"
         },
-        unlockedSkills = unlockedCombatSkills.toList()
+        unlockedSkills = unlockedCombatSkills.toList(),
+        morale = morale,
+        statHistory = statHistory.toMutableList()
     )
 }
 
@@ -207,4 +210,6 @@ fun HaremCharacter.applyToCharacter(target: Character) {
     target.jeManzelkou = isWife
     target.role = role.title
     target.nalada = mood
+    target.morale = morale
+    target.statHistory = statHistory.toMutableList()
 }

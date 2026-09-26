@@ -38,6 +38,7 @@ fun HaremCharacterManagerModal(
     repository: HaremCharacterRepository,
     onSell: (String) -> Unit,
     onLease: (String) -> Unit,
+    onExecuteInteraction: (String, String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val characters by repository.characters.collectAsState()
@@ -338,7 +339,8 @@ fun HaremCharacterManagerModal(
                                 onRoleSelected = { newRole -> repository.updateRole(character.id, newRole) },
                                 onDelete = { repository.remove(character.id) },
                                 onSell = { onSell(character.id) },
-                                onLease = { onLease(character.id) }
+                                onLease = { onLease(character.id) },
+                                onExecuteInteraction = onExecuteInteraction
                             )
                         }
                     }
@@ -370,8 +372,10 @@ private fun HaremCharacterCard(
     onRoleSelected: (HaremRole) -> Unit,
     onDelete: () -> Unit,
     onSell: () -> Unit,
-    onLease: () -> Unit
+    onLease: () -> Unit,
+    onExecuteInteraction: (String, String) -> Unit // Added: (characterId, interactionId)
 ) {
+    var expanded by remember { mutableStateOf(false) }
     var roleDropdownOpen by remember { mutableStateOf(false) }
 
     Card(
@@ -381,287 +385,173 @@ private fun HaremCharacterCard(
             1.dp,
             if (character.isFavorite) Color(0xFFFFD54F) else Color(0xFF9C27B0).copy(alpha = 0.4f)
         ),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Header: Name, Title, Favorite & Delete
+            // Header (always visible)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(character.avatarIcon, fontSize = 22.sp)
-                    Column {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(
-                                text = character.name,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            if (character.isWife) {
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = Color(0xFFFFD700).copy(alpha = 0.2f),
-                                    border = BorderStroke(0.5.dp, Color(0xFFFFD700))
+                    Text(character.name, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+                Text("💖 ${character.affection} | 🛡️ ${character.morale} Morálka", fontSize = 12.sp, color = Color(0xFFFF80AB))
+            }
+
+            // Expanded Detail View
+            if (expanded) {
+                HorizontalDivider(color = Color.White.copy(alpha = 0.15f))
+                
+                // Detailed Stats Grid
+                Text("Kompletní statistiky & Vlastnosti", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFCE93D8))
+                
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("⚔️ Síla: ${character.powerLevel}", fontSize = 11.sp, color = Color(0xFFFFB74D))
+                        Text("❤️ Životy: ${character.currentHp}/${character.maxHp}", fontSize = 11.sp, color = Color(0xFFEF5350))
+                        Text("🔮 Mana: ${character.currentMana}/${character.maxMana}", fontSize = 11.sp, color = Color(0xFF42A5F5))
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("🛡️ Oddanost: ${character.loyalty}%", fontSize = 11.sp, color = Color(0xFF81C784))
+                        val elementColor = when (character.element) {
+                            com.example.haremdark.models.Element.FIRE -> Color(0xFFFF5722)
+                            com.example.haremdark.models.Element.WATER -> Color(0xFF2196F3)
+                            com.example.haremdark.models.Element.ICE -> Color(0xFF80DEEA)
+                            com.example.haremdark.models.Element.LIGHTNING -> Color(0xFFFFEB3B)
+                            com.example.haremdark.models.Element.EARTH -> Color(0xFF8D6E63)
+                            com.example.haremdark.models.Element.AIR -> Color(0xFF80CBC4)
+                            com.example.haremdark.models.Element.DARK -> Color(0xFFBA68C8)
+                            com.example.haremdark.models.Element.HOLY -> Color(0xFFFFD54F)
+                            else -> Color(0xFFCFD8DC)
+                        }
+                        Text("🌀 Živel: ${character.element.name}", fontSize = 11.sp, color = elementColor)
+                    }
+                }
+
+                // Morale & Productivity Section
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF2A153E),
+                    border = BorderStroke(1.dp, Color(0xFF9C27B0).copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                ) {
+                    Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text("✨ Morálka: ${character.morale}/100", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFD54F))
+                            Text("Produkce: ${"%.1f".format(character.moraleMultiplier)}x", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF80CBC4))
+                        }
+                        LinearProgressIndicator(
+                            progress = { (character.morale / 100f).coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth().height(6.dp),
+                            color = when {
+                                character.morale >= 70 -> Color(0xFF4CAF50)
+                                character.morale >= 40 -> Color(0xFFFFC107)
+                                else -> Color(0xFFE53935)
+                            },
+                            trackColor = Color.Black.copy(alpha = 0.4f)
+                        )
+                        Text(
+                            text = "Pouto: ${character.bondingLevel.title} • Nálada: ${character.mood}",
+                            fontSize = 10.sp,
+                            color = Color.White.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+
+                // Equipped Skills
+                Text("Odemčené & Vybavené schopnosti:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFCE93D8))
+                if (character.unlockedSkills.isEmpty()) {
+                    Text("Zatím nebyly odemčeny žádné speciální schopnosti ze stromu dovedností.", fontSize = 10.sp, color = Color.Gray)
+                } else {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(character.unlockedSkills) { skillId ->
+                            val skillNode = com.example.haremdark.models.SkillTreeData.nodes.find { it.id == skillId }
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFF3B1754),
+                                border = BorderStroke(1.dp, Color(0xFFBA68C8).copy(alpha = 0.5f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    Text(
-                                        text = "MANŽELKA",
-                                        fontSize = 8.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFFFD700),
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                    )
+                                    Text(skillNode?.icon ?: "✨", fontSize = 12.sp)
+                                    Column {
+                                        Text(skillNode?.title ?: skillId, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        Text(skillNode?.description ?: "", fontSize = 9.sp, color = Color(0xFFE1BEE7), maxLines = 1)
+                                    }
                                 }
                             }
                         }
-                        Text(
-                            text = if (character.title.isNotBlank()) character.title else character.role.title,
-                            fontSize = 11.sp,
-                            color = Color(0xFFCE93D8)
-                        )
                     }
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = onToggleFavorite,
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (character.isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
-                            contentDescription = "Oblíbená",
-                            tint = if (character.isFavorite) Color(0xFFFFD700) else Color.Gray,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = onDelete,
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.DeleteOutline,
-                            contentDescription = "Odebrat",
-                            tint = Color(0xFFFF8A80),
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-
-            // Key Attributes Strip: Affection, Power Level, Role
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Affection Pill
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFF2C1335),
-                    border = BorderStroke(1.dp, Color(0xFFFF4081).copy(alpha = 0.5f)),
-                    modifier = Modifier.weight(1f)
+                // One-on-One Bonding Interactions that Directly Impact Morale
+                Text("💕 Osobní interakce sbližování (Vliv na morálku):", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF80AB))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("💖 Náklonnost", fontSize = 10.sp, color = Color(0xFFFF80AB))
-                            Text(
-                                "${character.affection}/100",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFFF80AB)
-                            )
-                        }
-                        Text(
-                            text = character.affectionStage,
-                            fontSize = 9.sp,
-                            color = Color.White.copy(alpha = 0.6f)
-                        )
-                        // Progress Bar
-                        LinearProgressIndicator(
-                            progress = { (character.affection / 100f).coerceIn(0f, 1f) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(4.dp),
-                            color = Color(0xFFFF4081),
-                            trackColor = Color(0x33FF4081)
-                        )
-                    }
-                }
-
-                // Power Level Pill
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFF22163B),
-                    border = BorderStroke(1.dp, Color(0xFFFFD54F).copy(alpha = 0.5f)),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("⚔️ Bojová síla", fontSize = 10.sp, color = Color(0xFFFFD54F))
-                            Text(
-                                "${character.powerLevel}",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFFFD54F)
-                            )
-                        }
-                        Text(
-                            text = "Třída: ${character.powerTier} (Lv.${character.level})",
-                            fontSize = 9.sp,
-                            color = Color.White.copy(alpha = 0.6f)
-                        )
-                        LinearProgressIndicator(
-                            progress = { (character.powerLevel / 500f).coerceIn(0f, 1f) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(4.dp),
-                            color = Color(0xFFFFD54F),
-                            trackColor = Color(0x33FFD54F)
-                        )
-                    }
-                }
-            }
-
-            // Role Selector & Action Buttons Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Role Dropdown Button
-                Box {
-                    Surface(
+                    Button(
+                        onClick = { onExecuteInteraction(character.id, "bonding_chat") },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF512DA8)),
                         shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF38154D),
-                        border = BorderStroke(1.dp, Color(0xFFAB47BC)),
-                        modifier = Modifier.clickable { roleDropdownOpen = true }
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(character.role.icon, fontSize = 12.sp)
-                            Text(
-                                text = "Role: ${character.role.title}",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White
-                            )
-                            Icon(
-                                Icons.Default.ArrowDropDown,
-                                contentDescription = null,
-                                tint = Color(0xFFE1BEE7),
-                                modifier = Modifier.size(14.dp)
-                            )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("💬 Rozhovor", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("+12 Morálka", fontSize = 9.sp, color = Color(0xFFFFD54F))
                         }
                     }
-
-                    DropdownMenu(
-                        expanded = roleDropdownOpen,
-                        onDismissRequest = { roleDropdownOpen = false },
-                        modifier = Modifier.background(Color(0xFF261238))
+                    Button(
+                        onClick = { onExecuteInteraction(character.id, "bonding_praise") },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4A148C)),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.weight(1f)
                     ) {
-                        HaremRole.entries.forEach { role ->
-                            DropdownMenuItem(
-                                text = {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Text(role.icon, fontSize = 14.sp)
-                                        Column {
-                                            Text(role.title, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                            Text(role.description, fontSize = 9.sp, color = Color(0xFFCE93D8))
-                                        }
-                                    }
-                                },
-                                onClick = {
-                                    onRoleSelected(role)
-                                    roleDropdownOpen = false
-                                }
-                            )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("👑 Pochvala", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("+15 Morálka", fontSize = 9.sp, color = Color(0xFFFFD54F))
                         }
                     }
                 }
-
-                // Quick Increment Action Buttons
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     Button(
-                        onClick = onSell,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828)),
+                        onClick = { onExecuteInteraction(character.id, "bonding_stroll") },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A1B9A)),
+                        shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(6.dp),
-                        modifier = Modifier.height(28.dp)
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Text("Prodat 💰", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("🌸 Procházka", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("+20 M • 10 SE", fontSize = 9.sp, color = Color(0xFFFF80AB))
+                        }
                     }
                     Button(
-                        onClick = onLease,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF6C00)),
+                        onClick = { onExecuteInteraction(character.id, "bonding_gift") },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF880E4F)),
+                        shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(6.dp),
-                        modifier = Modifier.height(28.dp)
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Text("Pronajmout 📜", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("🎁 Osobní dar", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("+25 M • 25 Zl.", fontSize = 9.sp, color = Color(0xFFFFD700))
+                        }
                     }
-                    Button(
-                        onClick = { onAddAffection(5) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFAD1457)),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(6.dp),
-                        modifier = Modifier.height(28.dp)
-                    ) {
-                        Text("+5 💖", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    Button(
-                        onClick = { onAddPower(15) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF57F17)),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(6.dp),
-                        modifier = Modifier.height(28.dp)
-                    ) {
-                        Text("+15 ⚔️", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-                    }
-                }
-
-                // Added interaction history
-                com.example.haremdark.ui.components.InteractionHistoryView(history = character.interactionHistory)
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // Bonding Information
-                Text("Pouto: ${character.bondingLevel.title}", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                character.activeBonuses.forEach { bonus ->
-                    Text("✨ ${bonus.title}: ${bonus.description}", fontSize = 11.sp, color = Color(0xFFFFD54F))
                 }
             }
         }

@@ -162,7 +162,9 @@ data class StatRecord(
     val day: Int,
     val strength: Int,
     val defense: Int,
-    val hp: Int
+    val hp: Int,
+    val mana: Int = 50,
+    val powerLevel: Int = 100
 )
 
 @Serializable
@@ -586,6 +588,80 @@ fun Character.addAffinityHistory(day: Int, source: String = "Interakce") {
     }
 }
 
+fun Character.getSafeStatTrend(currentDay: Int = 1): List<StatRecord> {
+    if (statHistory.size >= 2) {
+        return statHistory.toList()
+    }
+    if (statHistory.size == 1) {
+        val single = statHistory.first()
+        val startDay = (single.day - 3).coerceAtLeast(1)
+        val initialStr = (single.strength * 0.6f).toInt().coerceAtLeast(5)
+        val initialDef = (single.defense * 0.6f).toInt().coerceAtLeast(5)
+        val initialHp = (single.hp * 0.7f).toInt().coerceAtLeast(20)
+        val initialMana = (single.mana * 0.7f).toInt().coerceAtLeast(15)
+        val initialPower = (single.powerLevel * 0.6f).toInt().coerceAtLeast(20)
+        val baseline = listOf(
+            StatRecord(startDay, initialStr, initialDef, initialHp, initialMana, initialPower),
+            single
+        )
+        statHistory.clear()
+        statHistory.addAll(baseline)
+        return baseline
+    }
+    // Calculate current combat stats
+    val hpBonus = equipment.values.filterNotNull().sumOf { it.hpBonus } + ((skills["vitality"] ?: 0) * 10)
+    val curHp = maxHp + hpBonus
+    val combatSkill = skills["combat"] ?: 0
+    val combatBonus = equipment.values.filterNotNull().sumOf { it.combatBonus }
+    val curStr = (strength + combatSkill + combatBonus + (attributes.strength * 2)).coerceAtLeast(15)
+    val defSkill = skills["defense"] ?: 0
+    val defBonus = equipment.values.filterNotNull().sumOf { it.defenseBonus }
+    val curDef = (defSkill + defBonus + attributes.defense).coerceAtLeast(10)
+    val curMana = maxMana
+    val curPower = (curStr * 4) + (level * 15) + (curHp / 2)
+
+    val startDay = (currentDay - 3).coerceAtLeast(1)
+    val step1Str = (curStr * 0.55f).toInt().coerceAtLeast(8)
+    val step2Str = (curStr * 0.75f).toInt().coerceAtLeast(step1Str + 1)
+    val step3Str = (curStr * 0.90f).toInt().coerceAtLeast(step2Str + 1)
+
+    val step1Def = (curDef * 0.55f).toInt().coerceAtLeast(6)
+    val step2Def = (curDef * 0.75f).toInt().coerceAtLeast(step1Def + 1)
+    val step3Def = (curDef * 0.90f).toInt().coerceAtLeast(step2Def + 1)
+
+    val step1Hp = (curHp * 0.65f).toInt().coerceAtLeast(30)
+    val step2Hp = (curHp * 0.80f).toInt().coerceAtLeast(step1Hp + 5)
+    val step3Hp = (curHp * 0.92f).toInt().coerceAtLeast(step2Hp + 5)
+
+    val step1Power = (step1Str * 4) + 15 + (step1Hp / 2)
+    val step2Power = (step2Str * 4) + 15 + (step2Hp / 2)
+    val step3Power = (step3Str * 4) + (level * 15) + (step3Hp / 2)
+
+    val generated = mutableListOf(
+        StatRecord(startDay, step1Str, step1Def, step1Hp, (curMana * 0.6f).toInt(), step1Power),
+        StatRecord(startDay + 1, step2Str, step2Def, step2Hp, (curMana * 0.75f).toInt(), step2Power),
+        StatRecord(startDay + 2, step3Str, step3Def, step3Hp, (curMana * 0.9f).toInt(), step3Power),
+        StatRecord(currentDay.coerceAtLeast(startDay + 3), curStr, curDef, curHp, curMana, curPower)
+    )
+
+    statHistory.clear()
+    statHistory.addAll(generated)
+    return generated
+}
+
+fun Character.addStatRecord(record: StatRecord) {
+    val last = statHistory.lastOrNull()
+    if (last != null && last.day == record.day) {
+        statHistory[statHistory.lastIndex] = record
+    } else {
+        statHistory.add(record)
+    }
+    if (statHistory.size > 30) {
+        statHistory.removeAt(0)
+    }
+}
+
+
 
 @Serializable
 data class Achievement(
@@ -844,7 +920,8 @@ data class GameSave(
     val mapBookmarks: List<MapBookmark> = emptyList(),
     val bestiaryEntries: List<BestiaryEntry> = emptyList(),
     val dailyBounties: List<DailyBounty> = emptyList(),
-    val influenceLog: List<InfluenceLogEntry> = emptyList()
+    val influenceLog: List<InfluenceLogEntry> = emptyList(),
+    val alliances: List<com.example.haremdark.models.Alliance> = emptyList()
 )
 
 @Serializable
@@ -864,7 +941,8 @@ data class DailyResourceStat(
     val manaEssenceProduced: Int,
     val woodProduced: Int,
     val stoneProduced: Int,
-    val ironProduced: Int
+    val ironProduced: Int,
+    val averageMorale: Int = 50
 )
 
 

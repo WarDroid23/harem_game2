@@ -118,7 +118,7 @@ fun CharacterDetailDialog(
     val portraitRes = StaticData.getPortraitForArchetype(currentActiveCharacter.archetypeId)
 
     var selectedSection by remember { mutableIntStateOf(initialTab) }
-    val sectionTabs = listOf("📖 Životopis", "📊 Profil", "🛡️ Výbava", "💖 Náklonnost & Trend", "📖 Příběhy Pouta", "🎙️ Archiv & Hlasy", "🎁 Dary", "📦 Sklad & Inventář", "⚡ Akce", "✨ Dovednosti", "🎯 Výcvik", "📋 Úkoly", "🕰️ Klíčové Momenty", "🖼️ Galerie", "🏆 Milníky", "📜 Historie")
+    val sectionTabs = listOf("📖 Životopis", "📊 Profil", "🛡️ Výbava", "💖 Náklonnost & Trend", "📖 Příběhy Pouta", "🎙️ Archiv & Hlasy", "🎁 Dary", "📦 Sklad & Inventář", "⚡ Akce", "✨ Dovednosti", "🎯 Výcvik", "📋 Úkoly", "🕰️ Klíčové Momenty", "🖼️ Galerie", "🏆 Milníky", "📜 Historie", "📈 Progrese Statistik")
     var activeEmote by remember { mutableStateOf<String?>(null) }
     var emoteKey by remember { mutableLongStateOf(0L) }
 
@@ -543,7 +543,8 @@ fun CharacterDetailDialog(
                             archetype = archetype,
                             phase = phase,
                             engine = engine,
-                            onOpenAffinityTrend = { selectedSection = 3 }
+                            onOpenAffinityTrend = { selectedSection = 3 },
+                            onOpenStatProgression = { selectedSection = 16 }
                         )
                         2 -> EquipmentTab(character = currentActiveCharacter, player = player, onEquip = onEquipItem, onUnequip = onUnequipItem, engine = engine)
                         3 -> AffinityAndDialogueTab(character = currentActiveCharacter, engine = engine, onTriggerAffinityEffect = triggerAffinityEffect)
@@ -636,6 +637,14 @@ fun CharacterDetailDialog(
                         15 -> SlaveInteractionLogTab(
                             character = currentActiveCharacter,
                             engine = engine
+                        )
+                        16 -> CharacterStatProgressionVicoChart(
+                            character = currentActiveCharacter,
+                            currentDay = currentGameState?.player?.day ?: 1,
+                            isFullTab = true,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
                         )
                     }
                 }
@@ -1558,7 +1567,8 @@ fun ProfileAndStatsTab(
     archetype: com.example.haremdark.models.CharacterArchetype?,
     phase: com.example.haremdark.models.DegradationPhase?,
     engine: GameEngine? = null,
-    onOpenAffinityTrend: (() -> Unit)? = null
+    onOpenAffinityTrend: (() -> Unit)? = null,
+    onOpenStatProgression: (() -> Unit)? = null
 ) {
     Column(
         modifier = Modifier
@@ -1783,6 +1793,14 @@ fun ProfileAndStatsTab(
 
         // Vico Column Chart for Trait Balance & Influence Tracking
         CharacterTraitVicoChart(character = character)
+
+        // Vico Stat Progression Over Time Chart (Strength, Defense, HP, Power Level)
+        CharacterStatProgressionVicoChart(
+            character = character,
+            currentDay = engine?.gameState?.value?.player?.day ?: 1,
+            onOpenFullDetail = onOpenStatProgression,
+            modifier = Modifier.fillMaxWidth()
+        )
 
         // Detailed Progress Stats
         Text("Základní vitální ukazatele:", fontWeight = FontWeight.Bold, fontSize = 13.sp)

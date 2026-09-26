@@ -32,6 +32,9 @@ import com.example.haremdark.domain.EventSound
 import com.example.haremdark.domain.GameEngine
 import com.example.haremdark.domain.HapticManager
 import com.example.haremdark.domain.SoundEffectManager
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.haremdark.models.Character
 import com.example.haremdark.models.GameSave
 import com.example.haremdark.ui.components.CharacterDiscoveryDialog
@@ -45,6 +48,8 @@ fun EmpireScreen(
     val context = LocalContext.current
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("🗡️ Mafie", "🏰 Budovy", "💰 Nájem", "📈 Produkce", "⛓️ Trh", "🔮 Dominium")
+    var showBuildingDashboard by remember { mutableStateOf(false) }
+    var showAnalyticsDashboard by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -74,11 +79,35 @@ fun EmpireScreen(
 
         when (selectedTab) {
             0 -> MafiaTab(gameState, engine)
-            1 -> BuildingsTab(gameState, engine)
+            1 -> BuildingsTab(gameState, engine, onOpenDashboard = { showBuildingDashboard = true })
             2 -> RentalsHubTab(gameState)
-            3 -> StatisticsTab(gameState)
+            3 -> StatisticsTab(gameState, onOpenAnalytics = { showAnalyticsDashboard = true })
             4 -> RecruitmentTab(gameState, engine)
             5 -> DomainExpansionScreen(gameState, engine)
+        }
+    }
+
+    if (showBuildingDashboard) {
+        Dialog(
+            onDismissRequest = { showBuildingDashboard = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            BuildingManagementScreen(
+                engine = engine,
+                onBack = { showBuildingDashboard = false }
+            )
+        }
+    }
+
+    if (showAnalyticsDashboard) {
+        Dialog(
+            onDismissRequest = { showAnalyticsDashboard = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            DashboardChartScreen(
+                engine = engine,
+                onBack = { showAnalyticsDashboard = false }
+            )
         }
     }
 }
@@ -497,13 +526,51 @@ fun MafiaTab(gameState: GameSave, engine: GameEngine) {
 }
 
 @Composable
-fun BuildingsTab(gameState: GameSave, engine: GameEngine) {
+fun BuildingsTab(gameState: GameSave, engine: GameEngine, onOpenDashboard: () -> Unit = {}) {
     val context = LocalContext.current
 
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(bottom = 90.dp)
     ) {
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF261238)),
+                border = BorderStroke(1.2.dp, Color(0xFFBA68C8).copy(alpha = 0.8f)),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "🏰 Správa Budov & Dominia",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = Color(0xFFE1BEE7)
+                        )
+                        Text(
+                            "Přehled obrany dominia, globálních násobičů a správa upgradů.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.75f)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = onOpenDashboard,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7B1FA2)),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text("Dashboard", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
         items(gameState.buildings) { building ->
             val cost = building.baseCost * (building.level + 1)
             Card(
@@ -672,11 +739,49 @@ fun DomainResourceBanner(gameState: GameSave) {
 }
 
 @Composable
-fun StatisticsTab(gameState: GameSave) {
+fun StatisticsTab(gameState: GameSave, onOpenAnalytics: () -> Unit = {}) {
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(bottom = 90.dp)
     ) {
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF102331)),
+                border = BorderStroke(1.2.dp, Color(0xFF29B6F6).copy(alpha = 0.8f)),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "📈 Analytický Dashboard (30 dní)",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = Color(0xFF81D4FA)
+                        )
+                        Text(
+                            "Interaktivní Vico grafy produkce surovin a trendů morálky harému.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.75f)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = onOpenAnalytics,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0288D1)),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text("Otevřít grafy", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),

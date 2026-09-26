@@ -212,6 +212,65 @@ class GameEngine(private val context: Context) {
         haremCharacterRepository.updateSkillPoints(characterId, character.availableSkillPoints + points)
     }
 
+    fun executeBondingInteraction(characterId: String, interactionType: String): Pair<Boolean, String> {
+        val character = haremCharacterRepository.getById(characterId)
+            ?: return Pair(false, "Členka harému nebyla nalezena.")
+        val player = _gameState.value.player
+
+        var moraleGain = 10
+        var affectionGain = 5
+        var goldCost = 0
+        var sexEnergyCost = 0
+        var logMessage = ""
+
+        when (interactionType) {
+            "bonding_chat", "chat" -> {
+                moraleGain = 12
+                affectionGain = 6
+                logMessage = "💬 Důvěrný rozhovor: ${character.name} se ti svěřila se svými pocity. Její morálka stoupla o +$moraleGain!"
+            }
+            "bonding_praise", "praise" -> {
+                moraleGain = 15
+                affectionGain = 5
+                logMessage = "👑 Pochvala: Ocenil jsi oddanost a schopnosti ${character.name}. Hrdost zvýšila její morálku o +$moraleGain!"
+            }
+            "bonding_stroll", "stroll" -> {
+                if (player.sexEnergy < 10) return Pair(false, "Nedostatek energie (vyžadováno 10 SE).")
+                sexEnergyCost = 10
+                moraleGain = 20
+                affectionGain = 10
+                logMessage = "🌸 Zámecká procházka: Společná procházka zahradou upevnila pouto s ${character.name}. Morálka vzrostla o +$moraleGain!"
+            }
+            "bonding_gift", "gift" -> {
+                if (player.gold < 25) return Pair(false, "Nedostatek zlata na dárek (vyžadováno 25 zlata).")
+                goldCost = 25
+                moraleGain = 25
+                affectionGain = 15
+                logMessage = "🎁 Osobní dar: ${character.name} s nadšením přijala tvůj dárek. Její morálka prudce vzrostla o +$moraleGain!"
+            }
+            else -> {
+                moraleGain = 10
+                affectionGain = 5
+                logMessage = "💖 Sblížení: Pouto s ${character.name} posílilo její morálku o +$moraleGain."
+            }
+        }
+
+        if (goldCost > 0) {
+            spendGold(goldCost, "Dárek pro ${character.name}")
+        }
+        if (sexEnergyCost > 0) {
+            updateState { state ->
+                val p = state.player.copy(sexEnergy = (state.player.sexEnergy - sexEnergyCost).coerceAtLeast(0))
+                state.copy(player = p)
+            }
+        }
+
+        haremCharacterRepository.updateMorale(characterId, moraleGain)
+        haremCharacterRepository.updateAffection(characterId, affectionGain)
+        addLog(logMessage)
+        return Pair(true, logMessage)
+    }
+
     val haremCharacterRepository: com.example.haremdark.data.HaremCharacterRepository = com.example.haremdark.data.HaremCharacterRepositoryImpl(
         initialCharacters = _gameState.value.characters.map { it.toHaremCharacter() }
     ) { updatedHaremCharacters ->
@@ -495,6 +554,37 @@ class GameEngine(private val context: Context) {
         )
         _gameState.value = finalState
         haremCharacterRepository.sync(finalState.characters.map { it.toHaremCharacter() })
+    }
+
+    private val _activeFactionEvent = MutableStateFlow<com.example.haremdark.models.FactionEvent?>(null)
+    val activeFactionEvent = _activeFactionEvent.asStateFlow()
+
+    fun triggerRandomFactionEvent() {
+        _activeFactionEvent.value = com.example.haremdark.models.FactionEventGenerator.generateRandomEvent()
+    }
+
+    fun resolveFactionEvent(option: com.example.haremdark.models.EventOption) {
+        val event = _activeFactionEvent.value ?: return
+        updateState { state ->
+            val p = state.player.copy(
+                gold = (state.player.gold + option.goldReward).coerceAtLeast(0),
+                influence = (state.player.influence + option.influenceChange).coerceAtLeast(0)
+            )
+            // Add resource logic
+            val wood = (p.wood + (option.resourceReward["wood"] ?: 0)).coerceAtLeast(0)
+            
+            state.copy(player = p.copy(wood = wood))
+        }
+        addLog("📜 Vyřešena událost: ${event.title} - ${option.text}")
+        _activeFactionEvent.value = null
+    }
+
+    fun formAlliance(faction: com.example.haremdark.models.FactionType, type: com.example.haremdark.models.AllianceType, duration: Int) {
+        updateState { state ->
+            val newAlliance = com.example.haremdark.models.Alliance(faction, type, duration)
+            state.copy(alliances = state.alliances + newAlliance)
+        }
+        addLog("🤝 Ujednána aliance s ${faction.title}: ${type.title} na $duration dní.")
     }
 
     fun spendGold(amount: Int, reason: String? = null): Boolean {
@@ -1014,6 +1104,10 @@ class GameEngine(private val context: Context) {
             p.darkEnergy = (p.darkEnergy + assignmentDarkEnergy).coerceAtMost(newMaxDark)
             
             // Record production history
+            val currentAvgMorale = if (updatedCharacters.isNotEmpty()) {
+                updatedCharacters.map { it.morale }.average().toInt().coerceIn(0, 100)
+            } else 50
+
             val newStat = DailyResourceStat(
                 day = newDay,
                 goldProduced = modifiedYield.gold,
@@ -1021,9 +1115,10 @@ class GameEngine(private val context: Context) {
                 manaEssenceProduced = modifiedYield.manaEssence,
                 woodProduced = modifiedYield.wood,
                 stoneProduced = modifiedYield.stone,
-                ironProduced = modifiedYield.iron
+                ironProduced = modifiedYield.iron,
+                averageMorale = currentAvgMorale
             )
-            val newHistory = (current.resourceHistory + newStat).takeLast(14) // Keep last 14 days
+            val newHistory = (current.resourceHistory + newStat).takeLast(30) // Keep last 30 days
 
             if (yield.wood > 0 || yield.stone > 0 || yield.iron > 0 || yield.mana > 0 || yield.manaEssence > 0) {
                 addLog("🏘️ Dominium vyprodukovalo: +${yield.wood} dřeva, +${yield.stone} kamení, +${yield.iron} železa, +${yield.mana} many, +${yield.manaEssence} esence many. Populace vzrostla o ${yield.populationGrowth}.")
@@ -1135,6 +1230,29 @@ class GameEngine(private val context: Context) {
                 }
             }
             p.items = playerItems
+
+            // Record stat progression for all harem members for the new day
+            updatedCharacters.forEach { char ->
+                val combatSkill = char.skills["combat"] ?: 0
+                val defSkill = char.skills["defense"] ?: 0
+                val combatBonus = char.equipment.values.filterNotNull().sumOf { it.combatBonus }
+                val defBonus = char.equipment.values.filterNotNull().sumOf { it.defenseBonus }
+                val hpBonus = char.equipment.values.filterNotNull().sumOf { it.hpBonus } + ((char.skills["vitality"] ?: 0) * 10)
+                val curHp = char.maxHp + hpBonus
+                val curStr = (char.strength + combatSkill + combatBonus + (char.attributes.strength * 2)).coerceAtLeast(15)
+                val curDef = (defSkill + defBonus + char.attributes.defense).coerceAtLeast(10)
+                val curPower = (curStr * 4) + (char.level * 15) + (curHp / 2)
+                char.addStatRecord(
+                    com.example.haremdark.models.StatRecord(
+                        day = newDay,
+                        strength = curStr,
+                        defense = curDef,
+                        hp = curHp,
+                        mana = char.maxMana,
+                        powerLevel = curPower
+                    )
+                )
+            }
 
             val logs = (logsList + current.gameLog).take(30)
 

@@ -438,6 +438,10 @@ fun HaremScreen(
                     repository = engine.haremCharacterRepository,
                     onSell = { id -> engine.sellCharacter(id) },
                     onLease = { id -> engine.leaseCharacter(id, 1) },
+                    onExecuteInteraction = { charId, interactionId ->
+                        val result = engine.executeBondingInteraction(charId, interactionId)
+                        Toast.makeText(context, result.second, Toast.LENGTH_SHORT).show()
+                    },
                     onDismiss = { showHaremCharacterManager = false }
                 )
             }
