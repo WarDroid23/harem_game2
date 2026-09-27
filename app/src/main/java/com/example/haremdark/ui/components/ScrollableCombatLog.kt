@@ -151,11 +151,22 @@ fun CombatLogItem(
     val isStatusTrigger = entry.message.contains("Omráčen", ignoreCase = true) || 
                           entry.message.contains("Hoření", ignoreCase = true) ||
                           entry.message.contains("Otráven", ignoreCase = true) || 
-                          entry.message.contains("Krvácení", ignoreCase = true)
+                          entry.message.contains("Krvácení", ignoreCase = true) ||
+                          entry.message.contains("Stavový", ignoreCase = true) ||
+                          entry.message.contains("Zmrazen", ignoreCase = true)
+    val isRelationshipBonus = entry.message.contains("Pouto", ignoreCase = true) ||
+                              entry.message.contains("Milenka", ignoreCase = true) ||
+                              entry.message.contains("Věrnost", ignoreCase = true) ||
+                              entry.message.contains("Asistence", ignoreCase = true) ||
+                              entry.message.contains("Oddanost", ignoreCase = true) ||
+                              entry.message.contains("Vášeň", ignoreCase = true) ||
+                              entry.message.contains("Affinity", ignoreCase = true) ||
+                              entry.message.contains("Královna", ignoreCase = true)
 
     val itemBgColor = when {
         entry.type == "victory" -> Color(0x334CAF50)
         entry.type == "defeat" -> Color(0x33F44336)
+        isRelationshipBonus -> Color(0x33E91E63)
         isCritical -> Color(0x44D32F2F)
         isStatusTrigger -> Color(0x2200E5FF)
         else -> Color.Transparent
@@ -164,19 +175,21 @@ fun CombatLogItem(
     val itemBorderColor = when {
         entry.type == "victory" -> Color(0xFF4CAF50).copy(alpha = 0.5f)
         entry.type == "defeat" -> Color(0xFFF44336).copy(alpha = 0.5f)
+        isRelationshipBonus -> Color(0xFFFF4081).copy(alpha = 0.6f)
         isCritical -> Color(0xFFFF5252).copy(alpha = 0.6f)
         isStatusTrigger -> Color(0xFF00E5FF).copy(alpha = 0.4f)
         else -> Color.White.copy(alpha = 0.05f)
     }
 
-    val textColor = when (entry.type) {
-        "player_attack", "player_spell" -> Color(0xFFFFCC80) // Light orange for player offenses
-        "player_heal" -> Color(0xFFA5D6A7)                 // Soft green for healing
-        "player_support" -> Color(0xFF80D8FF)              // Soft blue for buffs
-        "enemy_attack", "enemy_special" -> Color(0xFFFF8A80) // Soft red for enemy attacks
-        "victory" -> Color(0xFFFFD700)                     // Gold for victory
-        "defeat" -> Color(0xFFEF5350)                      // Red for defeat
-        "system" -> Color(0xFFCFD8DC)                      // Cool gray for environment hazards
+    val textColor = when {
+        isRelationshipBonus -> Color(0xFFFF80AB)           // Vibrant pink for relationship bonuses
+        entry.type == "player_attack" || entry.type == "player_spell" -> Color(0xFFFFCC80) // Light orange for player offenses
+        entry.type == "player_heal" -> Color(0xFFA5D6A7)                 // Soft green for healing
+        entry.type == "player_support" -> Color(0xFF80D8FF)              // Soft blue for buffs
+        entry.type == "enemy_attack" || entry.type == "enemy_special" -> Color(0xFFFF8A80) // Soft red for enemy attacks
+        entry.type == "victory" -> Color(0xFFFFD700)                     // Gold for victory
+        entry.type == "defeat" -> Color(0xFFEF5350)                      // Red for defeat
+        entry.type == "system" -> Color(0xFFCFD8DC)                      // Cool gray for environment hazards
         else -> Color.White
     }
 
@@ -190,7 +203,7 @@ fun CombatLogItem(
             .padding(8.dp)
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            // Header Row: Turn tracker, Actor badge & critical badge
+            // Header Row: Turn tracker, Actor badge & critical/relationship badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -229,6 +242,21 @@ fun CombatLogItem(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    if (isRelationshipBonus) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFFC2185B)
+                        ) {
+                            Text(
+                                text = "💖 POUTO BONUS",
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.5.dp)
+                            )
+                        }
+                    }
+
                     if (isCritical) {
                         Surface(
                             shape = RoundedCornerShape(4.dp),

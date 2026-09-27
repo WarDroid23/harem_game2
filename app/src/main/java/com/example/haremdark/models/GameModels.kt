@@ -223,6 +223,7 @@ data class Character(
         defense = 10
     ),
     var nalada: String = "neutrální",
+    var status: String = "Aktivní",
     var statusIcon: String = "😐",
     var morale: Int = 50,
     var plodnost: Int = 50,
@@ -941,7 +942,10 @@ data class GameSave(
     val influenceLog: List<InfluenceLogEntry> = emptyList(),
     val alliances: List<com.example.haremdark.models.Alliance> = emptyList(),
     val guild: com.example.haremdark.models.Guild? = null,
-    val materials: List<com.example.haremdark.models.CraftingMaterial> = emptyList()
+    val materials: List<com.example.haremdark.models.CraftingMaterial> = emptyList(),
+    val haremRooms: List<com.example.haremdark.models.HaremRoom> = com.example.haremdark.models.RoomDecorationCatalog.DEFAULT_INITIAL_ROOMS(),
+    val activeIdleExpeditions: List<com.example.haremdark.models.ActiveIdleExpedition> = emptyList(),
+    val completedExpeditionReports: List<com.example.haremdark.models.IdleExpeditionReport> = emptyList()
 )
 
 @Serializable

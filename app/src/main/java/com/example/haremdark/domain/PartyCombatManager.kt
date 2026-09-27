@@ -126,7 +126,8 @@ object PartyCombatManager {
         player: Player,
         haremLevel: Int,
         includePlayerAsLeader: Boolean,
-        encounterDef: PartyCombatCatalog.PartyEncounterDefinition
+        encounterDef: PartyCombatCatalog.PartyEncounterDefinition,
+        rooms: List<com.example.haremdark.models.HaremRoom> = emptyList()
     ): PartyCombatSession {
         val partyList = mutableListOf<PartyMember>()
 
@@ -194,11 +195,14 @@ object PartyCombatManager {
                 )
                 val allSkills = (baseSkills + unlockedActiveSkills).distinctBy { it.id }
 
+                val assignedRoom = rooms.find { it.assignedCharacterId == char.id }
+                val roomStatBonus = assignedRoom?.getCumulativeStatBonus() ?: com.example.haremdark.models.RoomStatBonus()
                 val loyaltyBonus = com.example.haremdark.data.LoyaltyCombatData.getBonusForLoyalty(char.loajalita)
-                val baseAtk = 18 + combatSkill * 2 + eqBonusAtk + char.fazeZkazenosti * 3 + passiveBonuses.attackBonus
-                val finalAtk = ((baseAtk * (1.0f + combatBonuses.dmgMultiplierBonus + charSpecificBuff.attackBonusPercent)) * loyaltyBonus.attackMultiplier).toInt()
-                val baseDef = 10 + (char.skills["defense"] ?: 3) + (if (role == CombatRole.TANK_GUARDIAN) 8 else 0) + passiveBonuses.defenseBonus + combatBonuses.defenseBonus + charSpecificBuff.defenseBonus
-                val finalDef = (baseDef * loyaltyBonus.defenseMultiplier).toInt()
+                val baseAtk = 18 + combatSkill * 2 + eqBonusAtk + char.fazeZkazenosti * 3 + passiveBonuses.attackBonus + roomStatBonus.attackBonus
+                val multAtk = 1.0f + combatBonuses.dmgMultiplierBonus + charSpecificBuff.attackBonusPercent
+                val finalAtk = (baseAtk.toFloat() * multAtk * loyaltyBonus.attackMultiplier).toInt()
+                val baseDef = 10 + (char.skills["defense"] ?: 3) + (if (role == CombatRole.TANK_GUARDIAN) 8 else 0) + passiveBonuses.defenseBonus + combatBonuses.defenseBonus + charSpecificBuff.defenseBonus + roomStatBonus.defenseBonus
+                val finalDef = (baseDef.toFloat() * loyaltyBonus.defenseMultiplier).toInt()
                 val finalCrit = 10 + (if (role == CombatRole.PHYSICAL_DPS || role == CombatRole.ASSASSIN_BLADE) 15 else 0) + passiveBonuses.critBonus + combatBonuses.critBonus + charSpecificBuff.critBonusPercent + loyaltyBonus.critBonusPercent
 
                 // Determine formation position

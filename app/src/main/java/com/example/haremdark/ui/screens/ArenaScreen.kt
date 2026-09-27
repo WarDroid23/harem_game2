@@ -191,7 +191,7 @@ fun ArenaScreen(
                         selected = selectedArenaTab == 0,
                         onClick = {
                             selectedArenaTab = 0
-                            HapticManager.triggerLightClick()
+                            HapticManager.vibrateClick()
                         },
                         text = {
                             Row(
@@ -207,7 +207,7 @@ fun ArenaScreen(
                         selected = selectedArenaTab == 1,
                         onClick = {
                             selectedArenaTab = 1
-                            HapticManager.triggerLightClick()
+                            HapticManager.vibrateClick()
                         },
                         text = {
                             Row(
@@ -223,7 +223,7 @@ fun ArenaScreen(
                         selected = selectedArenaTab == 2,
                         onClick = {
                             selectedArenaTab = 2
-                            HapticManager.triggerLightClick()
+                            HapticManager.vibrateClick()
                         },
                         text = {
                             Row(
@@ -277,7 +277,7 @@ fun ArenaScreen(
                                 onClick = {
                                     selectedEncounterForDialog = null
                                     showPartyBuilderDialog = true
-                                    HapticManager.triggerMediumClick()
+                                    HapticManager.vibrateClick()
                                 },
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC2185B)),
@@ -509,7 +509,7 @@ fun ArenaScreen(
                                     onClick = {
                                         selectedEncounterForDialog = waveGauntlet
                                         showPartyBuilderDialog = true
-                                        HapticManager.triggerMediumClick()
+                                        HapticManager.vibrateClick()
                                     },
                                     shape = RoundedCornerShape(10.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD81B60)),
@@ -665,7 +665,7 @@ fun ArenaScreen(
                                         .border(2.dp, Color(skin.auraColorHex), RoundedCornerShape(12.dp))
                                         .clickable {
                                             selectedSkinDetail = skin
-                                            HapticManager.triggerLightClick()
+                                            HapticManager.vibrateClick()
                                         }
                                 ) {
                                     SubcomposeAsyncImage(
@@ -790,7 +790,7 @@ fun ArenaScreen(
                                     OutlinedButton(
                                         onClick = {
                                             selectedSkinDetail = skin
-                                            HapticManager.triggerLightClick()
+                                            HapticManager.vibrateClick()
                                         },
                                         shape = RoundedCornerShape(8.dp),
                                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
@@ -981,7 +981,7 @@ fun ArenaScreen(
                                     onClick = {
                                         selectedEncounterForDialog = encounter
                                         showPartyBuilderDialog = true
-                                        HapticManager.triggerMediumClick()
+                                        HapticManager.vibrateClick()
                                     },
                                     shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD81B60)),

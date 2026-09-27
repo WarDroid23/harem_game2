@@ -44,6 +44,7 @@ import com.example.haremdark.models.Character
 import com.example.haremdark.models.GameSave
 import com.example.haremdark.models.InventoryItem
 import com.example.haremdark.models.EquipmentLoadout
+import com.example.haremdark.domain.DomainResourceManager
 import com.example.haremdark.domain.VoiceManager
 import com.example.haremdark.domain.VoiceTriggerType
 import androidx.compose.foundation.BorderStroke
@@ -443,69 +444,89 @@ fun InventoryScreen(
         }
 
         // --- CATEGORY SELECTOR TABS ---
-        Row(
+        LazyRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            CategoryTabChip(
-                title = "Dary",
-                count = giftItemsCount,
-                icon = "🎁",
-                selected = selectedTab == 0,
-                accentColor = Color(0xFFE91E63),
-                onClick = { selectedTab = 0 },
-                modifier = Modifier.weight(1f)
-            )
-            CategoryTabChip(
-                title = "Bojové",
-                count = combatItemsCount,
-                icon = "🧪",
-                selected = selectedTab == 1,
-                accentColor = Color(0xFF4CAF50),
-                onClick = { selectedTab = 1 },
-                modifier = Modifier.weight(1f)
-            )
-            CategoryTabChip(
-                title = "Synergie",
-                count = synergyItemsCount,
-                icon = "✨",
-                selected = selectedTab == 5,
-                accentColor = Color(0xFFE91E63),
-                onClick = { selectedTab = 5 },
-                modifier = Modifier.weight(1f)
-            )
-            CategoryTabChip(
-                title = "Úkolové",
-                count = questItemsCount,
-                icon = "📜",
-                selected = selectedTab == 2,
-                accentColor = Color(0xFFFF9800),
-                onClick = { selectedTab = 2 },
-                modifier = Modifier.weight(1f)
-            )
-            CategoryTabChip(
-                title = "Vše",
-                count = totalItemCount,
-                icon = "🎒",
-                selected = selectedTab == 3,
-                accentColor = Color(0xFF9C27B0),
-                onClick = { selectedTab = 3 },
-                modifier = Modifier.weight(0.85f)
-            )
-            CategoryTabChip(
-                title = "Sety",
-                count = engine.getAllLoadouts().size,
-                icon = "⚔️",
-                selected = selectedTab == 4,
-                accentColor = Color(0xFF00BCD4),
-                onClick = { selectedTab = 4 },
-                modifier = Modifier.weight(1f)
-            )
+            item {
+                CategoryTabChip(
+                    title = "Dary",
+                    count = giftItemsCount,
+                    icon = "🎁",
+                    selected = selectedTab == 0,
+                    accentColor = Color(0xFFE91E63),
+                    onClick = { selectedTab = 0 }
+                )
+            }
+            item {
+                CategoryTabChip(
+                    title = "Bojové",
+                    count = combatItemsCount,
+                    icon = "🧪",
+                    selected = selectedTab == 1,
+                    accentColor = Color(0xFF4CAF50),
+                    onClick = { selectedTab = 1 }
+                )
+            }
+            item {
+                CategoryTabChip(
+                    title = "Suroviny & Výbava",
+                    count = player.wood + player.stone + player.iron,
+                    icon = "🪵",
+                    selected = selectedTab == 6,
+                    accentColor = Color(0xFFFFB74D),
+                    onClick = { selectedTab = 6 }
+                )
+            }
+            item {
+                CategoryTabChip(
+                    title = "Synergie",
+                    count = synergyItemsCount,
+                    icon = "✨",
+                    selected = selectedTab == 5,
+                    accentColor = Color(0xFFE91E63),
+                    onClick = { selectedTab = 5 }
+                )
+            }
+            item {
+                CategoryTabChip(
+                    title = "Úkolové",
+                    count = questItemsCount,
+                    icon = "📜",
+                    selected = selectedTab == 2,
+                    accentColor = Color(0xFFFF9800),
+                    onClick = { selectedTab = 2 }
+                )
+            }
+            item {
+                CategoryTabChip(
+                    title = "Vše",
+                    count = totalItemCount,
+                    icon = "🎒",
+                    selected = selectedTab == 3,
+                    accentColor = Color(0xFF9C27B0),
+                    onClick = { selectedTab = 3 }
+                )
+            }
+            item {
+                CategoryTabChip(
+                    title = "Sety",
+                    count = engine.getAllLoadouts().size,
+                    icon = "⚔️",
+                    selected = selectedTab == 4,
+                    accentColor = Color(0xFF00BCD4),
+                    onClick = { selectedTab = 4 }
+                )
+            }
         }
 
         if (selectedTab == 4) {
             // --- LOADOUT MANAGEMENT VIEW ---
             LoadoutsInventoryTab(gameState = gameState, engine = engine)
+        } else if (selectedTab == 6) {
+            // --- GATHERED RESOURCES & EQUIPPED ITEMS VIEW ---
+            ResourcesAndEquippedItemsTab(gameState = gameState, engine = engine)
         } else {
             // --- SEARCH BAR, FILTER BUTTON & SORT BUTTON ---
             Row(
@@ -2175,5 +2196,697 @@ fun LoadoutsInventoryTab(
                 }
             }
         )
+    }
+}
+
+@Composable
+fun ResourcesAndEquippedItemsTab(
+    gameState: GameSave,
+    engine: GameEngine
+) {
+    val context = LocalContext.current
+    val player = gameState.player
+    val characters = gameState.characters
+    val resourceManager = remember { DomainResourceManager() }
+    val dailyYield = remember(gameState) { resourceManager.calculateDailyYield(gameState) }
+
+    var selectedCharacterForEquip by remember { mutableStateOf<Pair<Character, String>?>(null) }
+    var showSellResourceDialog by remember { mutableStateOf<String?>(null) }
+    var sellAmountText by remember { mutableStateOf("10") }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(bottom = 90.dp)
+    ) {
+        // Hero Header Banner
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "🪵 Suroviny & 🛡️ Nasazená Výbava",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFFD700)
+                            )
+                            Text(
+                                text = "Shromážděné suroviny dominia, denní výnosy a zbraně/výstroj pánovy družiny.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFF231428),
+                            border = BorderStroke(1.dp, Color(0xFFE040FB).copy(alpha = 0.5f))
+                        ) {
+                            Text(
+                                text = "Lvl ${player.level} • Den ${player.day}",
+                                color = Color(0xFFEA80FC),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Section 1: Gathered Domain Resources
+        item {
+            Text(
+                text = "🪵 SHROMÁŽDĚNÉ SUROVINY DOMINIA",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                color = Color(0xFFFFD700),
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+            )
+        }
+
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1D1426)),
+                border = BorderStroke(1.dp, Color(0xFF9C27B0).copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "Přehled přírodních, energetických a finančních zdrojů panství:",
+                        fontSize = 11.sp,
+                        color = Color(0xFFCE93D8)
+                    )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ResourceInventoryCard(
+                                icon = "🪵",
+                                name = "Dřevo",
+                                amount = "${player.wood}",
+                                yieldText = "+${dailyYield.wood}/den",
+                                color = Color(0xFFFFB74D),
+                                onSellClick = {
+                                    showSellResourceDialog = "wood"
+                                    sellAmountText = "10"
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            ResourceInventoryCard(
+                                icon = "🪨",
+                                name = "Kámen",
+                                amount = "${player.stone}",
+                                yieldText = "+${dailyYield.stone}/den",
+                                color = Color(0xFFB0BEC5),
+                                onSellClick = {
+                                    showSellResourceDialog = "stone"
+                                    sellAmountText = "10"
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ResourceInventoryCard(
+                                icon = "⛓️",
+                                name = "Železo",
+                                amount = "${player.iron}",
+                                yieldText = "+${dailyYield.iron}/den",
+                                color = Color(0xFF90A4AE),
+                                onSellClick = {
+                                    showSellResourceDialog = "iron"
+                                    sellAmountText = "10"
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            ResourceInventoryCard(
+                                icon = "💰",
+                                name = "Zlato",
+                                amount = "${player.gold}",
+                                yieldText = "+${dailyYield.gold}/den",
+                                color = Color(0xFFFFD700),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ResourceInventoryCard(
+                                icon = "🔮",
+                                name = "Mana",
+                                amount = "${player.mana}/${player.maxMana}",
+                                yieldText = "+${dailyYield.mana}/den",
+                                color = Color(0xFF80D8FF),
+                                modifier = Modifier.weight(1f)
+                            )
+                            ResourceInventoryCard(
+                                icon = "🧪",
+                                name = "Esence many",
+                                amount = "${player.manaEssence}",
+                                yieldText = "+${dailyYield.manaEssence}/den",
+                                color = Color(0xFF00E676),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ResourceInventoryCard(
+                                icon = "⚡",
+                                name = "Sexuální E.",
+                                amount = "${player.sexEnergy}/${player.maxSexEnergy}",
+                                yieldText = "Obnova denně",
+                                color = Color(0xFFFF80AB),
+                                modifier = Modifier.weight(1f)
+                            )
+                            ResourceInventoryCard(
+                                icon = "💎",
+                                name = "Temná E. (Gemy)",
+                                amount = "${player.darkEnergy}/${player.maxDarkEnergy}",
+                                yieldText = "Obnova denně",
+                                color = Color(0xFFEA80FC),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            ResourceInventoryCard(
+                                icon = "🤝",
+                                name = "Vliv",
+                                amount = "${player.influence}/${player.maxInfluence}",
+                                yieldText = "Diplomacie",
+                                color = Color(0xFF0288D1),
+                                modifier = Modifier.weight(1f)
+                            )
+                            ResourceInventoryCard(
+                                icon = "👥",
+                                name = "Populace",
+                                amount = "${player.population}/${player.maxPopulation}",
+                                yieldText = "+${dailyYield.populationGrowth}/den",
+                                color = Color(0xFF81C784),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Section 2: Lord's Equipment
+        item {
+            Text(
+                text = "👑 VÝBAVA & ZBRANĚ PÁNA DOMINIA",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                color = Color(0xFFFFD700),
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+            )
+        }
+
+        item {
+            val equippedWeapon = player.weapons.getOrNull(player.equippedWeaponIndex) ?: player.weapons.firstOrNull()
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF261922)),
+                border = BorderStroke(1.dp, Color(0xFFFF80AB).copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("⚔️", fontSize = 24.sp)
+                            Column {
+                                Text(
+                                    text = equippedWeapon?.name ?: "Základní dýka",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "Aktivní zbraň Pána • Typ: ${equippedWeapon?.type ?: "krátká"}",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFFFF80AB)
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF4CAF50).copy(alpha = 0.25f)
+                        ) {
+                            Text(
+                                text = "NASAZENO",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF81C784),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        StatBadgeSimple("⚔️ Poškození", "+${equippedWeapon?.damage ?: 10}", Color(0xFFFF7043), Modifier.weight(1f))
+                        StatBadgeSimple("🔮 Temný bonus", "+${equippedWeapon?.darkBonus ?: 0}", Color(0xFFAB47BC), Modifier.weight(1f))
+                        StatBadgeSimple("⚖️ Váha", "${equippedWeapon?.weight ?: 1.0f} kg", Color(0xFF90A4AE), Modifier.weight(1f))
+                        StatBadgeSimple("💰 Hodnota", "${equippedWeapon?.price ?: 100} zl.", Color(0xFFFFD700), Modifier.weight(1f))
+                    }
+
+                    if (player.weapons.size > 1) {
+                        Text("Přepnout zbraň v ruce:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            items(player.weapons.size) { index ->
+                                val w = player.weapons[index]
+                                val isSelected = index == player.equippedWeaponIndex
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = {
+                                        player.equippedWeaponIndex = index
+                                        Toast.makeText(context, "Přepnuto na zbraň: ${w.name}", Toast.LENGTH_SHORT).show()
+                                    },
+                                    label = {
+                                        Text(
+                                            "🗡️ ${w.name} (+${w.damage} Útok)",
+                                            fontSize = 10.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Section 3: Harem Equipment
+        item {
+            Text(
+                text = "🛡️ VÝBAVA & VÝSTROJ ČLENEK HARÉMU",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                color = Color(0xFFFFD700),
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+            )
+        }
+
+        if (characters.isEmpty()) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(modifier = Modifier.padding(20.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text("V harému zatím nemáš žádné dívky k vybavení.", color = Color.Gray, fontSize = 12.sp)
+                    }
+                }
+            }
+        } else {
+            items(characters, key = { it.id }) { char ->
+                val weaponItem = char.equipment["weapon"]
+                val armorItem = char.equipment["armor"]
+                val accessoryItem = char.equipment["accessory"]
+
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1528)),
+                    border = BorderStroke(1.dp, Color(0xFF00BCD4).copy(alpha = 0.35f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text("💃", fontSize = 18.sp)
+                                Column {
+                                    Text(char.name, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                                    Text("Role: ${char.role} • Úroveň ${char.level}", fontSize = 10.sp, color = Color(0xFF80DEEA))
+                                }
+                            }
+
+                            Text(
+                                text = "Bojová síla: ${char.effectiveStrength}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFFD700)
+                            )
+                        }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            EquipmentSlotRow(
+                                slotTitle = "🗡️ Zbraň",
+                                slotId = "weapon",
+                                item = weaponItem,
+                                onUnequip = {
+                                    engine.unequipItemFromCharacter(char.id, "weapon")
+                                    Toast.makeText(context, "Zbraň odejmuta ${char.name}", Toast.LENGTH_SHORT).show()
+                                },
+                                onEquipClick = {
+                                    selectedCharacterForEquip = Pair(char, "weapon")
+                                }
+                            )
+
+                            EquipmentSlotRow(
+                                slotTitle = "🛡️ Zbroj",
+                                slotId = "armor",
+                                item = armorItem,
+                                onUnequip = {
+                                    engine.unequipItemFromCharacter(char.id, "armor")
+                                    Toast.makeText(context, "Zbroj odejmuta ${char.name}", Toast.LENGTH_SHORT).show()
+                                },
+                                onEquipClick = {
+                                    selectedCharacterForEquip = Pair(char, "armor")
+                                }
+                            )
+
+                            EquipmentSlotRow(
+                                slotTitle = "💍 Doplněk",
+                                slotId = "accessory",
+                                item = accessoryItem,
+                                onUnequip = {
+                                    engine.unequipItemFromCharacter(char.id, "accessory")
+                                    Toast.makeText(context, "Doplněk odejmut ${char.name}", Toast.LENGTH_SHORT).show()
+                                },
+                                onEquipClick = {
+                                    selectedCharacterForEquip = Pair(char, "accessory")
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Modal to Select Inventory Item to Equip
+    selectedCharacterForEquip?.let { (char, slotId) ->
+        val matchingItems = player.items.filter { it.count > 0 && (it.equipSlot == slotId || it.category == "equipment") }
+
+        Dialog(onDismissRequest = { selectedCharacterForEquip = null }) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xFF1E1220),
+                border = BorderStroke(1.dp, Color(0xFF00BCD4).copy(alpha = 0.6f)),
+                modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "Vyber ${if (slotId == "weapon") "Zbraň" else if (slotId == "armor") "Zbroj" else "Doplněk"} pro ${char.name}",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+
+                    if (matchingItems.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                            Text("V batohu nemáš žádné vhodné předměty pro tento slot.", color = Color.Gray, fontSize = 12.sp)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.weight(1f, fill = false),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            items(matchingItems) { item ->
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF2C1A2E)),
+                                    modifier = Modifier.fillMaxWidth().clickable {
+                                        engine.equipItemToCharacter(char.id, item.id, slotId)
+                                        Toast.makeText(context, "Nasadit ${item.name} pro ${char.name}", Toast.LENGTH_SHORT).show()
+                                        selectedCharacterForEquip = null
+                                    }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(10.dp).fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text(item.icon.ifBlank { "📦" }, fontSize = 18.sp)
+                                            Column {
+                                                Text(item.name, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
+                                                Text(
+                                                    text = "Bonusy: +${item.combatBonus} Útok, +${item.defenseBonus} Obrana, +${item.hpBonus} HP",
+                                                    fontSize = 10.sp,
+                                                    color = Color(0xFF80DEEA)
+                                                )
+                                            }
+                                        }
+
+                                        Button(
+                                            onClick = {
+                                                engine.equipItemToCharacter(char.id, item.id, slotId)
+                                                Toast.makeText(context, "Nasadit ${item.name} pro ${char.name}", Toast.LENGTH_SHORT).show()
+                                                selectedCharacterForEquip = null
+                                            },
+                                            shape = RoundedCornerShape(6.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                        ) {
+                                            Text("Nasadit", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Button(
+                        onClick = { selectedCharacterForEquip = null },
+                        modifier = Modifier.align(Alignment.End),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Zavřít")
+                    }
+                }
+            }
+        }
+    }
+
+    // Modal to Sell Resources
+    showSellResourceDialog?.let { type ->
+        val currentAmount = when (type) {
+            "wood" -> player.wood
+            "stone" -> player.stone
+            "iron" -> player.iron
+            else -> 0
+        }
+        val pricePerUnit = when (type) {
+            "wood" -> 2
+            "stone" -> 4
+            "iron" -> 8
+            else -> 1
+        }
+        val resourceTitle = when (type) {
+            "wood" -> "🪵 Dřevo"
+            "stone" -> "🪨 Kámen"
+            "iron" -> "⛓️ Železo"
+            else -> "Surovina"
+        }
+
+        AlertDialog(
+            onDismissRequest = { showSellResourceDialog = null },
+            title = { Text("💰 Prodat surovinu: $resourceTitle") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Na skladě: $currentAmount ks • Výkupní cena: $pricePerUnit zlata / ks", fontSize = 12.sp)
+                    OutlinedTextField(
+                        value = sellAmountText,
+                        onValueChange = { sellAmountText = it },
+                        label = { Text("Množství k prodeji") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val amount = sellAmountText.toIntOrNull() ?: 0
+                    if (amount > 0 && currentAmount >= amount) {
+                        engine.sellResource(type, amount, pricePerUnit)
+                        Toast.makeText(context, "Prodáno $amount ks suroviny za ${amount * pricePerUnit} zlata!", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Neplatné množství!", Toast.LENGTH_SHORT).show()
+                    }
+                    showSellResourceDialog = null
+                }) {
+                    Text("Prodat za zlato")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSellResourceDialog = null }) {
+                    Text("Zrušit")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun ResourceInventoryCard(
+    icon: String,
+    name: String,
+    amount: String,
+    yieldText: String,
+    color: Color,
+    onSellClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(10.dp),
+        color = color.copy(alpha = 0.12f),
+        border = BorderStroke(0.5.dp, color.copy(alpha = 0.35f))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(icon, fontSize = 18.sp)
+                Column {
+                    Text(name, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                    Text(amount, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = color)
+                    Text(yieldText, fontSize = 9.sp, color = color.copy(alpha = 0.8f))
+                }
+            }
+
+            if (onSellClick != null) {
+                IconButton(onClick = onSellClick, modifier = Modifier.size(24.dp)) {
+                    Text("🪙", fontSize = 12.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EquipmentSlotRow(
+    slotTitle: String,
+    slotId: String,
+    item: InventoryItem?,
+    onUnequip: () -> Unit,
+    onEquipClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = Color(0x22000000),
+        border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.1f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(slotTitle, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF80DEEA))
+
+                if (item != null) {
+                    Text("•", fontSize = 11.sp, color = Color.Gray)
+                    Text(
+                        text = item.name,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "(+${item.combatBonus} Útok, +${item.defenseBonus} Def)",
+                        fontSize = 9.sp,
+                        color = Color(0xFFFFD700)
+                    )
+                } else {
+                    Text("— Prázdný slot —", fontSize = 10.sp, color = Color.Gray)
+                }
+            }
+
+            if (item != null) {
+                TextButton(
+                    onClick = onUnequip,
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                    modifier = Modifier.height(26.dp)
+                ) {
+                    Text("Odejmout", fontSize = 10.sp, color = MaterialTheme.colorScheme.error)
+                }
+            } else {
+                Button(
+                    onClick = onEquipClick,
+                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                    modifier = Modifier.height(26.dp)
+                ) {
+                    Text("Nasadit", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
     }
 }

@@ -800,13 +800,248 @@ object GameContent {
     )
 
     val ALCHEMY_RECIPES = listOf(
+        // === ZBRANĚ (WEAPONS) ===
+        AlchemyRecipe(
+            id = "craft_shadow_dagger",
+            name = "Stínová dýka temnoty",
+            description = "Smrtící dýka ukovaná z temných střepů. Každý výpad způsobuje tichou bolest.",
+            goldCost = 100,
+            darkCost = 15,
+            materials = mapOf("temny_strep" to 5, "zelezna_ruda" to 10),
+            resultItem = InventoryItem(
+                id = "craft_shadow_dagger_item",
+                name = "Stínová dýka temnoty",
+                description = "Lehká dýka s čepelí pohlcující světlo.",
+                count = 1,
+                price = 220,
+                category = "equipment",
+                icon = "🗡️",
+                rarity = "Vzácný",
+                effectDescription = "+22 Útok, +10% Šance na kritický zásah",
+                equipSlot = "weapon",
+                combatBonus = 22,
+                source = "Kovárna"
+            )
+        ),
+        AlchemyRecipe(
+            id = "craft_succubus_whip",
+            name = "Bič rozkoše a nadvlády",
+            description = "Ohebný bič z démonické kůže s ocelovými ostny. Zvyšuje boj i autoritu.",
+            goldCost = 200,
+            darkCost = 25,
+            materials = mapOf("temny_strep" to 8, "mana_esence" to 10, "draci_krev" to 1),
+            resultItem = InventoryItem(
+                id = "craft_succubus_whip_item",
+                name = "Bič rozkoše a nadvlády",
+                description = "Exkluzivní bič přitahující absolutní poddanost.",
+                count = 1,
+                price = 380,
+                category = "equipment",
+                icon = "⛓️",
+                rarity = "Epický",
+                effectDescription = "+32 Útok, +15 Dominance, +10 HP",
+                equipSlot = "weapon",
+                combatBonus = 32,
+                hpBonus = 10,
+                source = "Kovárna"
+            )
+        ),
+        AlchemyRecipe(
+            id = "craft_empress_sword",
+            name = "Meč Temné Císařovny",
+            description = "Legendární obouruční čepel protkaná měsíčním prachem a temnou esencí.",
+            goldCost = 450,
+            darkCost = 50,
+            materials = mapOf("temny_strep" to 15, "mana_esence" to 20, "mesicni_prach" to 5),
+            resultItem = InventoryItem(
+                id = "craft_empress_sword_item",
+                name = "Meč Temné Císařovny",
+                description = "Vznešená i vražedná zbraň hodná vládce podsvětí.",
+                count = 1,
+                price = 750,
+                category = "equipment",
+                icon = "⚔️",
+                rarity = "Legendární",
+                effectDescription = "+52 Útok, +20% Krit, +15 Temná síla",
+                equipSlot = "weapon",
+                combatBonus = 52,
+                source = "Kovárna"
+            )
+        ),
+        AlchemyRecipe(
+            id = "craft_astral_staff",
+            name = "Hůl astrálního chaosu",
+            description = "Mystická hůl usměrňující temné magické proudy a obnovující energii.",
+            goldCost = 350,
+            darkCost = 40,
+            materials = mapOf("mana_esence" to 25, "krystal" to 10, "temny_strep" to 6),
+            resultItem = InventoryItem(
+                id = "craft_astral_staff_item",
+                name = "Hůl astrálního chaosu",
+                description = "Kouzelná hůl zářící purpurovým světlem.",
+                count = 1,
+                price = 600,
+                category = "equipment",
+                icon = "🔮",
+                rarity = "Epický",
+                effectDescription = "+45 Kouzla/Boj, +30 Max Mana, +15 HP",
+                equipSlot = "weapon",
+                combatBonus = 45,
+                hpBonus = 15,
+                source = "Kovárna"
+            )
+        ),
+
+        // === ZBROJE (ARMOR) ===
+        AlchemyRecipe(
+            id = "craft_velvet_corset",
+            name = "Sametový korzet touhy",
+            description = "Zesílený sametový korzet nabízející lehkou ochranu a podmanivý vzhled.",
+            goldCost = 150,
+            darkCost = 20,
+            materials = mapOf("temny_strep" to 4, "drevohorec" to 15),
+            resultItem = InventoryItem(
+                id = "craft_velvet_corset_item",
+                name = "Sametový korzet touhy",
+                description = "Padnoucí korzet lemovaný temným hedvábím.",
+                count = 1,
+                price = 280,
+                category = "equipment",
+                icon = "👗",
+                rarity = "Vzácný",
+                effectDescription = "+25 Obrana, +20 Max HP, +10 Touha",
+                equipSlot = "armor",
+                defenseBonus = 25,
+                hpBonus = 20,
+                source = "Kovárna"
+            )
+        ),
+        AlchemyRecipe(
+            id = "craft_blood_plate",
+            name = "Plátová zbroj krvavého rytíře",
+            description = "Těžké železné brnění napuštěné temnou esencí pro neprostupnou obranu.",
+            goldCost = 350,
+            darkCost = 35,
+            materials = mapOf("temny_strep" to 12, "zelezna_ruda" to 20, "mana_esence" to 15),
+            resultItem = InventoryItem(
+                id = "craft_blood_plate_item",
+                name = "Plátová zbroj krvavého rytíře",
+                description = "Masivní pláty chránící před nejtežšími údery.",
+                count = 1,
+                price = 620,
+                category = "equipment",
+                icon = "🛡️",
+                rarity = "Epický",
+                effectDescription = "+50 Obrana, +50 Max HP, +10% Odolnost",
+                equipSlot = "armor",
+                defenseBonus = 50,
+                hpBonus = 50,
+                source = "Kovárna"
+            )
+        ),
+        AlchemyRecipe(
+            id = "craft_royal_collar",
+            name = "Zlatý obojek nadvlády",
+            description = "Těžký runový obojek zajišťující pasivní poslušnost i ochranu krku.",
+            goldCost = 250,
+            darkCost = 30,
+            materials = mapOf("temny_strep" to 10, "draci_krev" to 2),
+            resultItem = InventoryItem(
+                id = "craft_royal_collar_item",
+                name = "Zlatý obojek nadvlády",
+                description = "Nádherný ozdobný i ochranný prvek.",
+                count = 1,
+                price = 450,
+                category = "equipment",
+                icon = "👑",
+                rarity = "Legendární",
+                effectDescription = "+35 Obrana, +30 Poslušnost, +20 Max HP",
+                equipSlot = "armor",
+                defenseBonus = 35,
+                hpBonus = 20,
+                source = "Kovárna"
+            )
+        ),
+
+        // === DOPLŇKY (ACCESSORIES) ===
+        AlchemyRecipe(
+            id = "craft_dark_ring",
+            name = "Prsten temného paktu",
+            description = "Stříbrný kroužek s černým rubínem, který spájí energii s pánem.",
+            goldCost = 180,
+            darkCost = 20,
+            materials = mapOf("temny_strep" to 6, "mana_esence" to 10),
+            resultItem = InventoryItem(
+                id = "craft_dark_ring_item",
+                name = "Prsten temného paktu",
+                description = "Kouzelný prsten rezonující s temnotou.",
+                count = 1,
+                price = 320,
+                category = "equipment",
+                icon = "💍",
+                rarity = "Vzácný",
+                effectDescription = "+15 Útok, +15 Obrana, +5% Krit",
+                equipSlot = "accessory",
+                combatBonus = 15,
+                defenseBonus = 15,
+                source = "Kovárna"
+            )
+        ),
+        AlchemyRecipe(
+            id = "craft_domination_amulet",
+            name = "Amulet nadvlády a kontroly",
+            description = "Prastarý medailon zvyšující synergii a odolnost celé družiny.",
+            goldCost = 280,
+            darkCost = 30,
+            materials = mapOf("temny_strep" to 10, "mesicni_prach" to 4, "mana_esence" to 15),
+            resultItem = InventoryItem(
+                id = "craft_domination_amulet_item",
+                name = "Amulet nadvlády a kontroly",
+                description = "Amulet vyzařující magickou autoritu.",
+                count = 1,
+                price = 500,
+                category = "equipment",
+                icon = "🧿",
+                rarity = "Epický",
+                effectDescription = "+30 Max HP, +20 Synergie, +10 Obrana",
+                equipSlot = "accessory",
+                hpBonus = 30,
+                defenseBonus = 10,
+                source = "Kovárna"
+            )
+        ),
+        AlchemyRecipe(
+            id = "craft_desire_crystal",
+            name = "Krystal neuhasitelné touhy",
+            description = "Afridiakální krystal zvyšující regeneraci a náklonnost dívky.",
+            goldCost = 220,
+            darkCost = 25,
+            materials = mapOf("temny_strep" to 8, "krystal" to 5),
+            resultItem = InventoryItem(
+                id = "craft_desire_crystal_item",
+                name = "Krystal neuhasitelné touhy",
+                description = "Hřejivý krystal pulzující růžovým světlem.",
+                count = 1,
+                price = 390,
+                category = "equipment",
+                icon = "✨",
+                rarity = "Vzácný",
+                effectDescription = "+25 Max HP, +15 Vlhkost/Touha",
+                equipSlot = "accessory",
+                hpBonus = 25,
+                source = "Kovárna"
+            )
+        ),
+
+        // === ALCHYMIE & LEKTVARY (POTIONS) ===
         AlchemyRecipe(
             id = "brew_touha",
             name = "Elixír divoké touhy",
             description = "Bylinný odvar vyvolávající okamžité vzrušení a poddajnost.",
             goldCost = 35,
             darkCost = 5,
-            resultItem = InventoryItem("elixir_touhy", "Elixír touhy", "Okamžitě zvyšuje touhu a vlhkost.", 1, 40)
+            materials = mapOf("drevohorec" to 5),
+            resultItem = InventoryItem("elixir_touhy", "Elixír touhy", "Okamžitě zvyšuje touhu a vlhkost.", 1, 40, "potion", "🔮", "Vzácný", "+35 TE & +35 SE")
         ),
         AlchemyRecipe(
             id = "brew_healing",
@@ -814,7 +1049,8 @@ object GameContent {
             description = "Hojí zranění po bojích i přísných trestech.",
             goldCost = 25,
             darkCost = 4,
-            resultItem = InventoryItem("hojivy_balzam", "Hojivý balzám", "Uzdravuje 35 HP.", 1, 25)
+            materials = mapOf("zelezna_ruda" to 3),
+            resultItem = InventoryItem("hojivy_balzam", "Hojivý balzám", "Uzdravuje 45 HP.", 1, 25, "potion", "🧪", "Běžný", "+45 HP")
         ),
         AlchemyRecipe(
             id = "brew_poslusnost",
@@ -822,7 +1058,46 @@ object GameContent {
             description = "Koncentrovaná esence podlamující vůli vzdorovat.",
             goldCost = 70,
             darkCost = 15,
-            resultItem = InventoryItem("serum_poslusnost", "Sérum poslušnosti", "Trvale posiluje loajalitu a submisivitu.", 1, 90)
+            materials = mapOf("mana_esence" to 5),
+            resultItem = InventoryItem("serum_poslusnost", "Sérum poslušnosti", "Trvale posiluje loajalitu a submisivitu.", 1, 90, "potion", "💉", "Epický", "+15 Poslušnost & Loajalita")
+        ),
+        AlchemyRecipe(
+            id = "brew_immortality_nectar",
+            name = "Nektar nesmrtelné vášeň",
+            description = "Prastarý elixír doplňující veškeré zdraví a energii harému.",
+            goldCost = 180,
+            darkCost = 25,
+            materials = mapOf("mana_esence" to 10, "mesicni_prach" to 2),
+            resultItem = InventoryItem("nektar_vasne", "Nektar nesmrtelné vášeň", "Plně uzdravuje a doplňuje 100 SE.", 1, 250, "potion", "🍷", "Legendární", "+100 HP & +100 SE")
+        ),
+
+        // === ARTEFAKTY & DARY (GIFTS & RELICS) ===
+        AlchemyRecipe(
+            id = "craft_night_roses",
+            name = "Kytice nočních růží",
+            description = "Voňavé temné růže vyvolávající náklonnost u dívek harému.",
+            goldCost = 40,
+            darkCost = 5,
+            materials = mapOf("drevohorec" to 8),
+            resultItem = InventoryItem("gift_roses", "Kytice nočních růží", "Dar pro dívku v harému.", 1, 25, "gift", "🌹", "Běžný", "+10 Náklonnost, +8 Loajalita")
+        ),
+        AlchemyRecipe(
+            id = "craft_gold_collar_gift",
+            name = "Zlatý obojek pána (Dar)",
+            description = "Symbol absolutního vlastnictví a věrnosti vyrytý rodovým erbem.",
+            goldCost = 200,
+            darkCost = 25,
+            materials = mapOf("temny_strep" to 8),
+            resultItem = InventoryItem("drahy_obojek", "Zlatý obojek pána", "Legendární dar pro členku harému.", 1, 150, "gift", "👑", "Legendární", "+25 Loajalita, +25 Poslušnost")
+        ),
+        AlchemyRecipe(
+            id = "craft_perfume",
+            name = "Afrodiziakální noční parfém",
+            description = "Omamná esence z půlnočních květů rozněcující touhu.",
+            goldCost = 90,
+            darkCost = 10,
+            materials = mapOf("mana_esence" to 5),
+            resultItem = InventoryItem("gift_perfume", "Noční parfém", "Vzácný dar pro harém.", 1, 70, "gift", "🌸", "Vzácný", "+12 Loajalita, +14 Touha")
         )
     )
 

@@ -1,10 +1,14 @@
 package com.example.haremdark.ui.components
 
+import android.widget.Toast
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -12,15 +16,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.haremdark.data.AffinityData
 import com.example.haremdark.data.LoyaltyCombatData
-import com.example.haremdark.domain.GameEngine
-import com.example.haremdark.models.Character
 import com.example.haremdark.data.GameContent
+import com.example.haremdark.domain.GameEngine
+import com.example.haremdark.domain.HapticManager
+import com.example.haremdark.domain.SoundEffectManager
+import com.example.haremdark.domain.HaremSound
+import com.example.haremdark.models.Character
 import com.example.haremdark.models.GameSave
 
 @Composable
@@ -30,6 +39,9 @@ fun GiftingModal(
     engine: GameEngine,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+    var giftReactionMessage by remember { mutableStateOf<String?>(null) }
+
     val loyaltyBonus = remember(character.loajalita) {
         LoyaltyCombatData.getBonusForLoyalty(character.loajalita)
     }
@@ -47,12 +59,13 @@ fun GiftingModal(
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF191224)),
             border = BorderStroke(1.5.dp, Color(0xFFAB47BC)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 16.dp)
+                .padding(vertical = 12.dp)
         ) {
             Column(
                 modifier = Modifier
@@ -71,7 +84,7 @@ fun GiftingModal(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Text("🎁", fontSize = 20.sp)
+                            Text("🎁", fontSize = 22.sp)
                             Text(
                                 text = "Obdarovat: ${character.name}",
                                 fontWeight = FontWeight.Bold,
@@ -80,9 +93,10 @@ fun GiftingModal(
                             )
                         }
                         Text(
-                            text = "${affinityTier.icon} ${affinityTier.title} • Vztah úr. ${affinityTier.level}",
+                            text = "${affinityTier.icon} ${affinityTier.title} • Úroveň důvěrnosti ${affinityTier.level}",
                             fontSize = 11.sp,
-                            color = Color(affinityTier.colorHex)
+                            color = Color(affinityTier.colorHex),
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
 
@@ -99,6 +113,55 @@ fun GiftingModal(
                             color = Color(0xFFFFD700),
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
+                    }
+                }
+
+                // Reaction Overlay Card when a gift was just given
+                AnimatedVisibility(
+                    visible = giftReactionMessage != null,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    giftReactionMessage?.let { reactionText ->
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFF2B1042),
+                            border = BorderStroke(1.dp, Color(0xFFFFD700)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text("💖", fontSize = 16.sp)
+                                    Text(
+                                        "Reakce & Odemčený rozhovor:",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFFFD700)
+                                    )
+                                }
+                                Text(
+                                    text = reactionText,
+                                    fontSize = 12.sp,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Button(
+                                    onClick = { giftReactionMessage = null },
+                                    modifier = Modifier.align(Alignment.End),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E24AA))
+                                ) {
+                                    Text("Pokračovat", fontSize = 11.sp)
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -124,7 +187,7 @@ fun GiftingModal(
                             ) {
                                 Text(loyaltyBonus.icon, fontSize = 16.sp)
                                 Text(
-                                    text = "Bojová úroveň: ${loyaltyBonus.title}",
+                                    text = "Bojový stupeň: ${loyaltyBonus.title}",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp,
                                     color = Color(0xFFFFD54F)
@@ -154,7 +217,7 @@ fun GiftingModal(
                             color = Color.White.copy(alpha = 0.9f)
                         )
                         Text(
-                            text = "💡 Vyšší náklonnost a loajalita z darů přímo zvyšují útok, obranu a asistenční zásahy v boji!",
+                            text = "💡 Vyšší náklonnost z darů odemyká unikátní dialogové možnosti a zvyšuje bojovou synergii!",
                             fontSize = 9.sp,
                             color = Color(0xFFCE93D8)
                         )
@@ -197,14 +260,14 @@ fun GiftingModal(
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f, fill = false),
+                        .heightIn(max = 260.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     // Inventory gifts section
                     if (inventoryGiftItems.isNotEmpty()) {
                         item {
                             Text(
-                                text = "🎒 V tvém inventáři:",
+                                text = "🎒 V tvém inventáři (vyrobené & získané dary):",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF81C784)
@@ -238,7 +301,7 @@ fun GiftingModal(
                                                 color = Color.White
                                             )
                                             Text(
-                                                text = "+15 Náklonnost • +12 Loajalita",
+                                                text = item.effectDescription.ifBlank { "+15 Náklonnost • +12 Loajalita" },
                                                 fontSize = 10.sp,
                                                 color = Color(0xFFFF80AB)
                                             )
@@ -247,8 +310,14 @@ fun GiftingModal(
 
                                     Button(
                                         onClick = {
-                                            engine.giveInventoryGift(character.id, item.id)
-                                            onDismiss()
+                                            val (success, msg) = engine.giveInventoryGift(character.id, item.id)
+                                            if (success) {
+                                                SoundEffectManager.playHarem(HaremSound.CRAFTING_SUCCESS)
+                                                HapticManager.vibrateClick()
+                                                giftReactionMessage = msg
+                                            } else {
+                                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                            }
                                         },
                                         enabled = character.canGiftToday,
                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
@@ -310,8 +379,14 @@ fun GiftingModal(
 
                                 Button(
                                     onClick = {
-                                        engine.giveDirectGift(gift.id, character.id)
-                                        onDismiss()
+                                        val (success, msg) = engine.giveDirectGift(gift.id, character.id)
+                                        if (success) {
+                                            SoundEffectManager.playHarem(HaremSound.CRAFTING_SUCCESS)
+                                            HapticManager.vibrateClick()
+                                            giftReactionMessage = msg
+                                        } else {
+                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                        }
                                     },
                                     enabled = character.canGiftToday && canAfford,
                                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
@@ -340,4 +415,3 @@ fun GiftingModal(
         }
     }
 }
-

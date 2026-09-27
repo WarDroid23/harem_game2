@@ -110,6 +110,11 @@ interface HaremCharacterRepository {
     fun updateSkillPoints(id: String, points: Int): HaremCharacter?
 
     /**
+     * Update experience.
+     */
+    fun updateExperience(id: String, newXp: Int): HaremCharacter?
+
+    /**
      * Update character morale (clamped 0..100).
      */
     fun updateMorale(id: String, delta: Int): HaremCharacter?
@@ -383,6 +388,21 @@ class HaremCharacterRepositoryImpl(
             current.map { char ->
                 if (char.id == id) {
                     val result = char.copy(availableSkillPoints = points)
+                    updated = result
+                    result
+                } else char
+            }
+        }
+        if (updated != null) notifyStateChanged()
+        return updated
+    }
+
+    override fun updateExperience(id: String, newXp: Int): HaremCharacter? {
+        var updated: HaremCharacter? = null
+        _characters.update { current ->
+            current.map { char ->
+                if (char.id == id) {
+                    val result = char.copy(experience = newXp.coerceAtLeast(0))
                     updated = result
                     result
                 } else char

@@ -453,22 +453,22 @@ object PartyCombatCatalog {
             recommendedLevel = 1,
             backgroundRes = R.drawable.img_arena_battle,
             enemies = listOf(
-                CombatEnemy("glad_1", "Gladiátorský novic", "🗡️", "Bojovník", "Běžný", 85, 85, 14, 6, 10, rewardGold = 25, rewardXp = 20),
-                CombatEnemy("hound_1", "Bojový vlčák", "🐕", "Bestie", "Rychlý", 65, 65, 16, 4, 15, rewardGold = 20, rewardXp = 15)
+                CombatEnemy("glad_1", "Gladiátorský novic", "🗡️", "Bojovník", "Běžný", hp = 85, maxHp = 85, attack = 14, defense = 6, speed = 10, rewardGold = 25, rewardXp = 20),
+                CombatEnemy("hound_1", "Bojový vlčák", "🐕", "Bestie", "Rychlý", hp = 65, maxHp = 65, attack = 16, defense = 4, speed = 15, rewardGold = 20, rewardXp = 15)
             ),
             totalWaves = 3,
             wavesList = listOf(
                 listOf(
-                    CombatEnemy("glad_1", "Gladiátorský novic", "🗡️", "Bojovník", "Běžný", 85, 85, 14, 6, 10, rewardGold = 25, rewardXp = 20),
-                    CombatEnemy("hound_1", "Bojový vlčák", "🐕", "Bestie", "Rychlý", 65, 65, 16, 4, 15, rewardGold = 20, rewardXp = 15)
+                    CombatEnemy("glad_1", "Gladiátorský novic", "🗡️", "Bojovník", "Běžný", hp = 85, maxHp = 85, attack = 14, defense = 6, speed = 10, rewardGold = 25, rewardXp = 20),
+                    CombatEnemy("hound_1", "Bojový vlčák", "🐕", "Bestie", "Rychlý", hp = 65, maxHp = 65, attack = 16, defense = 4, speed = 15, rewardGold = 20, rewardXp = 15)
                 ),
                 listOf(
-                    CombatEnemy("glad_spear", "Krvavý kopiník arény", "🔱", "Bojovník", "DPS", 110, 110, 18, 8, 12, rewardGold = 35, rewardXp = 30),
-                    CombatEnemy("arena_archer", "Kušinice ze stínů", "🏹", "Střelec", "Rychlý", 90, 90, 20, 5, 16, rewardGold = 30, rewardXp = 25)
+                    CombatEnemy("glad_spear", "Krvavý kopiník arény", "🔱", "Bojovník", "DPS", hp = 110, maxHp = 110, attack = 18, defense = 8, speed = 12, rewardGold = 35, rewardXp = 30),
+                    CombatEnemy("arena_archer", "Kušinice ze stínů", "🏹", "Střelec", "Rychlý", hp = 90, maxHp = 90, attack = 20, defense = 5, speed = 16, rewardGold = 30, rewardXp = 25)
                 ),
                 listOf(
-                    CombatEnemy("colosseum_champ", "Šampion Kolosea: Gorgar Krvavý", "👑", "Šampion Arény", "Boss", 260, 260, 26, 16, 11, isBoss = true, bossPhase = 1, rewardGold = 80, rewardXp = 70),
-                    CombatEnemy("slave_master", "Arénový bičovník", "⛓️", "Dozorce", "Tank", 130, 130, 16, 12, 8, rewardGold = 40, rewardXp = 35)
+                    CombatEnemy("colosseum_champ", "Šampion Kolosea: Gorgar Krvavý", "👑", "Šampion Arény", "Boss", hp = 260, maxHp = 260, attack = 26, defense = 16, speed = 11, isBoss = true, rewardGold = 80, rewardXp = 70),
+                    CombatEnemy("slave_master", "Arénový bičovník", "⛓️", "Dozorce", "Tank", hp = 130, maxHp = 130, attack = 16, defense = 12, speed = 8, rewardGold = 40, rewardXp = 35)
                 )
             ),
             isWaveGauntlet = true,
@@ -487,30 +487,30 @@ object PartyCombatCatalog {
             recommendedLevel = 3,
             backgroundRes = R.drawable.img_arena_domain_4,
             enemies = listOf(
-                CombatEnemy("cult_1", "Kultista Černého slunce", "🕯️", "Kultista", "Mág", 120, 120, 22, 8, 10, rewardGold = 40, rewardXp = 35),
-                CombatEnemy("imp_1", "Ohnivý rarášek", "🔥", "Démon", "DPS", 95, 95, 24, 6, 18, rewardGold = 35, rewardXp = 30)
+                CombatEnemy("cult_1", "Kultista Černého slunce", "🕯️", "Kultista", "Mág", hp = 120, maxHp = 120, attack = 22, defense = 8, speed = 10, rewardGold = 40, rewardXp = 35),
+                CombatEnemy("imp_1", "Ohnivý rarášek", "🔥", "Démon", "DPS", hp = 95, maxHp = 95, attack = 24, defense = 6, speed = 18, rewardGold = 35, rewardXp = 30)
             ),
             totalWaves = 5,
             wavesList = listOf(
                 listOf(
-                    CombatEnemy("cult_1", "Kultista Černého slunce", "🕯️", "Kultista", "Mág", 120, 120, 22, 8, 10, rewardGold = 40, rewardXp = 35),
-                    CombatEnemy("imp_1", "Ohnivý rarášek", "🔥", "Démon", "DPS", 95, 95, 24, 6, 18, rewardGold = 35, rewardXp = 30)
+                    CombatEnemy("cult_1", "Kultista Černého slunce", "🕯️", "Kultista", "Mág", hp = 120, maxHp = 120, attack = 22, defense = 8, speed = 10, rewardGold = 40, rewardXp = 35),
+                    CombatEnemy("imp_1", "Ohnivý rarášek", "🔥", "Démon", "DPS", hp = 95, maxHp = 95, attack = 24, defense = 6, speed = 18, rewardGold = 35, rewardXp = 30)
                 ),
                 listOf(
-                    CombatEnemy("undead_knight", "Rytíř zatracených", "🛡️", "Nemrtvý", "Tank", 180, 180, 20, 18, 8, rewardGold = 50, rewardXp = 45),
-                    CombatEnemy("succubus_scout", "Zákeřná sukubí zvědka", "💋", "Démonka", "DPS", 130, 130, 26, 8, 17, rewardGold = 45, rewardXp = 40)
+                    CombatEnemy("undead_knight", "Rytíř zatracených", "🛡️", "Nemrtvý", "Tank", hp = 180, maxHp = 180, attack = 20, defense = 18, speed = 8, rewardGold = 50, rewardXp = 45),
+                    CombatEnemy("succubus_scout", "Zákeřná sukubí zvědka", "💋", "Démonka", "DPS", hp = 130, maxHp = 130, attack = 26, defense = 8, speed = 17, rewardGold = 45, rewardXp = 40)
                 ),
                 listOf(
-                    CombatEnemy("void_caster", "Astrální zaříkávač nicoty", "🔮", "Kouzelník", "Mág", 160, 160, 28, 10, 12, rewardGold = 60, rewardXp = 50),
-                    CombatEnemy("abyss_hound", "Pekelný trojhlavý pes", "🐕‍🦺", "Bestie", "Rychlý", 150, 150, 27, 9, 16, rewardGold = 55, rewardXp = 45)
+                    CombatEnemy("void_caster", "Astrální zaříkávač nicoty", "🔮", "Kouzelník", "Mág", hp = 160, maxHp = 160, attack = 28, defense = 10, speed = 12, rewardGold = 60, rewardXp = 50),
+                    CombatEnemy("abyss_hound", "Pekelný trojhlavý pes", "🐕‍🦺", "Bestie", "Rychlý", hp = 150, maxHp = 150, attack = 27, defense = 9, speed = 16, rewardGold = 55, rewardXp = 45)
                 ),
                 listOf(
-                    CombatEnemy("shadow_executioner", "Stínový popravčí propasti", "🪓", "Zabiják", "DPS", 220, 220, 32, 14, 14, rewardGold = 75, rewardXp = 65),
-                    CombatEnemy("succubus_matron", "Vznešená matrona rozkoše", "👑", "Démonka", "Mág", 190, 190, 30, 12, 15, rewardGold = 70, rewardXp = 60)
+                    CombatEnemy("shadow_executioner", "Stínový popravčí propasti", "🪓", "Zabiják", "DPS", hp = 220, maxHp = 220, attack = 32, defense = 14, speed = 14, rewardGold = 75, rewardXp = 65),
+                    CombatEnemy("succubus_matron", "Vznešená matrona rozkoše", "👑", "Démonka", "Mág", hp = 190, maxHp = 190, attack = 30, defense = 12, speed = 15, rewardGold = 70, rewardXp = 60)
                 ),
                 listOf(
-                    CombatEnemy("abyss_archdemon", "Archidémon Malgok: Pán Temnoty", "👿", "Pán Propasti", "Boss", 420, 420, 38, 22, 14, isBoss = true, bossPhase = 1, rewardGold = 150, rewardXp = 140),
-                    CombatEnemy("void_core", "Krystal astrální zhouby", "💎", "Totem", "Mág", 160, 160, 15, 25, 6, rewardGold = 60, rewardXp = 50)
+                    CombatEnemy("abyss_archdemon", "Archidémon Malgok: Pán Temnoty", "👿", "Pán Propasti", "Boss", hp = 420, maxHp = 420, attack = 38, defense = 22, speed = 14, isBoss = true, rewardGold = 150, rewardXp = 140),
+                    CombatEnemy("void_core", "Krystal astrální zhouby", "💎", "Totem", "Mág", hp = 160, maxHp = 160, attack = 15, defense = 25, speed = 6, rewardGold = 60, rewardXp = 50)
                 )
             ),
             isWaveGauntlet = true,
@@ -529,38 +529,38 @@ object PartyCombatCatalog {
             recommendedLevel = 5,
             backgroundRes = R.drawable.img_arena_domain_5,
             enemies = listOf(
-                CombatEnemy("paladin_1", "Svatý inkvizitor", "⚔️", "Inkvizitor", "Tank", 200, 200, 28, 20, 10, rewardGold = 60, rewardXp = 50),
-                CombatEnemy("cleric_1", "Svatá léčitelka řádu", "✨", "Léčitelka", "Mág", 170, 170, 20, 12, 12, rewardGold = 50, rewardXp = 45)
+                CombatEnemy("paladin_1", "Svatý inkvizitor", "⚔️", "Inkvizitor", "Tank", hp = 200, maxHp = 200, attack = 28, defense = 20, speed = 10, rewardGold = 60, rewardXp = 50),
+                CombatEnemy("cleric_1", "Svatá léčitelka řádu", "✨", "Léčitelka", "Mág", hp = 170, maxHp = 170, attack = 20, defense = 12, speed = 12, rewardGold = 50, rewardXp = 45)
             ),
             totalWaves = 7,
             wavesList = listOf(
                 listOf(
-                    CombatEnemy("paladin_1", "Svatý inkvizitor", "⚔️", "Inkvizitor", "Tank", 200, 200, 28, 20, 10, rewardGold = 60, rewardXp = 50),
-                    CombatEnemy("cleric_1", "Svatá léčitelka řádu", "✨", "Léčitelka", "Mág", 170, 170, 20, 12, 12, rewardGold = 50, rewardXp = 45)
+                    CombatEnemy("paladin_1", "Svatý inkvizitor", "⚔️", "Inkvizitor", "Tank", hp = 200, maxHp = 200, attack = 28, defense = 20, speed = 10, rewardGold = 60, rewardXp = 50),
+                    CombatEnemy("cleric_1", "Svatá léčitelka řádu", "✨", "Léčitelka", "Mág", hp = 170, maxHp = 170, attack = 20, defense = 12, speed = 12, rewardGold = 50, rewardXp = 45)
                 ),
                 listOf(
-                    CombatEnemy("valkyrie_guard", "Fallen Valkyrie Strážkyně", "🛡️", "Valkýra", "Tank", 240, 240, 32, 22, 14, rewardGold = 75, rewardXp = 60),
-                    CombatEnemy("astral_witch", "Astrální čarodějka hvězd", "🔮", "Čarodějka", "DPS", 200, 200, 36, 12, 16, rewardGold = 70, rewardXp = 55)
+                    CombatEnemy("valkyrie_guard", "Fallen Valkyrie Strážkyně", "🛡️", "Valkýra", "Tank", hp = 240, maxHp = 240, attack = 32, defense = 22, speed = 14, rewardGold = 75, rewardXp = 60),
+                    CombatEnemy("astral_witch", "Astrální čarodějka hvězd", "🔮", "Čarodějka", "DPS", hp = 200, maxHp = 200, attack = 36, defense = 12, speed = 16, rewardGold = 70, rewardXp = 55)
                 ),
                 listOf(
-                    CombatEnemy("dragon_knight", "Dračí rytíř plamene", "🐲", "Drakobijec", "DPS", 280, 280, 38, 24, 13, rewardGold = 90, rewardXp = 75),
-                    CombatEnemy("flame_siren", "Ohnivá siréna inferna", "🔥", "Siréna", "Mág", 220, 220, 34, 14, 18, rewardGold = 80, rewardXp = 65)
+                    CombatEnemy("dragon_knight", "Dračí rytíř plamene", "🐲", "Drakobijec", "DPS", hp = 280, maxHp = 280, attack = 38, defense = 24, speed = 13, rewardGold = 90, rewardXp = 75),
+                    CombatEnemy("flame_siren", "Ohnivá siréna inferna", "🔥", "Siréna", "Mág", hp = 220, maxHp = 220, attack = 34, defense = 14, speed = 18, rewardGold = 80, rewardXp = 65)
                 ),
                 listOf(
-                    CombatEnemy("blood_titan", "Krvavý titán z podsvětí", "👹", "Kolos", "Tank", 350, 350, 36, 26, 8, rewardGold = 110, rewardXp = 90),
-                    CombatEnemy("shadow_assassin", "Stínová mistryně dýk", "🗡️", "Vražedkyně", "DPS", 210, 210, 44, 14, 22, rewardGold = 95, rewardXp = 80)
+                    CombatEnemy("blood_titan", "Krvavý titán z podsvětí", "👹", "Kolos", "Tank", hp = 350, maxHp = 350, attack = 36, defense = 26, speed = 8, rewardGold = 110, rewardXp = 90),
+                    CombatEnemy("shadow_assassin", "Stínová mistryně dýk", "🗡️", "Vražedkyně", "DPS", hp = 210, maxHp = 210, attack = 44, defense = 14, speed = 22, rewardGold = 95, rewardXp = 80)
                 ),
                 listOf(
-                    CombatEnemy("high_inquisitor", "Nejvyšší inkvizitor Malakor", "👑", "Vládce řádu", "Boss", 380, 380, 42, 28, 14, isBoss = true, bossPhase = 1, rewardGold = 140, rewardXp = 120),
-                    CombatEnemy("seraph_healer", "Seraphimská andělská kněžka", "👼", "Anděl", "Mág", 240, 240, 22, 18, 15, rewardGold = 100, rewardXp = 85)
+                    CombatEnemy("high_inquisitor", "Nejvyšší inkvizitor Malakor", "👑", "Vládce řádu", "Boss", hp = 380, maxHp = 380, attack = 42, defense = 28, speed = 14, isBoss = true, rewardGold = 140, rewardXp = 120),
+                    CombatEnemy("seraph_healer", "Seraphimská andělská kněžka", "👼", "Anděl", "Mág", hp = 240, maxHp = 240, attack = 22, defense = 18, speed = 15, rewardGold = 100, rewardXp = 85)
                 ),
                 listOf(
-                    CombatEnemy("void_leviathan", "Astrální Leviatan z Hlubin", "🐉", "Astrální bestie", "Boss", 460, 460, 46, 30, 12, isBoss = true, bossPhase = 1, rewardGold = 180, rewardXp = 150),
-                    CombatEnemy("void_shard", "Střep temné energie", "⚡", "Totem", "Mág", 190, 190, 25, 20, 20, rewardGold = 80, rewardXp = 70)
+                    CombatEnemy("void_leviathan", "Astrální Leviatan z Hlubin", "🐉", "Astrální bestie", "Boss", hp = 460, maxHp = 460, attack = 46, defense = 30, speed = 12, isBoss = true, rewardGold = 180, rewardXp = 150),
+                    CombatEnemy("void_shard", "Střep temné energie", "⚡", "Totem", "Mág", hp = 190, maxHp = 190, attack = 25, defense = 20, speed = 20, rewardGold = 80, rewardXp = 70)
                 ),
                 listOf(
-                    CombatEnemy("emperor_of_light", "Císař Světla a Soudce Bohů: Aurelius Magnus", "👑", "Bůh Války", "Boss", 600, 600, 52, 34, 18, isBoss = true, bossPhase = 1, rewardGold = 300, rewardXp = 250),
-                    CombatEnemy("valkyrie_champion", "Šampionka Zlaté Valkýry", "✨", "Valkýra", "DPS", 280, 280, 40, 26, 17, rewardGold = 150, rewardXp = 120)
+                    CombatEnemy("emperor_of_light", "Císař Světla a Soudce Bohů: Aurelius Magnus", "👑", "Bůh Války", "Boss", hp = 600, maxHp = 600, attack = 52, defense = 34, speed = 18, isBoss = true, rewardGold = 300, rewardXp = 250),
+                    CombatEnemy("valkyrie_champion", "Šampionka Zlaté Valkýry", "✨", "Valkýra", "DPS", hp = 280, maxHp = 280, attack = 40, defense = 26, speed = 17, rewardGold = 150, rewardXp = 120)
                 )
             ),
             isWaveGauntlet = true,

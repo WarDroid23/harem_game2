@@ -419,7 +419,8 @@ fun DomainExpansionScreen(
             ) {
                 listOf(
                     "🏭 Ekonomika & Stavby",
-                    "👩‍🦰 Přiřazení Otrokyň",
+                    "🛒 Trh Otrokyň",
+                    "👩‍🦰 Přiřazení Správkyň",
                     "📜 Císařské Dekrety",
                     "📖 Příběhové Kapitoly",
                     "🗺️ Provincie & Teritoria"
@@ -460,7 +461,11 @@ fun DomainExpansionScreen(
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                         }
                     )
-                    1 -> ConcubineWorkerAssignmentTab(
+                    1 -> SlaveMarketTab(
+                        gameState = gameState,
+                        engine = engine
+                    )
+                    2 -> ConcubineWorkerAssignmentTab(
                         characters = gameState.characters,
                         assignedWorkers = assignedWorkers,
                         onAssign = { bId, cId ->
@@ -472,7 +477,7 @@ fun DomainExpansionScreen(
                             Toast.makeText(context, "Dívka úspěšně přiřazena k provozu budovy!", Toast.LENGTH_SHORT).show()
                         }
                     )
-                    2 -> ImperialDecreesTab(
+                    3 -> ImperialDecreesTab(
                         player = player,
                         activeDecrees = activeDecrees,
                         onEnactDecree = { decree ->
@@ -488,7 +493,7 @@ fun DomainExpansionScreen(
                             }
                         }
                     )
-                    3 -> StoryChaptersTab(
+                    4 -> StoryChaptersTab(
                         domainLevel = domainLvl,
                         haremSize = gameState.characters.size,
                         claimedChapters = claimedChapters,
@@ -503,7 +508,7 @@ fun DomainExpansionScreen(
                             Toast.makeText(context, "🎉 Získáno: ${chapter.rewardGold}💰, ${chapter.rewardSexEnergy}⚡ a titul '${chapter.rewardTitle}'!", Toast.LENGTH_LONG).show()
                         }
                     )
-                    4 -> KingdomTerritoryTab(
+                    5 -> KingdomTerritoryTab(
                         gameState = gameState,
                         engine = engine
                     )
@@ -989,5 +994,325 @@ fun KingdomTerritoryTab(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun SlaveMarketTab(
+    gameState: GameSave,
+    engine: GameEngine
+) {
+    val context = LocalContext.current
+    val player = gameState.player
+    val domainLvl = gameState.domainExpansionLevel.coerceAtLeast(1)
+    val maxCapacity = 5 + (domainLvl * 5) + (gameState.buildings.find { it.type == "ubytovny" }?.level ?: 0) * 4
+    val currentHaremCount = gameState.characters.size
+
+    var candidates by remember { mutableStateOf(com.example.haremdark.data.SlaveMarketCatalog.PRESET_SLAVE_CANDIDATES) }
+
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(bottom = 24.dp)
+    ) {
+        item {
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                border = BorderStroke(1.dp, Color(0xFFAB47BC).copy(alpha = 0.5f))
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                "🛒 Trh Otrokyň & Společnic Dominia",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = Color(0xFFE1BEE7)
+                            )
+                            Text(
+                                "Kapacita harému: $currentHaremCount/$maxCapacity dívek",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Button(
+                                onClick = {
+                                    if (player.gold >= 100) {
+                                        player.gold -= 100
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
+                                        HapticManager.vibrateClick()
+                                        candidates = com.example.haremdark.data.SlaveMarketCatalog.generateFreshMarketRoster()
+                                        Toast.makeText(context, "🔄 Nabídka otrokyň byla obnovena!", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "Potřebuješ 100 Zlata na obnovu trhu!", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A1B9A)),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text("🔄 Obnovit", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            Button(
+                                onClick = {
+                                    if (player.gold >= 100) {
+                                        player.gold -= 100
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
+                                        HapticManager.vibrateClick()
+                                        candidates = listOf(
+                                            com.example.haremdark.data.SlaveMarketGenerator.generateProceduralCandidate(),
+                                            com.example.haremdark.data.SlaveMarketGenerator.generateProceduralCandidate(),
+                                            com.example.haremdark.data.SlaveMarketGenerator.generateProceduralCandidate(),
+                                            com.example.haremdark.data.SlaveMarketGenerator.generateProceduralCandidate()
+                                        )
+                                        Toast.makeText(context, "🎲 Vygenerována nová unikátní nabídka s procedurálním pozadím!", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "Potřebuješ 100 Zlata na generování!", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFAB47BC)),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text("🎲 Generovat", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    Text(
+                        "Obchodníci a nájezdníci přivádějí na trh zajaté šlechtičny, kněžky, bojem zocelené drakobijky a čarodějky. Vykup jejich svobodu a podrob je své vůli za suroviny dominia.",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        items(candidates) { candidate ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, if (candidate.isRecruited) Color.Gray else Color(candidate.rarityColorHex))
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Header
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .border(2.dp, Color(candidate.rarityColorHex), RoundedCornerShape(10.dp))
+                            ) {
+                                SubcomposeAsyncImage(
+                                    model = ImageRequest.Builder(LocalContext.current)
+                                        .data(candidate.portraitRes)
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = candidate.name,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+
+                            Column {
+                                Text(
+                                    candidate.name,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    candidate.title,
+                                    fontSize = 11.sp,
+                                    color = Color(candidate.rarityColorHex),
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    "Živel: ${candidate.element.name}",
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(candidate.rarityColorHex).copy(alpha = 0.2f)
+                        ) {
+                            Text(
+                                candidate.rarityName,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(candidate.rarityColorHex),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    // Personality Tags
+                    if (candidate.personalityTags.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            candidate.personalityTags.forEach { tag ->
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = Color(0xFF4A148C).copy(alpha = 0.35f),
+                                    border = BorderStroke(1.dp, Color(0xFFCE93D8).copy(alpha = 0.4f))
+                                ) {
+                                    Text(
+                                        text = "🏷️ $tag",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFFE1BEE7),
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Background trait
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text("✨", fontSize = 13.sp)
+                            Column {
+                                Text(
+                                    candidate.backgroundTraitName,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp,
+                                    color = Color(0xFFFFD700)
+                                )
+                                Text(
+                                    candidate.backgroundTraitDesc,
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    // Backstory
+                    Text(
+                        candidate.backstory,
+                        fontSize = 10.sp,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    // Initial stats grid
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceAround
+                    ) {
+                        StatMiniBadge("❤️ HP", "${candidate.initialHp}")
+                        StatMiniBadge("🔮 Mana", "${candidate.initialMana}")
+                        StatMiniBadge("🗡️ Útok", "${candidate.initialAttack}")
+                        StatMiniBadge("🛡️ Obrana", "${candidate.initialDefense}")
+                        StatMiniBadge("⚡ Rychlost", "${candidate.initialSpeed}")
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    // Resource costs & recruit button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text("Cena výkupu:", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                if (candidate.costGold > 0) ResourceCostPill("💰 ${candidate.costGold}")
+                                if (candidate.costWood > 0) ResourceCostPill("🪵 ${candidate.costWood}")
+                                if (candidate.costStone > 0) ResourceCostPill("🪨 ${candidate.costStone}")
+                                if (candidate.costMana > 0) ResourceCostPill("🔮 ${candidate.costMana}")
+                                if (candidate.costSexEnergy > 0) ResourceCostPill("⚡ ${candidate.costSexEnergy}")
+                            }
+                        }
+
+                        val isAlreadyInHarem = gameState.characters.any { it.name == candidate.name } || candidate.isRecruited
+
+                        Button(
+                            onClick = {
+                                val success = engine.recruitSlaveCandidate(candidate)
+                                if (success) {
+                                    candidate.isRecruited = true
+                                    Toast.makeText(context, "🎉 ${candidate.name} vstoupila do tvého harému!", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(context, "Výkup se nezdařil. Zkontroluj suroviny a kapacitu!", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            enabled = !isAlreadyInHarem,
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC2185B))
+                        ) {
+                            Text(
+                                if (isAlreadyInHarem) "Vykoupena ✓" else "🛒 Vykoupit",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatMiniBadge(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+@Composable
+private fun ResourceCostPill(text: String) {
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Text(
+            text,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+        )
     }
 }

@@ -59,6 +59,7 @@ class MainActivity : ComponentActivity() {
             val currentTheme by engine.currentTheme.collectAsState()
             val isLightMode by engine.isLightMode.collectAsState()
             val dailyReward by engine.dailyRewardAvailable.collectAsState()
+            val activeProgressionEncounter by engine.activeProgressionEncounter.collectAsState()
             val context = LocalContext.current
             
             var activeMoodNotification by remember { mutableStateOf<MoodNotification?>(null) }
@@ -347,6 +348,74 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
 
+                                // 2. Denní odměny za věrnost
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = Color(0xFF2C1338).copy(alpha = 0.75f)
+                                    ),
+                                    border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.45f)),
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        engine.checkDailyLogin(forceShow = true)
+                                    }
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(38.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(Color(0xFFFFD700).copy(alpha = 0.2f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text("🎁", fontSize = 20.sp)
+                                        }
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Text(
+                                                    "Denní odměny",
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 13.sp,
+                                                    color = Color(0xFFFFD700)
+                                                )
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = Color(0xFF4A148C)
+                                                ) {
+                                                    Text(
+                                                        "Kalendář",
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFFE1BEE7),
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                    )
+                                                }
+                                            }
+                                            Text(
+                                                "Vyzvedni si denní kořist za věrnost",
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                            )
+                                        }
+                                        Icon(
+                                            Icons.Default.ChevronRight,
+                                            contentDescription = null,
+                                            tint = Color(0xFFFFD54F),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+
                                 // 2. Rychlé uložení (Uložit hru)
                                 Card(
                                     modifier = Modifier
@@ -402,6 +471,60 @@ class MainActivity : ComponentActivity() {
                                             Icons.Default.ChevronRight,
                                             contentDescription = null,
                                             tint = Color(0xFFA5D6A7),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+
+                                // 3. Vyvolat náhodnou událost panství
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = Color(0xFF2C1A38).copy(alpha = 0.75f)
+                                    ),
+                                    border = BorderStroke(1.dp, Color(0xFFE040FB).copy(alpha = 0.45f)),
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        val triggered = engine.triggerRandomProgressionEncounter()
+                                        if (!triggered) {
+                                            Toast.makeText(context, "Žádná nová událost nebyla k dispozici.", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(38.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(Color(0xFFE040FB).copy(alpha = 0.2f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text("🎲", fontSize = 18.sp)
+                                        }
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                "Náhodná událost panství",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp,
+                                                color = Color(0xFFEA80FC)
+                                            )
+                                            Text(
+                                                "Vyvolat událost dle úrovně a vztahů v harému",
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                                            )
+                                        }
+                                        Icon(
+                                            Icons.Default.ChevronRight,
+                                            contentDescription = null,
+                                            tint = Color(0xFFEA80FC),
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -894,6 +1017,34 @@ class MainActivity : ComponentActivity() {
                             composable("codex") {
                                 CodexScreen(player = gameState.player, onBack = { navController.popBackStack() })
                             }
+                            composable("crafting") {
+                                com.example.haremdark.ui.screens.CraftingScreen(
+                                    gameState = gameState,
+                                    engine = engine,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable("harem_rooms") {
+                                com.example.haremdark.ui.screens.HaremRoomDecorationScreen(
+                                    gameState = gameState,
+                                    engine = engine,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable("gear_loadouts") {
+                                com.example.haremdark.ui.screens.GearLoadoutManagementScreen(
+                                    gameState = gameState,
+                                    engine = engine,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable("idle_expeditions") {
+                                com.example.haremdark.ui.screens.IdleExpeditionScreen(
+                                    gameState = gameState,
+                                    engine = engine,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
                             composable("inventory") {
                                 com.example.haremdark.ui.screens.InventoryScreen(gameState = gameState, engine = engine)
                             }
@@ -938,7 +1089,8 @@ class MainActivity : ComponentActivity() {
                             }
                             composable("skill_tree") {
                                 SkillTreeScreen(
-                                    engine = engine
+                                    engine = engine,
+                                    onBack = { navController.popBackStack() }
                                 )
                             }
                             composable("daily_quests") {
@@ -960,13 +1112,16 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                                                // Daily Login Reward Dialog
+                // Daily Login Reward Dialog
                 dailyReward?.let { reward ->
                     DailyAttendanceDialog(
                         reward = reward,
                         onClaim = {
                             engine.claimDailyReward()
-                            Toast.makeText(context, "Denní odměna vybrána!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "🎁 Denní odměna byla úspěšně převzata!", Toast.LENGTH_SHORT).show()
+                        },
+                        onDismiss = {
+                            engine.dismissDailyRewardDialog()
                         }
                     )
                 }
@@ -988,6 +1143,18 @@ class MainActivity : ComponentActivity() {
                             Button(onClick = { activeNarrativeEvent = null }) {
                                 Text("Pokračovat")
                             }
+                        }
+                    )
+                }
+
+                // Progression & Relationship Random Encounter Dialog
+                activeProgressionEncounter?.let { enc ->
+                    com.example.haremdark.ui.components.ProgressionEncounterDialog(
+                        encounter = enc,
+                        onDismiss = { engine.dismissProgressionEncounter() },
+                        onChoiceSelected = { choice ->
+                            engine.resolveProgressionEncounterChoice(choice)
+                            Toast.makeText(context, "Vyřešeno: ${choice.outcomeSummary}", Toast.LENGTH_SHORT).show()
                         }
                     )
                 }

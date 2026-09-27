@@ -426,80 +426,14 @@ fun CharacterCard(
                 scaleAnim.animateTo(1f, animationSpec = androidx.compose.animation.core.tween(100))
             }
 
-                    // Affinity Tier & Passive Thought Snippet
-                    val nextTierInfo = AffinityData.TIERS.firstOrNull { it.level == affinityTier.level + 1 }
-                    val (currentInTier, tierSpan) = AffinityData.getProgressInTier(character.affinityPoints)
-                    val tierProgress = (currentInTier.toFloat() / tierSpan.toFloat()).coerceIn(0f, 1f)
-
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(affinityTier.colorHex).copy(alpha = 0.1f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(affinityTier.colorHex).copy(alpha = 0.25f)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .graphicsLayer {
-                                scaleX = scaleAnim.value
-                                scaleY = scaleAnim.value
-                            }
-                    ) {
-                        Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Text(affinityTier.icon, fontSize = 13.sp)
-                                    Text(
-                                        text = "Lvl ${affinityTier.level} ${affinityTier.title}",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(affinityTier.colorHex)
-                                    )
-                                }
-                                
-                                if (nextTierInfo != null) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Text(
-                                            text = "K ${nextTierInfo.icon}",
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                                        )
-                                        Text(
-                                            text = "${currentInTier}/${tierSpan}",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Medium,
-                                            color = Color(affinityTier.colorHex)
-                                        )
-                                    }
-                                }
-                            }
-                            LinearProgressIndicator(
-                                progress = { tierProgress },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(4.dp)
-                                    .clip(RoundedCornerShape(2.dp)),
-                                color = Color(affinityTier.colorHex),
-                                trackColor = Color(affinityTier.colorHex).copy(alpha = 0.2f)
-                            )
-                            Text(
-                                text = "• „${AffinityData.getRandomActiveDialogue(character.affinityPoints, character.archetypeId)}“",
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+            // Custom Visual Harem Relationship Progress Indicator
+            HaremRelationshipProgressIndicator(
+                character = character,
+                onInteract = { action ->
+                    if (action == "talk") onGreetClick()
+                    if (action == "gift") onGrantFavorClick()
                 }
-            }
+            )
 
             // Rental Status Banner if on rental
             if (character.naNajmu) {

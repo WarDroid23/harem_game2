@@ -37,7 +37,14 @@ data class DailyRewardState(
     val consecutiveDays: Int,
     val rewardGold: Int,
     val rewardMana: Int,
-    val itemReward: InventoryItem?
+    val rewardGems: Int = 10,
+    val rewardSkillPoints: Int = 0,
+    val rewardXp: Int = 100,
+    val itemReward: InventoryItem? = null,
+    val craftingMaterialsReward: Map<String, Int> = emptyMap(),
+    val streakBonusPercent: Int = 0,
+    val isAlreadyClaimedToday: Boolean = false,
+    val nextClaimTimeMillis: Long = 0L
 )
 
 data class AutoSaveEvent(
@@ -191,24 +198,64 @@ class GameEngine(private val context: Context) {
         return true
     }
 
-    fun purchaseSkillNode(characterId: String, nodeId: String): Boolean {
-        val character = haremCharacterRepository.getById(characterId) ?: return false
-        val skillNode = com.example.haremdark.models.SkillTreeData.nodes.find { it.id == nodeId } ?: return false
-        
-        if (character.availableSkillPoints < skillNode.cost) return false
-        if (character.unlockedSkills.contains(nodeId)) return false
-        if (skillNode.requiresId != null && !character.unlockedSkills.contains(skillNode.requiresId)) return false
-        
+    fun purchaseSkillNode(characterId: String, nodeId: String, useXp: Boolean = false): Pair<Boolean, String> {
+        val character = haremCharacterRepository.getById(characterId)
+            ?: return Pair(false, "Členka harému nebyla nalezena.")
+        val skillNode = com.example.haremdark.models.SkillTreeData.nodes.find { it.id == nodeId }
+            ?: return Pair(false, "Dovednost nebyla nalezena.")
+
+        if (character.unlockedSkills.contains(nodeId)) {
+            return Pair(false, "Tato dovednost je již odemčena.")
+        }
+
+        if (skillNode.requiresId != null && !character.unlockedSkills.contains(skillNode.requiresId)) {
+            val reqNode = com.example.haremdark.models.SkillTreeData.nodes.find { it.id == skillNode.requiresId }
+            val reqTitle = reqNode?.title ?: skillNode.requiresId
+            return Pair(false, "Nejprve musíte odemknout požadavek: $reqTitle.")
+        }
+
+        if (useXp) {
+            if (character.experience < skillNode.xpCost) {
+                return Pair(false, "Nedostatek zkušeností! Vyžadováno ${skillNode.xpCost} XP (máte ${character.experience} XP).")
+            }
+            haremCharacterRepository.updateExperience(characterId, character.experience - skillNode.xpCost)
+        } else {
+            if (character.availableSkillPoints < skillNode.cost) {
+                return Pair(false, "Nedostatek dovednostních bodů! Vyžadováno ${skillNode.cost} bodů (máte ${character.availableSkillPoints}).")
+            }
+            haremCharacterRepository.updateSkillPoints(characterId, character.availableSkillPoints - skillNode.cost)
+        }
+
         val newSkills = character.unlockedSkills.toMutableList()
         newSkills.add(nodeId)
-        
         haremCharacterRepository.updateSkills(characterId, newSkills)
-        haremCharacterRepository.updateSkillPoints(characterId, character.availableSkillPoints - skillNode.cost)
-        
-        addLog("✨ ${character.name} odemkla novou schopnost: ${skillNode.title}")
-        return true
+
+        val typeText = if (skillNode.isActiveCombatSkill) "⚡ Aktivní schopnost" else "🛡️ Pasivní buff"
+        val msg = "✨ ${character.name} odemkla $typeText: ${skillNode.title}!"
+        addLog(msg)
+        return Pair(true, msg)
     }
-    
+
+    fun earnCharacterXp(characterId: String, amount: Int) {
+        val character = haremCharacterRepository.getById(characterId) ?: return
+        val updatedXp = character.experience + amount
+        haremCharacterRepository.updateExperience(characterId, updatedXp)
+        addLog("⭐ ${character.name} získala +$amount Zkušeností (Celkem: $updatedXp XP)!")
+    }
+
+    fun convertXpToSkillPoints(characterId: String, xpCost: Int = 100): Pair<Boolean, String> {
+        val character = haremCharacterRepository.getById(characterId)
+            ?: return Pair(false, "Členka harému nebyla nalezena.")
+        if (character.experience < xpCost) {
+            return Pair(false, "Nedostatek zkušeností (vyžadováno $xpCost XP).")
+        }
+        haremCharacterRepository.updateExperience(characterId, character.experience - xpCost)
+        haremCharacterRepository.updateSkillPoints(characterId, character.availableSkillPoints + 1)
+        val msg = "🔮 ${character.name} přeměnila $xpCost XP na +1 Dovednostní bod!"
+        addLog(msg)
+        return Pair(true, msg)
+    }
+
     fun earnSkillPoints(characterId: String, points: Int) {
         val character = haremCharacterRepository.getById(characterId) ?: return
         haremCharacterRepository.updateSkillPoints(characterId, character.availableSkillPoints + points)
@@ -337,7 +384,7 @@ class GameEngine(private val context: Context) {
     private val _dailyRewardAvailable = MutableStateFlow<DailyRewardState?>(null)
     val dailyRewardAvailable: StateFlow<DailyRewardState?> = _dailyRewardAvailable.asStateFlow()
 
-    fun checkDailyLogin() {
+    fun checkDailyLogin(forceShow: Boolean = false) {
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             val lastLoginKey = longPreferencesKey("last_login_epoch_day")
             val streakKey = intPreferencesKey("consecutive_login_days")
@@ -347,19 +394,36 @@ class GameEngine(private val context: Context) {
             val consecutiveDays = prefs[streakKey] ?: 0
             
             val currentEpochDay = System.currentTimeMillis() / (1000 * 60 * 60 * 24)
+            val isAlreadyClaimed = (currentEpochDay <= lastLoginEpochDay)
             
-            if (currentEpochDay > lastLoginEpochDay) {
+            if (currentEpochDay > lastLoginEpochDay || forceShow) {
                 val isConsecutive = (currentEpochDay - lastLoginEpochDay) == 1L
-                val newStreak = if (isConsecutive) consecutiveDays + 1 else 1
+                val newStreak = if (isConsecutive) consecutiveDays + 1 else if (isAlreadyClaimed) consecutiveDays.coerceAtLeast(1) else 1
+                val streakBonus = (newStreak * 5).coerceAtMost(50)
                 
-                val rewardGold = 100 + (newStreak * 20).coerceAtMost(400)
-                val rewardMana = 20 + (newStreak * 5).coerceAtMost(100)
+                val baseGold = 150 + (newStreak * 30).coerceAtMost(500)
+                val rewardGold = (baseGold * (100 + streakBonus) / 100)
+                val rewardMana = 30 + (newStreak * 10).coerceAtMost(200)
+                val rewardGems = 10 + (newStreak * 3).coerceAtMost(50)
+                val rewardSkillPoints = if (newStreak % 3 == 0) 1 else 0
+                val rewardXp = 100 + (newStreak * 25)
                 
-                val itemReward = if (newStreak % 5 == 0) {
-                    InventoryItem(
+                val itemReward = when {
+                    newStreak % 7 == 0 -> InventoryItem(
+                        id = "gift_gold_collar",
+                        name = "Zlatý obojek pána",
+                        description = "Symbol absolutního vlastnictví a věrnosti vyrytý rodovým erbem. (Dar)",
+                        count = 1,
+                        price = 350,
+                        category = "gift",
+                        icon = "👑",
+                        rarity = "Legendární",
+                        effectDescription = "+25 Loajalita & +25 Poslušnost v harému"
+                    )
+                    newStreak % 5 == 0 -> InventoryItem(
                         id = "daily_gift_epic",
                         name = "Epický dar za věrnost",
-                        description = "Cenný předmět pro tvůj harém. (Dárek)",
+                        description = "Cenný předmět pro tvůj harém. (Dar)",
                         count = 1,
                         price = 250,
                         category = "gift",
@@ -367,32 +431,97 @@ class GameEngine(private val context: Context) {
                         rarity = "Epický",
                         effectDescription = "Velmi zvyšuje náklonnost"
                     )
-                } else null
-                
+                    newStreak % 3 == 0 -> InventoryItem(
+                        id = "gift_roses",
+                        name = "Kytice nočních růží",
+                        description = "Voňavé temné růže vyvolávající něhu. (Dar)",
+                        count = 1,
+                        price = 100,
+                        category = "gift",
+                        icon = "🌹",
+                        rarity = "Vzácný",
+                        effectDescription = "+10 Náklonnost & +8 Loajalita"
+                    )
+                    else -> InventoryItem(
+                        id = "hojivy_balzam",
+                        name = "Hojivý balzám",
+                        description = "Uzdravuje zranění z bojů.",
+                        count = 1,
+                        price = 25,
+                        category = "combat",
+                        icon = "🧪",
+                        rarity = "Běžný",
+                        effectDescription = "+45 HP"
+                    )
+                }
+
+                val materialsReward = when {
+                    newStreak % 7 == 0 -> mapOf(
+                        "temny_strep" to 25 + newStreak * 2,
+                        "mana_esence" to 20 + newStreak,
+                        "mesicni_prach" to 10,
+                        "draci_krev" to 3,
+                        "krystal" to 10
+                    )
+                    newStreak % 5 == 0 -> mapOf(
+                        "temny_strep" to 15 + newStreak,
+                        "mana_esence" to 12,
+                        "mesicni_prach" to 5,
+                        "krystal" to 5
+                    )
+                    newStreak % 3 == 0 -> mapOf(
+                        "temny_strep" to 10 + newStreak,
+                        "mana_esence" to 8,
+                        "mesicni_prach" to 3
+                    )
+                    newStreak % 2 == 0 -> mapOf(
+                        "temny_strep" to 8,
+                        "mana_esence" to 5,
+                        "zelezna_ruda" to 10
+                    )
+                    else -> mapOf(
+                        "temny_strep" to 5,
+                        "zelezna_ruda" to 8,
+                        "drevohorec" to 10
+                    )
+                }
+
                 _dailyRewardAvailable.value = DailyRewardState(
                     consecutiveDays = newStreak,
                     rewardGold = rewardGold,
                     rewardMana = rewardMana,
-                    itemReward = itemReward
+                    rewardGems = rewardGems,
+                    rewardSkillPoints = rewardSkillPoints,
+                    rewardXp = rewardXp,
+                    itemReward = itemReward,
+                    craftingMaterialsReward = materialsReward,
+                    streakBonusPercent = streakBonus,
+                    isAlreadyClaimedToday = isAlreadyClaimed
                 )
             }
         }
     }
 
+    fun dismissDailyRewardDialog() {
+        _dailyRewardAvailable.value = null
+    }
+
     fun claimDailyReward() {
         val reward = _dailyRewardAvailable.value ?: return
-        _dailyRewardAvailable.value = null
-        
+        if (reward.isAlreadyClaimedToday) return
+
+        _dailyRewardAvailable.value = reward.copy(isAlreadyClaimedToday = true)
+
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             val lastLoginKey = longPreferencesKey("last_login_epoch_day")
             val streakKey = intPreferencesKey("consecutive_login_days")
             val currentEpochDay = System.currentTimeMillis() / (1000 * 60 * 60 * 24)
-            
+
             context.dataStore.edit { prefs ->
                 prefs[lastLoginKey] = currentEpochDay
                 prefs[streakKey] = reward.consecutiveDays
             }
-            
+
             updateState { state ->
                 val p = state.player
                 val newItems = p.items.toMutableList()
@@ -405,12 +534,21 @@ class GameEngine(private val context: Context) {
                         newItems.add(reward.itemReward)
                     }
                 }
-                
+
+                val newResources = p.craftingResources.toMutableMap()
+                reward.craftingMaterialsReward.forEach { (matId, count) ->
+                    newResources[matId] = (newResources[matId] ?: 0) + count
+                }
+
                 state.copy(
                     player = p.copy(
                         gold = p.gold + reward.rewardGold,
                         darkEnergy = (p.darkEnergy + reward.rewardMana).coerceAtMost(p.maxDarkEnergy),
-                        items = newItems
+                        manaEssence = p.manaEssence + reward.rewardGems,
+                        skillPoints = p.skillPoints + reward.rewardSkillPoints,
+                        xp = p.xp + reward.rewardXp,
+                        items = newItems,
+                        craftingResources = newResources
                     )
                 )
             }
@@ -433,6 +571,7 @@ class GameEngine(private val context: Context) {
             }
             
             checkDailyLogin()
+            checkAndCompleteIdleExpeditions()
         }
         
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
@@ -585,8 +724,74 @@ class GameEngine(private val context: Context) {
     private val _activeFactionEvent = MutableStateFlow<com.example.haremdark.models.FactionEvent?>(null)
     val activeFactionEvent = _activeFactionEvent.asStateFlow()
 
-    fun triggerRandomFactionEvent() {
-        _activeFactionEvent.value = com.example.haremdark.models.FactionEventGenerator.generateRandomEvent()
+    private val _activeProgressionEncounter = MutableStateFlow<com.example.haremdark.domain.ProgressionEncounter?>(null)
+    val activeProgressionEncounter: StateFlow<com.example.haremdark.domain.ProgressionEncounter?> = _activeProgressionEncounter.asStateFlow()
+
+    fun triggerRandomProgressionEncounter(): Boolean {
+        val encounter = com.example.haremdark.domain.ProgressionEncounterCatalog.selectRandomEncounter(_gameState.value)
+        if (encounter != null) {
+            _activeProgressionEncounter.value = encounter
+            addLog("📜 Nastala nová událost panství: ${encounter.title}")
+            return true
+        }
+        return false
+    }
+
+    fun dismissProgressionEncounter() {
+        _activeProgressionEncounter.value = null
+    }
+
+    fun resolveProgressionEncounterChoice(choice: com.example.haremdark.domain.ProgressionEncounterChoice) {
+        val enc = _activeProgressionEncounter.value ?: return
+        updateState { state ->
+            val p = state.player
+            val newGold = (p.gold + (choice.resourceRewards["gold"] ?: 0)).coerceAtLeast(0)
+            val newWood = (p.wood + (choice.resourceRewards["wood"] ?: 0)).coerceAtLeast(0)
+            val newStone = (p.stone + (choice.resourceRewards["stone"] ?: 0)).coerceAtLeast(0)
+            val newIron = (p.iron + (choice.resourceRewards["iron"] ?: 0)).coerceAtLeast(0)
+            val newMana = (p.mana + (choice.resourceRewards["mana"] ?: 0)).coerceIn(0, p.maxMana)
+            val newDarkEnergy = (p.darkEnergy + (choice.resourceRewards["darkEnergy"] ?: 0)).coerceIn(0, p.maxDarkEnergy)
+            val newSexEnergy = (p.sexEnergy + (choice.resourceRewards["sexEnergy"] ?: 0)).coerceIn(0, p.maxSexEnergy)
+            val newInfluence = (p.influence + (choice.resourceRewards["influence"] ?: 0)).coerceIn(0, p.maxInfluence)
+
+            val updatedPlayer = p.copy(
+                gold = newGold,
+                wood = newWood,
+                stone = newStone,
+                iron = newIron,
+                mana = newMana,
+                darkEnergy = newDarkEnergy,
+                sexEnergy = newSexEnergy,
+                influence = newInfluence
+            )
+
+            // Update matching character if encounter is tied to character or affects harem
+            val updatedCharacters = state.characters.map { c ->
+                if (enc.characterId != null && c.id == enc.characterId || enc.category == com.example.haremdark.domain.EncounterCategory.HAREM_RELATIONSHIP) {
+                    val copy = c.copy()
+                    if (choice.affinityGain > 0) {
+                        copy.affinityPoints = copy.affinityPoints + choice.affinityGain
+                        copy.affinityLevel = com.example.haremdark.data.AffinityData.getLevelForPoints(copy.affinityPoints)
+                    }
+                    if (choice.loyaltyGain != 0) copy.loajalita = (copy.loajalita + choice.loyaltyGain).coerceIn(0, 100)
+                    if (choice.affectionGain != 0) copy.srdce = (copy.srdce + choice.affectionGain).coerceIn(0, 100)
+                    if (choice.obedienceGain != 0) copy.poslusnost = (copy.poslusnost + choice.obedienceGain).coerceIn(0, 100)
+                    if (choice.fearGain != 0) copy.strach = (copy.strach + choice.fearGain).coerceIn(0, 100)
+                    if (choice.moraleGain != 0) copy.morale = (copy.morale + choice.moraleGain).coerceIn(0, 100)
+                    copy
+                } else c
+            }
+
+            val logMsg = "✨ Událost '${enc.title}' vyřešena: ${choice.outcomeSummary}"
+            val newLogs = (listOf(logMsg) + state.gameLog).take(30)
+
+            state.copy(
+                player = updatedPlayer,
+                characters = updatedCharacters,
+                gameLog = newLogs
+            )
+        }
+        _activeProgressionEncounter.value = null
     }
 
     fun resolveFactionEvent(option: com.example.haremdark.models.EventOption) {
@@ -1398,6 +1603,9 @@ class GameEngine(private val context: Context) {
         }
         gameStateManager.generateDailyObjectives(_gameState.value.player.day)
         autoSave("Nový den (Den ${_gameState.value.player.day})")
+        if (kotlin.random.Random.nextFloat() < 0.65f) {
+            triggerRandomProgressionEncounter()
+        }
     }
 
     // --- MISSIONS ---
@@ -2865,6 +3073,110 @@ class GameEngine(private val context: Context) {
         }
         autoSave()
         return Pair(true, msg)
+    }
+
+    // --- HAREM ROOM DECORATION & LIVING QUARTERS SYSTEM ---
+
+    fun getHaremRooms(): List<com.example.haremdark.models.HaremRoom> {
+        val currentRooms = _gameState.value.haremRooms
+        if (currentRooms.isEmpty()) {
+            val defaults = com.example.haremdark.models.RoomDecorationCatalog.DEFAULT_INITIAL_ROOMS()
+            updateState { it.copy(haremRooms = defaults) }
+            return defaults
+        }
+        return currentRooms
+    }
+
+    fun assignCharacterToRoom(roomId: String, characterId: String?): Pair<Boolean, String> {
+        val current = _gameState.value
+        val rooms = getHaremRooms().map { it.copy(installedDecorations = it.installedDecorations.toMutableMap()) }.toMutableList()
+        val roomIdx = rooms.indexOfFirst { it.id == roomId }
+        if (roomIdx == -1) return Pair(false, "Komnata nenalezena.")
+
+        val targetChar = if (characterId != null) current.characters.find { it.id == characterId } else null
+
+        // Unassign character from any other room first
+        if (characterId != null) {
+            rooms.forEachIndexed { idx, room ->
+                if (room.assignedCharacterId == characterId && room.id != roomId) {
+                    rooms[idx] = room.copy(assignedCharacterId = null)
+                }
+            }
+        }
+
+        val updatedRoom = rooms[roomIdx].copy(assignedCharacterId = characterId)
+        rooms[roomIdx] = updatedRoom
+
+        val msg = if (targetChar != null) {
+            "🌹 ${targetChar.name} byla ubytována v komnatě '${updatedRoom.name}'!"
+        } else {
+            "Komnata '${updatedRoom.name}' je nyní prázdná."
+        }
+
+        updateState { state ->
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(haremRooms = rooms, gameLog = logs)
+        }
+        SoundEffectManager.playHarem(HaremSound.GIFT)
+        autoSave()
+        return Pair(true, msg)
+    }
+
+    fun installDecorationToRoom(roomId: String, decorationId: String): Pair<Boolean, String> {
+        val decoration = com.example.haremdark.models.RoomDecorationCatalog.ALL_DECORATIONS.find { it.id == decorationId }
+            ?: return Pair(false, "Dekorace nenalezena.")
+
+        val current = _gameState.value
+        val p = current.player
+        val rooms = getHaremRooms().map { it.copy(installedDecorations = it.installedDecorations.toMutableMap()) }.toMutableList()
+        val roomIdx = rooms.indexOfFirst { it.id == roomId }
+        if (roomIdx == -1) return Pair(false, "Komnata nenalezena.")
+
+        if (p.gold < decoration.goldCost) {
+            return Pair(false, "Nedostatek zlata pro zakoupení dekorace (${p.gold}/${decoration.goldCost})!")
+        }
+        if (p.darkEnergy < decoration.darkEnergyCost) {
+            return Pair(false, "Nedostatek temné energie (${p.darkEnergy}/${decoration.darkEnergyCost})!")
+        }
+
+        for ((matId, reqAmount) in decoration.materialCosts) {
+            val available = p.craftingResources[matId] ?: 0
+            if (available < reqAmount) {
+                return Pair(false, "Nedostatek materiálu $matId ($available/$reqAmount)!")
+            }
+        }
+
+        val room = rooms[roomIdx]
+        val slotKey = decoration.slot.name
+        room.installedDecorations[slotKey] = decoration
+
+        val msg = "🛋️ Komnata '${room.name}' byla vylepšena o '${decoration.name}'! (Komfort: +${decoration.comfortPoints})"
+        SoundEffectManager.playHarem(HaremSound.CRAFTING_SUCCESS)
+
+        updateState { state ->
+            val newResources = state.player.craftingResources.toMutableMap()
+            for ((matId, reqAmount) in decoration.materialCosts) {
+                newResources[matId] = (newResources[matId] ?: 0) - reqAmount
+            }
+
+            val newP = state.player.copy(
+                gold = (state.player.gold - decoration.goldCost).coerceAtLeast(0),
+                darkEnergy = (state.player.darkEnergy - decoration.darkEnergyCost).coerceAtLeast(0),
+                craftingResources = newResources
+            )
+
+            val logs = (listOf(msg) + state.gameLog).take(30)
+            state.copy(player = newP, haremRooms = rooms, gameLog = logs)
+        }
+        autoSave()
+        return Pair(true, msg)
+    }
+
+    fun getRoomPassiveCombatBonus(characterId: String): com.example.haremdark.models.RoomStatBonus {
+        val rooms = _gameState.value.haremRooms
+        val room = rooms.find { it.assignedCharacterId == characterId }
+            ?: return com.example.haremdark.models.RoomStatBonus()
+        return room.getCumulativeStatBonus()
     }
 
     // --- UNDERWORLD DRUGS & CARTEL SYSTEM ---
@@ -4886,7 +5198,7 @@ class GameEngine(private val context: Context) {
                     narrativeText = "Pevný kryt a magická bariéra vytvořily neprostupnou hradbu. Hrdina se připravil absorbovat a odrazit nadcházející nápor útoků."
                 ))
             }
-            "player_skill_fireball" -> {
+            "player_skill_fireball", "player_skill_pils_fireball" -> {
                 if (player.darkEnergy >= 15) {
                     player.darkEnergy -= 15
                     newPlayerDark = player.darkEnergy
@@ -4918,7 +5230,7 @@ class GameEngine(private val context: Context) {
                     ))
                 }
             }
-            "player_skill_shadow_shield" -> {
+            "player_skill_shadow_shield", "player_skill_pils_shadow_shield" -> {
                 if (player.darkEnergy >= 10) {
                     player.darkEnergy -= 10
                     newPlayerDark = player.darkEnergy
@@ -4948,7 +5260,7 @@ class GameEngine(private val context: Context) {
                     ))
                 }
             }
-            "player_skill_dark_harvest" -> {
+            "player_skill_dark_harvest", "player_skill_pils_dark_harvest" -> {
                 if (player.darkEnergy >= 20) {
                     player.darkEnergy -= 20
                     newPlayerDark = player.darkEnergy
@@ -5530,6 +5842,10 @@ class GameEngine(private val context: Context) {
         }
 
         
+        val updatedSkillCooldowns = session.skillCooldowns.mapValues { (_, cd) ->
+            (cd - 1).coerceAtLeast(0)
+        }.filterValues { it > 0 }
+
         _combatState.value = session.copy(
             bossHp = newBossHp,
             playerHp = newPlayerHp,
@@ -5538,6 +5854,7 @@ class GameEngine(private val context: Context) {
             enemyBleedTurns = newBleedTurns,
             enemyStunned = newStunned,
             activeBuff = activeBuff,
+            skillCooldowns = updatedSkillCooldowns,
             hazardCountdown = newHazardCountdown,
             lastHazardTriggerMessage = hazardTriggerMsg,
             logEntries = newLogEntries.take(40),
@@ -5672,7 +5989,7 @@ class GameEngine(private val context: Context) {
         }
 
         SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
-        HapticManager.triggerHeavyClick()
+        HapticManager.vibrateHeavy()
         addLog("👑 Odemčen a vybaven exkluzivní vizuální skin [${skinDef.name}] za ${skinDef.prestigeCost} 🏆 Prestiže!")
         autoSave("Odemčení skinu")
         return true
@@ -5687,7 +6004,7 @@ class GameEngine(private val context: Context) {
             }
             current.copy(characters = updatedChars)
         }
-        HapticManager.triggerLightClick()
+        HapticManager.vibrateClick()
         addLog("✨ Vybaven vizuální skin pro postavu.")
         autoSave("Vybavení skinu")
     }
@@ -5701,9 +6018,51 @@ class GameEngine(private val context: Context) {
             }
             current.copy(characters = updatedChars)
         }
-        HapticManager.triggerLightClick()
+        HapticManager.vibrateClick()
         addLog("🔄 Obnoven výchozí vzhled postavy.")
         autoSave("Odebrání skinu")
+    }
+
+    fun recruitSlaveCandidate(candidate: com.example.haremdark.data.SlaveMarketCandidate): Boolean {
+        val player = _gameState.value.player
+        val characters = _gameState.value.characters
+        val domainLvl = _gameState.value.domainExpansionLevel.coerceAtLeast(1)
+        val maxCapacity = 5 + (domainLvl * 5) + (_gameState.value.buildings.find { it.type == "ubytovny" }?.level ?: 0) * 4
+
+        if (characters.size >= maxCapacity) {
+            addLog("❌ Kapacita harému je naplněna! Vylepši ubytovny nebo úroveň dominia.")
+            return false
+        }
+
+        if (player.gold < candidate.costGold ||
+            player.wood < candidate.costWood ||
+            player.stone < candidate.costStone ||
+            player.mana < candidate.costMana ||
+            player.sexEnergy < candidate.costSexEnergy
+        ) {
+            addLog("❌ Nedostatek zdrojů pro výkup dívky [${candidate.name}].")
+            return false
+        }
+
+        // Deduct resources
+        player.gold -= candidate.costGold
+        player.wood -= candidate.costWood
+        player.stone -= candidate.costStone
+        player.mana -= candidate.costMana
+        player.sexEnergy -= candidate.costSexEnergy
+
+        val newChar = com.example.haremdark.data.SlaveMarketCatalog.convertCandidateToCharacter(candidate)
+
+        updateState { current ->
+            val updatedList = current.characters.toMutableList().apply { add(newChar) }
+            current.copy(characters = updatedList)
+        }
+
+        SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
+        HapticManager.vibrateHeavy()
+        addLog("👑 Úspěšně vykoupena dívka [${candidate.name} - ${candidate.title}] do tvého harému!")
+        autoSave("Nábor v trhu otrokyň")
+        return true
     }
 
     private fun addPlayerXp(amount: Int) {
@@ -6774,4 +7133,136 @@ class GameEngine(private val context: Context) {
         }
     }
 
+    // --- IDLE EXPEDITION SYSTEM ---
+    fun startIdleExpedition(zoneId: String, characterIds: List<String>): Pair<Boolean, String> {
+        val zone = com.example.haremdark.models.IdleExpeditionCatalog.getZoneById(zoneId)
+            ?: return Pair(false, "Neznámá zóna pro expedici.")
+
+        if (characterIds.size < zone.requiredMembersCount) {
+            return Pair(false, "Tato expedice vyžaduje alespoň ${zone.requiredMembersCount} dívky.")
+        }
+
+        val current = _gameState.value
+        val isAlreadyOccupied = current.activeIdleExpeditions.any { active ->
+            active.assignedCharacterIds.any { id -> characterIds.contains(id) }
+        }
+        if (isAlreadyOccupied) {
+            return Pair(false, "Jedna nebo více vybraných dívek už plní jinou expedici!")
+        }
+
+        val expeditionId = "idle_exp_${System.currentTimeMillis()}"
+        val durationMillis = zone.durationMinutes * 60 * 1000L
+        val newActiveExp = com.example.haremdark.models.ActiveIdleExpedition(
+            id = expeditionId,
+            zoneId = zone.id,
+            assignedCharacterIds = characterIds,
+            startTimeMillis = System.currentTimeMillis(),
+            durationMillis = durationMillis
+        )
+
+        updateState { state ->
+            val updatedCharacters = state.characters.map { char ->
+                if (characterIds.contains(char.id)) {
+                    char.copy(status = "Na expedici: ${zone.name}")
+                } else char
+            }
+            state.copy(
+                characters = updatedCharacters,
+                activeIdleExpeditions = state.activeIdleExpeditions + newActiveExp
+            )
+        }
+        autoSave()
+        return Pair(true, "Dívky se úspěšně vydaly na expedici '${zone.name}' (${zone.durationMinutes} min)!")
+    }
+
+    fun checkAndCompleteIdleExpeditions(): List<com.example.haremdark.models.IdleExpeditionReport> {
+        val current = _gameState.value
+        val now = System.currentTimeMillis()
+        val completedList = mutableListOf<com.example.haremdark.models.IdleExpeditionReport>()
+
+        val remainingActive = mutableListOf<com.example.haremdark.models.ActiveIdleExpedition>()
+
+        updateState { state ->
+            val newReports = state.completedExpeditionReports.toMutableList()
+            var newPlayer = state.player
+            val newResources = state.player.craftingResources.toMutableMap()
+            val newCharacters = state.characters.toMutableList()
+
+            state.activeIdleExpeditions.forEach { active ->
+                val elapsedTime = now - active.startTimeMillis
+                if (elapsedTime >= active.durationMillis) {
+                    val zone = com.example.haremdark.models.IdleExpeditionCatalog.getZoneById(active.zoneId)
+                    val assignedChars = newCharacters.filter { active.assignedCharacterIds.contains(it.id) }
+                    val totalPower = assignedChars.sumOf { (it.skills["combat"] ?: 0) * 15 + it.affinityPoints * 2 + it.level * 10 + 50 }
+
+                    val powerRatio = if (zone != null) (totalPower.toFloat() / zone.recommendedPower.toFloat()).coerceIn(0.7f, 1.5f) else 1.0f
+
+                    val goldGained = ((zone?.baseGoldReward ?: 300) * powerRatio).toInt()
+                    val darkGained = ((zone?.baseDarkEnergyReward ?: 50) * powerRatio).toInt()
+                    val xpGained = (150 * powerRatio).toInt()
+
+                    val gatheredMaterials = mutableMapOf<String, Int>()
+                    zone?.possibleMaterials?.forEach { matKey ->
+                        val count = (1..3).random()
+                        gatheredMaterials[matKey] = (gatheredMaterials[matKey] ?: 0) + count
+                        newResources[matKey] = (newResources[matKey] ?: 0) + count
+                    }
+
+                    // Reset character status and add XP
+                    for (i in newCharacters.indices) {
+                        if (active.assignedCharacterIds.contains(newCharacters[i].id)) {
+                            val c = newCharacters[i]
+                            val newXp = c.xp + xpGained
+                            newCharacters[i] = c.copy(status = "Aktivní", xp = newXp)
+                        }
+                    }
+
+                    val charNames = assignedChars.map { it.name }
+                    val report = com.example.haremdark.models.IdleExpeditionReport(
+                        id = active.id,
+                        zoneId = active.zoneId,
+                        zoneName = zone?.name ?: "Neznámá zóna",
+                        zoneIcon = zone?.icon ?: "🗺️",
+                        assignedCharacterNames = charNames,
+                        goldGained = goldGained,
+                        darkEnergyGained = darkGained,
+                        xpGainedPerMember = xpGained,
+                        materialsGained = gatheredMaterials,
+                        flavorLog = "Tvoje dívky (${charNames.joinToString(", ")}) úspěšně prozkoumaly zónu '${zone?.name}' a vrátily se s bohatou kořistí!"
+                    )
+
+                    newReports.add(report)
+                    completedList.add(report)
+
+                    newPlayer = newPlayer.copy(
+                        gold = newPlayer.gold + goldGained,
+                        darkEnergy = (newPlayer.darkEnergy + darkGained).coerceAtMost(newPlayer.maxDarkEnergy),
+                        craftingResources = newResources
+                    )
+                } else {
+                    remainingActive.add(active)
+                }
+            }
+
+            state.copy(
+                player = newPlayer,
+                characters = newCharacters,
+                activeIdleExpeditions = remainingActive,
+                completedExpeditionReports = newReports
+            )
+        }
+
+        if (completedList.isNotEmpty()) {
+            autoSave()
+        }
+        return completedList
+    }
+
+    fun dismissExpeditionReport(reportId: String) {
+        updateState { state ->
+            val updatedReports = state.completedExpeditionReports.filter { it.id != reportId }
+            state.copy(completedExpeditionReports = updatedReports)
+        }
+        autoSave()
+    }
 }

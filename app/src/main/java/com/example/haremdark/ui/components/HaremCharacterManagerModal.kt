@@ -434,6 +434,15 @@ private fun HaremCharacterCard(
                     }
                 }
 
+                // Harem Relationship Level Visual Progress Indicator
+                HaremRelationshipProgressIndicator(
+                    character = character,
+                    onInteract = { action ->
+                        if (action == "talk") onExecuteInteraction(character.id, "bonding_chat")
+                        if (action == "gift") onExecuteInteraction(character.id, "bonding_gift")
+                    }
+                )
+
                 // Morale & Productivity Section
                 Surface(
                     shape = RoundedCornerShape(8.dp),
