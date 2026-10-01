@@ -48,6 +48,8 @@ import com.example.haremdark.models.Character
 import com.example.haremdark.models.GameSave
 import com.example.haremdark.ui.components.CharacterCard
 import com.example.haremdark.domain.VoiceManager
+import com.example.haremdark.ui.components.HaremFavoritesDashboard
+import com.example.haremdark.ui.components.GiftingModal
 import com.example.haremdark.ui.components.CharacterDetailDialog
 import com.example.haremdark.ui.components.CharacterGridCard
 import com.example.haremdark.ui.components.InteractionDialog
@@ -247,6 +249,7 @@ fun HaremScreen(
     val activeEvent by haremViewModel.activeTimeLimitedEvent.collectAsState()
     val eventRemainingSeconds by haremViewModel.eventRemainingSeconds.collectAsState()
     val isEventDialogueOpen by haremViewModel.isEventDialogueOpen.collectAsState()
+    var selectedCharacterForGifting by remember { mutableStateOf<Character?>(null) }
 
     LaunchedEffect(gameState.characters.size) {
         if (gameState.characters.isNotEmpty() && haremViewModel.activeTimeLimitedEvent.value == null) {
@@ -459,6 +462,21 @@ fun HaremScreen(
                 com.example.haremdark.ui.components.SynergyDashboardDialog(
                     characters = gameState.characters,
                     onDismiss = { showSynergyDashboardDialog = false }
+                )
+            }
+
+            // Top-Level Favorites & Quick Access Dashboard
+            if (gameState.characters.isNotEmpty()) {
+                HaremFavoritesDashboard(
+                    characters = gameState.characters,
+                    gameState = gameState,
+                    engine = engine,
+                    onOpenProfile = { char -> haremViewModel.openProfile(char) },
+                    onOpenInteraction = { char -> haremViewModel.openInteraction(char) },
+                    onOpenGifting = { char -> selectedCharacterForGifting = char },
+                    onOpenLoadout = { char -> haremViewModel.openProfile(char) },
+                    onOpenSkillTree = { char -> haremViewModel.openProfile(char) },
+                    onOpenChamber = { char -> haremViewModel.selectTab(1) }
                 )
             }
 
@@ -1345,6 +1363,17 @@ fun HaremScreen(
                 )
             }
         }
+    }
+
+    // Direct Gifting Modal for Quick Access & Cards
+    selectedCharacterForGifting?.let { character ->
+        val currentConcubine = gameState.characters.firstOrNull { it.id == character.id } ?: character
+        GiftingModal(
+            character = currentConcubine,
+            gameState = gameState,
+            engine = engine,
+            onDismiss = { selectedCharacterForGifting = null }
+        )
     }
     if (isComparisonOpen && selectedIds.size == 2) {
         val char1 = gameState.characters.firstOrNull { it.id == selectedIds[0] }

@@ -94,10 +94,7 @@ object StaticData {
     }
 
     fun getPortraitForCharacter(character: com.example.haremdark.models.Character): Int {
-        if (character.equippedSkin != "default") {
-            return PrestigeSkinsCatalog.getSkinDrawable(character.equippedSkin, character.archetypeId)
-        }
-        return getPortraitForArchetype(character.archetypeId)
+        return com.example.haremdark.data.BondTierCatalog.getActivePortraitRes(character)
     }
 
     val GALLERY_ENTRIES = listOf(

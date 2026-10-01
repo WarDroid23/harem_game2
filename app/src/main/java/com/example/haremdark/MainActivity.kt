@@ -991,7 +991,13 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             composable("map") {
-                                WorldMapScreen(gameState = gameState, engine = engine)
+                                WorldMapScreen(
+                                    gameState = gameState,
+                                    engine = engine,
+                                    onNavigateToExpeditions = {
+                                        navController.navigate("idle_expeditions") { launchSingleTop = true }
+                                    }
+                                )
                             }
                             composable("arena") {
                                 ArenaScreen(gameState = gameState, engine = engine)

@@ -55,6 +55,12 @@ fun PartyCombatScreen(
     var showElementalSynergyModal by remember { mutableStateOf(false) }
     var selectedStatusEffectForDetail by remember { mutableStateOf<CombatStatusEffect?>(null) }
     var isAutoBattle by remember { mutableStateOf(false) }
+    var showTacticalOverlayMenu by remember { mutableStateOf(false) }
+
+    // Sync FX animation speed with session speed
+    LaunchedEffect(session.animationSpeedMultiplier) {
+        fxState.animationSpeedMultiplier = session.animationSpeedMultiplier
+    }
 
     val aliveEnemies = session.enemies.filter { it.isAlive }
     val aliveParty = session.party.filter { it.isAlive }
@@ -69,9 +75,9 @@ fun PartyCombatScreen(
     val camScale = fxState.cameraScale.value
 
     // Smart Tactical Auto-Battle AI loop
-    LaunchedEffect(isAutoBattle, session.currentTurnIndex, session.isFinished, session.haremComboGauge) {
+    LaunchedEffect(isAutoBattle, session.currentTurnIndex, session.isFinished, session.haremComboGauge, session.animationSpeedMultiplier) {
         if (isAutoBattle && !session.isFinished) {
-            kotlinx.coroutines.delay(800)
+            kotlinx.coroutines.delay((800 / session.animationSpeedMultiplier).toLong())
             if (session.isFinished) return@LaunchedEffect
 
             // 1. Ultimate Combo priority
@@ -308,13 +314,14 @@ fun PartyCombatScreen(
                         }
 
                         // Animation Speed Toggle
-                        var speedIdx by remember { mutableStateOf(0) }
-                        val speeds = listOf(1.0f, 2.0f, 4.0f)
-                        val speedLabels = listOf("1x", "2x", "4x")
+                        val speeds = listOf(1.0f, 1.5f, 2.0f)
+                        val speedLabels = listOf("1x", "1.5x", "2x")
+                        val speedIdx = speeds.indexOf(session.animationSpeedMultiplier).coerceAtLeast(0)
+
                         IconButton(
                             onClick = {
-                                speedIdx = (speedIdx + 1) % speeds.size
-                                onSessionUpdated(session.copy(animationSpeedMultiplier = speeds[speedIdx]))
+                                val nextIdx = (speedIdx + 1) % speeds.size
+                                onSessionUpdated(session.copy(animationSpeedMultiplier = speeds[nextIdx]))
                             },
                             modifier = Modifier.size(30.dp)
                         ) {
@@ -363,7 +370,19 @@ fun PartyCombatScreen(
                         }
 
                         IconButton(
-                            onClick = onExitCombat,
+                            onClick = { showTacticalOverlayMenu = true },
+                            modifier = Modifier.size(30.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.GpsFixed,
+                                contentDescription = "Taktické menu",
+                                tint = Color(0xFFFFD700),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { showTacticalOverlayMenu = true },
                             modifier = Modifier.size(30.dp)
                         ) {
                             Icon(
@@ -496,11 +515,12 @@ fun PartyCombatScreen(
                 )
             }
 
-            // --- SCROLLABLE COMBAT LOG VIEW ---
-            ScrollableCombatLogView(
+            // --- SLEEK COMBAT LOG OVERLAY ---
+            CombatLogOverlay(
                 logs = session.combatLogs,
-                onOpenFullModal = { showLogsModal = true },
-                onOpenElementalLogModal = { showElementalLogsModal = true }
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
             )
 
             // --- HAREM ULTIMATE COMBO GAUGE ---
@@ -552,6 +572,7 @@ fun PartyCombatScreen(
                 activeMember = activeMember,
                 targetEnemyName = targetEnemy?.name ?: "Nepřítel",
                 playerItems = gameState.player.items,
+                onOpenTacticalMenu = { showTacticalOverlayMenu = true },
                 onBasicAttack = {
                     coroutineScope.launch {
                         val (next, msg) = PartyCombatManager.executeBasicAttack(session, session.selectedTargetEnemyIndex)
@@ -675,6 +696,73 @@ fun PartyCombatScreen(
             activeSynergies = session.elementalSynergies,
             combatLogs = session.combatLogs,
             onDismiss = { showElementalSynergyModal = false }
+        )
+    }
+
+    // --- TACTICAL OVERLAY MENU ---
+    if (showTacticalOverlayMenu) {
+        TacticalOverlayMenu(
+            visible = showTacticalOverlayMenu,
+            enemies = session.enemies,
+            selectedTargetIndex = session.selectedTargetEnemyIndex,
+            activeMember = activeMember,
+            onSelectTarget = { targetIdx ->
+                onSessionUpdated(session.copy(selectedTargetEnemyIndex = targetIdx))
+            },
+            onDefend = {
+                showTacticalOverlayMenu = false
+                coroutineScope.launch {
+                    fxState.triggerAbility(CombatAbilityType.DEFEND, "Obranný Postoj", coroutineScope)
+                    fxState.triggerFloatingText(
+                        text = "+50% Obrana",
+                        isShield = true,
+                        isEnemyTarget = false,
+                        scope = coroutineScope
+                    )
+                    val (next, _) = PartyCombatManager.executeDefend(session)
+                    onSessionUpdated(next)
+                }
+            },
+            onFocusFire = { targetIdx ->
+                showTacticalOverlayMenu = false
+                coroutineScope.launch {
+                    val (next, _) = PartyCombatManager.executeFocusFire(session, targetIdx)
+                    fxState.triggerAttackSequence(
+                        attackerPartyIndex = session.currentTurnIndex,
+                        targetEnemyIndex = targetIdx,
+                        abilityType = CombatAbilityType.CRITICAL_SUPERNOVA,
+                        customName = "🎯 Soustředěná Palba",
+                        damageText = "-35% OBRANA",
+                        isCrit = true,
+                        scope = coroutineScope
+                    )
+                    onSessionUpdated(next)
+                }
+            },
+            onRetreat = {
+                showTacticalOverlayMenu = false
+                coroutineScope.launch {
+                    val (next, _) = PartyCombatManager.executeRetreat(session)
+                    onSessionUpdated(next)
+                }
+            },
+            onAllOutAssault = {
+                showTacticalOverlayMenu = false
+                coroutineScope.launch {
+                    val (next, _) = PartyCombatManager.executeAllOutAssault(session)
+                    fxState.triggerAbility(CombatAbilityType.CHAR_SPECIAL, "Totální Zteč", coroutineScope, isCritical = true)
+                    onSessionUpdated(next)
+                }
+            },
+            onRally = {
+                showTacticalOverlayMenu = false
+                coroutineScope.launch {
+                    val (next, _) = PartyCombatManager.executeRally(session)
+                    fxState.triggerAbility(CombatAbilityType.HAREM_SUPPORT, "Bojový Pokřik", coroutineScope)
+                    onSessionUpdated(next)
+                }
+            },
+            onDismiss = { showTacticalOverlayMenu = false }
         )
     }
 

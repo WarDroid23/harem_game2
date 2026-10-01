@@ -122,6 +122,50 @@ object HapticManager {
         }
     }
 
+    /**
+     * Miss / Evasion haptic feedback with a very short, sharp pulse.
+     */
+    fun vibrateMiss() {
+        if (!isHapticsEnabled) return
+        try {
+            val ctx = appContext ?: return
+            val vibrator = getVibrator(ctx) ?: return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(10, 100))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(10)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error vibrating miss", e)
+        }
+    }
+
+    /**
+     * Status effect trigger haptic feedback with a longer, pulsating vibration.
+     */
+    fun vibrateStatusEffect() {
+        if (!isHapticsEnabled) return
+        try {
+            val ctx = appContext ?: return
+            val vibrator = getVibrator(ctx) ?: return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(
+                    VibrationEffect.createWaveform(
+                        longArrayOf(0, 100, 50, 100),
+                        intArrayOf(0, 180, 0, 180),
+                        -1
+                    )
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(250)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error vibrating status effect", e)
+        }
+    }
+
     private fun getVibrator(context: Context): Vibrator? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager

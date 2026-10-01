@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
 import com.example.haremdark.data.AffinityData
 import com.example.haremdark.data.StaticData
+import com.example.haremdark.data.BondTierCatalog
 import com.example.haremdark.domain.HapticManager
 import com.example.haremdark.domain.SoundEffectManager
 import com.example.haremdark.models.Character
@@ -124,14 +125,21 @@ fun CharacterCard(
         val loyaltyTier = StaticData.getLoyaltyTier(character.loajalita)
         val archetype = StaticData.ARCHETYPES[character.archetypeId]
         val phase = StaticData.DEGRADATION_PHASES[character.fazeZkazenosti]
-        val affinityTier = AffinityData.getTierForPoints(character.affinityPoints)
+        val bondPalette = BondTierCatalog.getActivePalette(character)
+        val bondTier = BondTierCatalog.getTierForAffinity(character.affinityPoints)
+        val palettePrimaryColor = Color(bondPalette.primaryColorHex)
 
         Card(
             modifier = modifier
                 .fillMaxWidth()
                 .padding(vertical = 4.dp)
+                .border(
+                    width = if (character.customPaletteId != "default" || character.oblibena) 1.2.dp else 0.dp,
+                    color = if (character.oblibena) Color(0xFFFFD700) else palettePrimaryColor.copy(alpha = 0.7f),
+                    shape = RoundedCornerShape(16.dp)
+                )
                 .clickable {
-                    SoundEffectManager.playRelationshipTier(affinityTier.level)
+                    SoundEffectManager.playRelationshipTier(bondTier.tierLevel)
                     HapticManager.vibrateClick()
                     onDetailClick()
                 },
@@ -212,7 +220,19 @@ fun CharacterCard(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            Text(character.statusIcon, fontSize = 14.sp)
+                            val isBuffStatus = character.nalada in listOf("Extatická", "Nadšená", "Šťastná", "Poddajná", "Zamilovaná", "Soustředěná", "Pozorná") || character.loajalita >= 80 || character.breakthroughActive
+                            val isDebuffStatus = character.nalada in listOf("Ponížená", "Zmatená", "Zlomená", "Vzpurná", "Vystrašená", "Vyčerpaná") || (character.maxHp > 0 && character.hp < character.maxHp * 0.35f) || character.loajalita < 25
+                            if (isBuffStatus || isDebuffStatus) {
+                                StatusEffectLottieIcon(
+                                    icon = character.statusIcon.ifBlank { if (isBuffStatus) "✨" else "⚠️" },
+                                    isBuff = isBuffStatus,
+                                    size = 22.dp,
+                                    iconSize = 13.sp,
+                                    glowScale = 1.35f
+                                )
+                            } else {
+                                Text(character.statusIcon, fontSize = 14.sp)
+                            }
                             if (hasActiveEvent) {
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
@@ -543,7 +563,7 @@ fun CharacterCard(
             ) {
                 OutlinedButton(
                     onClick = {
-                        SoundEffectManager.playRelationshipTier(affinityTier.level)
+                        SoundEffectManager.playRelationshipTier(bondTier.tierLevel)
                         HapticManager.vibrateClick()
                         onDetailClick()
                     },
@@ -575,7 +595,7 @@ fun CharacterCard(
 
                 Button(
                     onClick = {
-                        SoundEffectManager.playRelationshipTier(affinityTier.level)
+                        SoundEffectManager.playRelationshipTier(bondTier.tierLevel)
                         HapticManager.vibrateClick()
                         onInteractClick()
                     },
@@ -614,7 +634,10 @@ fun CharacterGridCard(
 ) {
     val loyaltyTier = StaticData.getLoyaltyTier(character.loajalita)
     val archetype = StaticData.ARCHETYPES[character.archetypeId]
-    val portraitRes = StaticData.getPortraitForArchetype(character.archetypeId)
+    val portraitRes = BondTierCatalog.getActivePortraitRes(character)
+    val bondPalette = BondTierCatalog.getActivePalette(character)
+    val bondTier = BondTierCatalog.getTierForAffinity(character.affinityPoints)
+    val palettePrimaryColor = Color(bondPalette.primaryColorHex)
 
     Card(
         modifier = modifier
@@ -622,8 +645,8 @@ fun CharacterGridCard(
             .height(245.dp)
             .clip(RoundedCornerShape(16.dp))
             .border(
-                width = if (isSelected) 3.dp else 0.dp,
-                color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                width = if (isSelected) 3.dp else if (character.customPaletteId != "default" || character.oblibena) 1.5.dp else 0.dp,
+                color = if (isSelected) MaterialTheme.colorScheme.primary else if (character.oblibena) Color(0xFFFFD700) else palettePrimaryColor.copy(alpha = 0.8f),
                 shape = RoundedCornerShape(16.dp)
             )
             .combinedClickable(
@@ -680,12 +703,16 @@ fun CharacterGridCard(
                     .fillMaxSize()
                     .background(
                         androidx.compose.ui.graphics.Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0x66000000),
-                                Color.Transparent,
-                                Color(0xD90E0514),
-                                Color(0xFB14081E)
-                            ),
+                            colors = if (bondPalette.cardGradientHexes.isNotEmpty()) {
+                                bondPalette.cardGradientHexes.map { Color(it) }
+                            } else {
+                                listOf(
+                                    Color(0x66000000),
+                                    Color.Transparent,
+                                    Color(0xD90E0514),
+                                    Color(0xFB14081E)
+                                )
+                            },
                             startY = 0f
                         )
                     )
@@ -880,13 +907,22 @@ fun CharacterGridCard(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            val isGridBuff = character.nalada in listOf("Extatická", "Nadšená", "Šťastná", "Poddajná", "Zamilovaná", "Soustředěná", "Pozorná") || character.loajalita >= 80 || character.breakthroughActive
+                            val isGridDebuff = character.nalada in listOf("Ponížená", "Zmatená", "Zlomená", "Vzpurná", "Vystrašená", "Vyčerpaná") || (character.maxHp > 0 && character.hp < character.maxHp * 0.35f) || character.loajalita < 25
                             Surface(
                                 shape = CircleShape,
                                 color = Color.Black.copy(alpha = 0.5f),
-                                modifier = Modifier.size(22.dp)
+                                modifier = Modifier.size(24.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Text(character.statusIcon, fontSize = 14.sp)
+                                    if (isGridBuff || isGridDebuff) {
+                                        StatusLottieAura(
+                                            isBuff = isGridBuff,
+                                            modifier = Modifier.fillMaxSize(),
+                                            glowScale = 1.35f
+                                        )
+                                    }
+                                    Text(character.statusIcon, fontSize = 13.sp)
                                 }
                             }
                         }

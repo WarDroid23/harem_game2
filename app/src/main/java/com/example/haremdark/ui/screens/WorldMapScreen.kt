@@ -48,6 +48,7 @@ import com.example.haremdark.models.*
 fun WorldMapScreen(
     gameState: GameSave,
     engine: GameEngine,
+    onNavigateToExpeditions: ((String?) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -219,9 +220,17 @@ fun WorldMapScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 contentPadding = PaddingValues(top = 10.dp, bottom = 100.dp)
             ) {
+                // Interactive World Map Weather Radar & Expedition Planner
+                item {
+                    com.example.haremdark.ui.components.WorldMapWeatherOverlay(
+                        gameState = gameState,
+                        engine = engine,
+                        onNavigateToExpeditions = onNavigateToExpeditions
+                    )
+                }
 
-        item {
-            val totalRegions = DomainData.DOMAINS.size
+                item {
+                    val totalRegions = DomainData.DOMAINS.size
             val capturedRegions = gameState.regionDominionLevel.filter { it.value >= 100 }.size
             val avgDominion = if (totalRegions > 0) gameState.regionDominionLevel.values.sum() / totalRegions else 0
             

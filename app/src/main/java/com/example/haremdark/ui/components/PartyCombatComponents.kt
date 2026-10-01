@@ -212,218 +212,16 @@ fun PartyFormationRow(
             val lungeOffsetY = if (isAttacking) (-14).dp else 0.dp
             val shakeOffsetX = if (isHit) 6.dp else 0.dp
 
-            Card(
+            DynamicCharacterCard(
+                member = member,
+                isSelected = isActiveTurn || isSelectedAlly,
+                isAttacking = isAttacking,
+                isHit = isHit,
+                onClick = { onSelectAlly(index) },
+                onSelectStatusEffect = onSelectStatusEffect,
                 modifier = Modifier
-                    .width(130.dp)
                     .offset(x = shakeOffsetX, y = lungeOffsetY)
-                    .scale(if (isAttacking) 1.08f else 1f)
-                    .clickable(enabled = member.isAlive) { onSelectAlly(index) }
-                    .border(
-                        width = if (isAttacking) 3.dp else if (isActiveTurn) 2.5.dp else if (isSelectedAlly) 1.5.dp else 1.dp,
-                        brush = borderBrush,
-                        shape = RoundedCornerShape(12.dp)
-                    ),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (!member.isAlive) Color(0xFF1B141E).copy(alpha = 0.5f)
-                    else if (isHit) Color(0xFF880E4F)
-                    else if (isActiveTurn) Color(0xFF38152D)
-                    else Color(0xFF1E1022)
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    // Portrait, Role & Turn Badge
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .border(1.dp, if (isActiveTurn) Color(0xFFFFD700) else Color.Gray, CircleShape)
-                        ) {
-                            if (member.isPlayer) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize().background(Color(0xFF4A148C)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text("👑", fontSize = 18.sp)
-                                }
-                            } else {
-                                val portraitRes = StaticData.getPortraitForArchetype(member.archetypeId)
-                                SubcomposeAsyncImage(
-                                    model = ImageRequest.Builder(LocalContext.current)
-                                        .data(portraitRes)
-                                        .crossfade(true)
-                                        .build(),
-                                    contentDescription = member.name,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize(),
-                                    error = {
-                                        Box(
-                                            modifier = Modifier.fillMaxSize().background(Color(0xFF311B92)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(member.role.icon, fontSize = 16.sp)
-                                        }
-                                    }
-                                )
-                            }
-                        }
-
-                        Column(horizontalAlignment = Alignment.End) {
-                            if (isActiveTurn) {
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = Color(0xFFFFD700)
-                                ) {
-                                    Text("NA TAHU", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color.Black, modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp))
-                                }
-                            } else {
-                                Text(member.role.icon, fontSize = 12.sp)
-                            }
-
-                            if (member.isDefending) {
-                                Text("🛡️ Kryt", fontSize = 8.sp, color = Color(0xFF64B5F6), fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-
-                    // Name and Buff badge
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = member.name,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = if (member.isAlive) Color.White else Color.Gray,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        if (member.characterSpecificBuffIcon.isNotEmpty()) {
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = Color(0xFFFFD700).copy(alpha = 0.2f),
-                                border = BorderStroke(0.5.dp, Color(0xFFFFD700).copy(alpha = 0.6f))
-                            ) {
-                                Text(
-                                    text = member.characterSpecificBuffIcon,
-                                    fontSize = 9.sp,
-                                    modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    if (member.isAlive) {
-                        // HP Bar
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            LinearProgressIndicator(
-                                progress = { member.hpPercent },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(5.dp)
-                                    .clip(RoundedCornerShape(3.dp)),
-                                color = if (member.hpPercent > 0.4f) Color(0xFF4CAF50) else Color(0xFFFF5252),
-                                trackColor = Color(0xFF1B381D),
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("HP", fontSize = 8.sp, color = Color(0xFF81C784))
-                                Text("${member.hp}/${member.maxHp}", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            }
-                        }
-
-                        // Mana Bar
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            LinearProgressIndicator(
-                                progress = { member.manaPercent },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(4.dp)
-                                    .clip(RoundedCornerShape(2.dp)),
-                                color = Color(0xFF29B6F6),
-                                trackColor = Color(0xFF0D253D),
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("MP", fontSize = 8.sp, color = Color(0xFF80D8FF))
-                                Text("${member.mana}/${member.maxMana}", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            }
-                        }
-                    } else {
-                        Text("💀 Zraněna / V bezvědomí", fontSize = 9.sp, color = Color.Red, fontWeight = FontWeight.Bold)
-                    }
-
-                    // Loyalty Combat Performance Badge
-                    if (!member.isPlayer && member.isAlive) {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = Color(0xFF261230),
-                            border = BorderStroke(0.5.dp, Color(0xFFFF80AB).copy(alpha = 0.5f)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = member.loyaltyTierName,
-                                    fontSize = 8.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFFFD54F),
-                                    maxLines = 1
-                                )
-                                if (member.loyaltyAssistChancePercent > 0) {
-                                    Text(
-                                        text = "💖 Asist ${member.loyaltyAssistChancePercent}%",
-                                        fontSize = 7.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFFFF80AB)
-                                    )
-                                } else if (member.loyaltyCombatBonusDmg > 1.0f) {
-                                    Text(
-                                        text = "+${((member.loyaltyCombatBonusDmg - 1.0f) * 100).toInt()}% DMG",
-                                        fontSize = 7.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFF81C784)
-                                    )
-                                } else if (member.loyaltyValue < 30) {
-                                    Text(
-                                        text = "⚠️ Váhavá",
-                                        fontSize = 7.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFFFFB74D)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Status Effects with countdown timers
-                    if (member.statusEffects.isNotEmpty()) {
-                        CharacterStatusEffectsRow(
-                            statusEffects = member.statusEffects,
-                            onSelectEffect = onSelectStatusEffect,
-                            maxVisible = 3,
-                            compact = true
-                        )
-                    }
-                }
-            }
+            )
         }
     }
 }
@@ -510,6 +308,7 @@ fun PartyCommandConsole(
     onSkillSelect: (PartyCombatSkill) -> Unit,
     onDefend: () -> Unit,
     onUseItem: (InventoryItem) -> Unit,
+    onOpenTacticalMenu: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -559,36 +358,55 @@ fun PartyCommandConsole(
             // Tabs Selector
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(3.dp)
             ) {
                 FilterChip(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    label = { Text("⚔️ Útok", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+                    label = { Text("⚔️ Útok", fontSize = 9.sp, fontWeight = FontWeight.Bold) },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(8.dp)
                 )
                 FilterChip(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    label = { Text("⚡ Dovednosti", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+                    label = { Text("⚡ Skilly", fontSize = 9.sp, fontWeight = FontWeight.Bold) },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(8.dp)
                 )
                 FilterChip(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
-                    label = { Text("🛡️ Kryt", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+                    label = { Text("🛡️ Kryt", fontSize = 9.sp, fontWeight = FontWeight.Bold) },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(8.dp)
                 )
                 FilterChip(
                     selected = selectedTab == 3,
                     onClick = { selectedTab = 3 },
-                    label = { Text("🧪 Lektvary", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+                    label = { Text("🧪 Lektvar", fontSize = 9.sp, fontWeight = FontWeight.Bold) },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(8.dp)
                 )
+                if (onOpenTacticalMenu != null) {
+                    FilterChip(
+                        selected = false,
+                        onClick = onOpenTacticalMenu,
+                        label = {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("🎯", fontSize = 9.sp)
+                                Text("Taktika", fontSize = 9.sp, fontWeight = FontWeight.ExtraBold)
+                            }
+                        },
+                        modifier = Modifier.weight(1.15f),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = FilterChipDefaults.filterChipColors(
+                            containerColor = Color(0xFF6A1B9A).copy(alpha = 0.5f),
+                            labelColor = Color(0xFFFFD700)
+                        ),
+                        border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.7f))
+                    )
+                }
             }
 
             // Tab Content
@@ -1443,175 +1261,4 @@ fun PartyCombatLogModal(
     }
 }
 
-/**
- * Scrollable Combat Log View embedded directly at the bottom of the battle screen.
- */
-@Composable
-fun ScrollableCombatLogView(
-    logs: List<CombatLogEntry>,
-    onOpenFullModal: () -> Unit,
-    onOpenElementalLogModal: () -> Unit = {},
-    modifier: Modifier = Modifier
-) {
-    var isExpanded by remember { mutableStateOf(true) }
-    val elementalCount = remember(logs) { logs.count { it.elementalBreakdown != null } }
-
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = Color(0xFF140B1A),
-        border = BorderStroke(1.dp, Color(0xFFFF80AB).copy(alpha = 0.4f)),
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text("📜", fontSize = 14.sp)
-                    Text(
-                        text = "Bojový deník tahů",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
-                        color = Color(0xFFFFD700)
-                    )
-                    Text(
-                        text = "(${logs.size})",
-                        fontSize = 10.sp,
-                        color = Color.White.copy(alpha = 0.6f)
-                    )
-                }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (elementalCount > 0) {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = Color(0x33B388FF),
-                            border = BorderStroke(1.dp, Color(0xFFB388FF).copy(alpha = 0.5f)),
-                            modifier = Modifier.clickable { onOpenElementalLogModal() }
-                        ) {
-                            Text(
-                                text = "⚡ Živly ($elementalCount)",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFFFD54F),
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
-                    TextButton(
-                        onClick = onOpenFullModal,
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                        modifier = Modifier.height(24.dp)
-                    ) {
-                        Text("Vše", fontSize = 10.sp, color = Color(0xFFFF80AB))
-                    }
-                    IconButton(
-                        onClick = { isExpanded = !isExpanded },
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = if (isExpanded) "Sbalit" else "Rozbalit",
-                            tint = Color.White
-                        )
-                    }
-                }
-            }
-
-            if (isExpanded) {
-                val displayLogs = logs.take(8)
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(110.dp)
-                        .background(Color(0xFF0C0610), RoundedCornerShape(8.dp))
-                        .padding(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(displayLogs) { entry ->
-                        val tacticalType = TacticalAnimationType.fromLogEntry(entry.type, entry.message, entry.actionName)
-                        val logColor = when (entry.type) {
-                            "player_attack", "player_spell" -> Color(0xFFFFCC80)
-                            "enemy_attack", "enemy_special" -> Color(0xFFFF8A80)
-                            "player_heal" -> Color(0xFFA5D6A7)
-                            "player_support" -> Color(0xFF80D8FF)
-                            "victory" -> Color(0xFFFFD700)
-                            "defeat" -> Color(0xFFE53935)
-                            else -> Color(0xFFE0E0E0)
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    if (entry.elementalBreakdown != null) {
-                                        onOpenElementalLogModal()
-                                    } else {
-                                        onOpenFullModal()
-                                    }
-                                }
-                        ) {
-                            TacticalLottieMicroBadge(
-                                animationType = tacticalType,
-                                sizeDp = 14.dp,
-                                showBorder = false
-                            )
-                            Text(
-                                text = "• [Kolo ${entry.turn}] ${entry.message}",
-                                color = logColor,
-                                fontSize = 10.sp,
-                                maxLines = 1,
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (entry.elementalBreakdown != null) {
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = Color(entry.elementalBreakdown.matchupType.tagColorHex).copy(alpha = 0.2f),
-                                    border = BorderStroke(0.5.dp, Color(entry.elementalBreakdown.matchupType.tagColorHex))
-                                ) {
-                                    Text(
-                                        text = "${entry.elementalBreakdown.matchupType.icon} ${entry.elementalBreakdown.affinityPercentString}",
-                                        fontSize = 8.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(entry.elementalBreakdown.matchupType.tagColorHex),
-                                        modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                val latest = logs.firstOrNull()
-                if (latest != null) {
-                    Text(
-                        text = "• [Kolo ${latest.turn}] ${latest.message}",
-                        color = Color(0xFFF8BBD0),
-                        fontSize = 10.sp,
-                        maxLines = 1,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                    )
-                } else {
-                    Text(
-                        text = "Zatím žádné záznamy v boji.",
-                        color = Color.White.copy(alpha = 0.5f),
-                        fontSize = 10.sp,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                    )
-                }
-            }
-        }
-    }
-}
 

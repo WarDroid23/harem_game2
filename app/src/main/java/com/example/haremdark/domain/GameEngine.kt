@@ -2074,7 +2074,7 @@ class GameEngine(private val context: Context) {
                 if (copy.id == characterId) {
                     copy.isPinned = !copy.isPinned
                     newPinnedState = copy.isPinned
-                    msg = if (copy.isPinned) "📌 ${copy.name} byla připnuta na vrchol seznamu!" else "📍 ${copy.name} byla odepnuta."
+                    msg = if (copy.isPinned) "📌 ${copy.name} byla připnuta do Rychlého přístupu oblíbenkyň!" else "📍 ${copy.name} byla odepnuta z oblíbených."
                 }
                 copy
             }
@@ -2082,6 +2082,153 @@ class GameEngine(private val context: Context) {
         }
         addLog(msg)
         return Pair(newPinnedState, msg)
+    }
+
+    fun quickAffectionKiss(characterId: String): Pair<Boolean, String> {
+        var msg = ""
+        var charName = ""
+        updateState { current ->
+            val updated = current.characters.map { c ->
+                if (c.id == characterId) {
+                    val copy = c.copy()
+                    charName = copy.name
+                    copy.srdce = (copy.srdce + 6).coerceAtMost(100)
+                    copy.morale = (copy.morale + 5).coerceAtMost(100)
+                    copy.affinityPoints = copy.affinityPoints + 6
+                    copy.lastInteractionDay = current.player.day
+                    copy.dailyTalksCount += 1
+                    msg = "💋 Vášnivě jsi políbil ${copy.name}! (+6 Srdce, +5 Morálka, +6 Affinity)"
+                    copy
+                } else c
+            }
+            current.copy(characters = updated)
+        }
+        SoundEffectManager.playHarem(HaremSound.SEDUCE)
+        addLog(msg)
+        autoSave("Rychlý polibek ($charName)")
+        return Pair(true, msg)
+    }
+
+    fun quickPraise(characterId: String): Pair<Boolean, String> {
+        var msg = ""
+        var charName = ""
+        updateState { current ->
+            val updated = current.characters.map { c ->
+                if (c.id == characterId) {
+                    val copy = c.copy()
+                    charName = copy.name
+                    copy.loajalita = (copy.loajalita + 6).coerceAtMost(100)
+                    copy.poslusnost = (copy.poslusnost + 5).coerceAtMost(100)
+                    copy.affinityPoints = copy.affinityPoints + 5
+                    copy.lastInteractionDay = current.player.day
+                    copy.dailyTalksCount += 1
+                    msg = "👑 Pochválil jsi věrnost a oddanost ${copy.name}! (+6 Loajalita, +5 Poslušnost)"
+                    copy
+                } else c
+            }
+            current.copy(characters = updated)
+        }
+        SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
+        addLog(msg)
+        autoSave("Pochvala ($charName)")
+        return Pair(true, msg)
+    }
+
+    fun quickTreat(characterId: String): Pair<Boolean, String> {
+        var msg = ""
+        var charName = ""
+        var success = false
+        updateState { current ->
+            if (current.player.gold < 15) {
+                msg = "Nemáš dostatek zlata (potřebuješ 15 🪙)."
+                return@updateState current
+            }
+            val newPlayer = current.player.copy(gold = current.player.gold - 15)
+            val updated = current.characters.map { c ->
+                if (c.id == characterId) {
+                    val copy = c.copy()
+                    charName = copy.name
+                    copy.touha = (copy.touha + 8).coerceAtMost(100)
+                    copy.srdce = (copy.srdce + 8).coerceAtMost(100)
+                    copy.duvera = (copy.duvera + 6).coerceAtMost(100)
+                    copy.affinityPoints = copy.affinityPoints + 10
+                    copy.dailyGiftsCount += 1
+                    copy.lastInteractionDay = current.player.day
+                    success = true
+                    msg = "🍰 Daroval jsi ${copy.name} sladkou lahůdku za 15 🪙! (+8 Touha, +8 Srdce, +10 Affinity)"
+                    copy
+                } else c
+            }
+            current.copy(player = newPlayer, characters = updated)
+        }
+        if (success) {
+            SoundEffectManager.playHarem(HaremSound.GIFT)
+            addLog(msg)
+            autoSave("Pamlsek ($charName)")
+        }
+        return Pair(success, msg)
+    }
+
+    fun setCustomPalette(characterId: String, paletteId: String): Pair<Boolean, String> {
+        var msg = ""
+        var success = false
+        val palette = com.example.haremdark.data.BondTierCatalog.getPaletteById(paletteId)
+        updateState { current ->
+            val updated = current.characters.map { c ->
+                if (c.id == characterId) {
+                    if (c.affinityLevel < palette.requiredAffinityLevel) {
+                        msg = "Tato paleta vyžaduje Stupeň Pouta ${palette.requiredAffinityLevel} (současný: ${c.affinityLevel})."
+                        return@map c
+                    }
+                    val copy = c.copy()
+                    copy.customPaletteId = paletteId
+                    if (!copy.unlockedPalettes.contains(paletteId)) {
+                        copy.unlockedPalettes.add(paletteId)
+                    }
+                    success = true
+                    msg = "🎨 Pro ${copy.name} byla aktivována paleta: ${palette.name}!"
+                    copy
+                } else c
+            }
+            current.copy(characters = updated)
+        }
+        if (success) {
+            SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
+            addLog(msg)
+            autoSave("Změna palety ($paletteId)")
+        }
+        return Pair(success, msg)
+    }
+
+    fun setCustomPortraitVariant(characterId: String, variantId: String): Pair<Boolean, String> {
+        var msg = ""
+        var success = false
+        val variant = com.example.haremdark.data.BondTierCatalog.PORTRAIT_VARIANTS.firstOrNull { it.id == variantId }
+        updateState { current ->
+            val updated = current.characters.map { c ->
+                if (c.id == characterId) {
+                    if (variant != null && c.affinityLevel < variant.requiredAffinityLevel) {
+                        msg = "Tento portrét vyžaduje Stupeň Pouta ${variant.requiredAffinityLevel} (současný: ${c.affinityLevel})."
+                        return@map c
+                    }
+                    val copy = c.copy()
+                    copy.customPortraitVariantId = variantId
+                    if (variantId != "default" && !copy.unlockedPortraitVariants.contains(variantId)) {
+                        copy.unlockedPortraitVariants.add(variantId)
+                    }
+                    success = true
+                    msg = "🖼️ Pro ${copy.name} byl nastaven portrét: ${variant?.title ?: "Výchozí"}!"
+                    copy
+                } else c
+            }
+            current.copy(characters = updated)
+        }
+        if (success) {
+            SoundEffectManager.playHarem(HaremSound.AFFINITY_UP)
+            addLog(msg)
+            autoSave("Změna portrétu ($variantId)")
+        }
+        return Pair(success, msg)
     }
 
     fun setCombatStrategy(characterId: String, strategy: com.example.haremdark.models.CombatStrategy) {
@@ -7020,10 +7167,14 @@ class GameEngine(private val context: Context) {
                 updatedPassives.add(nodeId)
             }
 
+            val updatedRanks = char.skillRanks.toMutableMap()
+            updatedRanks[nodeId] = 1
+
             val updatedChar = char.copy(
                 skillPoints = char.skillPoints - node.spCost,
                 unlockedPassives = updatedPassives,
-                unlockedCombatSkills = updatedCombatSkills
+                unlockedCombatSkills = updatedCombatSkills,
+                skillRanks = updatedRanks
             )
 
             val newList = current.characters.toMutableList()
@@ -7034,6 +7185,178 @@ class GameEngine(private val context: Context) {
             current.copy(
                 characters = newList,
                 gameLog = current.gameLog + "✨ ${char.name} odemkla schopnost: ${node.name} (${node.nodeType.label})"
+            )
+        }
+        if (result.first) autoSave()
+        return result
+    }
+
+    /**
+     * Enhances a character's skill or unlocks it using crafting resources, gold, and dark energy.
+     */
+    fun enhanceCharacterSkillWithResources(characterId: String, nodeId: String): Pair<Boolean, String> {
+        var result = Pair(false, "Chyba při vylepšování schopnosti.")
+        val node = com.example.haremdark.data.CharacterSkillCatalog.ALL_SKILL_NODES.firstOrNull { it.id == nodeId }
+            ?: return Pair(false, "Schopnost nebyla nalezena v katalogu.")
+
+        updateState { current ->
+            val charIndex = current.characters.indexOfFirst { it.id == characterId }
+            if (charIndex == -1) return@updateState current
+
+            val char = current.characters[charIndex]
+            val currentRank = com.example.haremdark.data.CharacterSkillCatalog.getSkillRank(char, nodeId)
+            val targetRank = if (currentRank <= 0) 1 else currentRank + 1
+
+            if (targetRank > node.maxRank) {
+                result = Pair(false, "Schopnost '${node.name}' již dosáhla maximální úrovně (Rank ${node.maxRank}).")
+                return@updateState current
+            }
+
+            // Check level and requirements
+            val reqLevelForTarget = node.reqLevel + (targetRank - 1)
+            if (char.level < reqLevelForTarget) {
+                result = Pair(false, "Pro Rank $targetRank je vyžadována úroveň $reqLevelForTarget (Aktuální: ${char.level}).")
+                return@updateState current
+            }
+
+            if (node.reqNodeId != null && targetRank == 1) {
+                val hasReq = char.unlockedPassives.contains(node.reqNodeId) || char.unlockedCombatSkills.contains(node.reqNodeId)
+                if (!hasReq) {
+                    result = Pair(false, "Nejprve musíš odemknout předchozí dovednost ve stromu.")
+                    return@updateState current
+                }
+            }
+
+            val cost = com.example.haremdark.data.CharacterSkillCatalog.getUpgradeCostForRank(node, targetRank)
+            val player = current.player
+
+            // Check player resources
+            if (player.gold < cost.goldCost) {
+                result = Pair(false, "Nedostatek zlata! Potřebuješ ${cost.goldCost}💰 (Máš ${player.gold}💰).")
+                return@updateState current
+            }
+            if (player.darkEnergy < cost.darkEnergyCost) {
+                result = Pair(false, "Nedostatek temné energie! Potřebuješ ${cost.darkEnergyCost}🔮 (Máš ${player.darkEnergy}🔮).")
+                return@updateState current
+            }
+            if (char.xp < cost.xpCost) {
+                result = Pair(false, "Nedostatek ZK postavy! Potřebuješ ${cost.xpCost} ZK (Máš ${char.xp} ZK).")
+                return@updateState current
+            }
+
+            val res = player.craftingResources
+            val darkShards = res["temny_strep"] ?: 0
+            val manaEssence = res["mana_esence"] ?: 0
+            val moonDust = res["mesicni_prach"] ?: 0
+            val dragonBlood = res["draci_krev"] ?: 0
+            val crystals = res["krystal"] ?: 0
+
+            if (darkShards < cost.darkShards) {
+                result = Pair(false, "Nedostatek Temných střepů! Potřebuješ ${cost.darkShards}💎 (Máš $darkShards).")
+                return@updateState current
+            }
+            if (manaEssence < cost.manaEssence) {
+                result = Pair(false, "Nedostatek Mana esence! Potřebuješ ${cost.manaEssence}✨ (Máš $manaEssence).")
+                return@updateState current
+            }
+            if (moonDust < cost.moonDust) {
+                result = Pair(false, "Nedostatek Měsíčního prachu! Potřebuješ ${cost.moonDust}🌙 (Máš $moonDust).")
+                return@updateState current
+            }
+            if (dragonBlood < cost.dragonBlood) {
+                result = Pair(false, "Nedostatek Dračí krve! Potřebuješ ${cost.dragonBlood}🩸 (Máš $dragonBlood).")
+                return@updateState current
+            }
+            if (crystals < cost.crystals) {
+                result = Pair(false, "Nedostatek Krystalů! Potřebuješ ${cost.crystals}💎 (Máš $crystals).")
+                return@updateState current
+            }
+
+            // Deduct resources
+            val updatedResources = res.toMutableMap()
+            if (cost.darkShards > 0) updatedResources["temny_strep"] = darkShards - cost.darkShards
+            if (cost.manaEssence > 0) updatedResources["mana_esence"] = manaEssence - cost.manaEssence
+            if (cost.moonDust > 0) updatedResources["mesicni_prach"] = moonDust - cost.moonDust
+            if (cost.dragonBlood > 0) updatedResources["draci_krev"] = dragonBlood - cost.dragonBlood
+            if (cost.crystals > 0) updatedResources["krystal"] = crystals - cost.crystals
+
+            val updatedPlayer = player.copy(
+                gold = player.gold - cost.goldCost,
+                darkEnergy = player.darkEnergy - cost.darkEnergyCost,
+                craftingResources = updatedResources
+            )
+
+            val updatedPassives = char.unlockedPassives.toMutableList()
+            val updatedCombatSkills = char.unlockedCombatSkills.toMutableList()
+            val updatedRanks = char.skillRanks.toMutableMap()
+
+            updatedRanks[nodeId] = targetRank
+
+            if (targetRank == 1) {
+                if (node.nodeType == com.example.haremdark.data.SkillNodeType.ACTIVE_ABILITY) {
+                    if (!updatedCombatSkills.contains(nodeId)) updatedCombatSkills.add(nodeId)
+                } else {
+                    if (!updatedPassives.contains(nodeId)) updatedPassives.add(nodeId)
+                }
+            }
+
+            val updatedChar = char.copy(
+                xp = char.xp - cost.xpCost,
+                unlockedPassives = updatedPassives,
+                unlockedCombatSkills = updatedCombatSkills,
+                skillRanks = updatedRanks
+            )
+
+            val newList = current.characters.toMutableList()
+            newList[charIndex] = updatedChar
+
+            val actionName = if (targetRank == 1) "odemkla schopnost" else "vylepšila schopnost na Rank $targetRank"
+            result = Pair(true, "✨ ${char.name} úspěšně $actionName: '${node.name}'!")
+            SoundEffectManager.playHarem(HaremSound.SKILL_UNLOCK)
+            HapticManager.vibrateClick()
+
+            current.copy(
+                player = updatedPlayer,
+                characters = newList,
+                gameLog = current.gameLog + "⚡ ${char.name} $actionName: ${node.name} (Rank $targetRank)"
+            )
+        }
+        if (result.first) autoSave()
+        return result
+    }
+
+    /**
+     * Resets and refunds a character's unlocked skills.
+     */
+    fun resetCharacterSkills(characterId: String): Pair<Boolean, String> {
+        var result = Pair(false, "Chyba při resetu dovedností.")
+        updateState { current ->
+            val charIndex = current.characters.indexOfFirst { it.id == characterId }
+            if (charIndex == -1) return@updateState current
+
+            val char = current.characters[charIndex]
+            val totalUnlocked = char.unlockedPassives.size + char.unlockedCombatSkills.size
+            if (totalUnlocked == 0) {
+                result = Pair(false, "${char.name} nemá žádné odemčené schopnosti k resetu.")
+                return@updateState current
+            }
+
+            val refundedSp = totalUnlocked
+            val updatedChar = char.copy(
+                skillPoints = char.skillPoints + refundedSp,
+                unlockedPassives = mutableListOf(),
+                unlockedCombatSkills = mutableListOf(),
+                skillRanks = mutableMapOf()
+            )
+
+            val newList = current.characters.toMutableList()
+            newList[charIndex] = updatedChar
+            result = Pair(true, "Dovednosti dívky ${char.name} byly resetovány! Vráceno $refundedSp dovednostních bodů.")
+            SoundEffectManager.playHarem(HaremSound.CRAFTING_SUCCESS)
+
+            current.copy(
+                characters = newList,
+                gameLog = current.gameLog + "🔄 Resetován strom dovedností dívky ${char.name} (Vráceno $refundedSp SP)"
             )
         }
         if (result.first) autoSave()
@@ -7197,13 +7520,17 @@ class GameEngine(private val context: Context) {
 
                     val powerRatio = if (zone != null) (totalPower.toFloat() / zone.recommendedPower.toFloat()).coerceIn(0.7f, 1.5f) else 1.0f
 
-                    val goldGained = ((zone?.baseGoldReward ?: 300) * powerRatio).toInt()
-                    val darkGained = ((zone?.baseDarkEnergyReward ?: 50) * powerRatio).toInt()
-                    val xpGained = (150 * powerRatio).toInt()
+                    val weather = com.example.haremdark.models.ZoneWeatherSystem.getWeatherForZone(active.zoneId, active.startTimeMillis)
+                    val baseGold = zone?.baseGoldReward ?: 300
+                    val baseDark = zone?.baseDarkEnergyReward ?: 50
+                    val goldGained = (baseGold * weather.goldMultiplier * powerRatio).toInt()
+                    val darkGained = (baseDark * weather.darkEnergyMultiplier * powerRatio).toInt()
+                    val xpGained = (150 * weather.xpMultiplier * powerRatio).toInt()
 
                     val gatheredMaterials = mutableMapOf<String, Int>()
                     zone?.possibleMaterials?.forEach { matKey ->
-                        val count = (1..3).random()
+                        val isBoosted = weather.boostedMaterials.contains(matKey)
+                        val count = if (isBoosted) (2..5).random() else (1..3).random()
                         gatheredMaterials[matKey] = (gatheredMaterials[matKey] ?: 0) + count
                         newResources[matKey] = (newResources[matKey] ?: 0) + count
                     }
@@ -7228,7 +7555,7 @@ class GameEngine(private val context: Context) {
                         darkEnergyGained = darkGained,
                         xpGainedPerMember = xpGained,
                         materialsGained = gatheredMaterials,
-                        flavorLog = "Tvoje dívky (${charNames.joinToString(", ")}) úspěšně prozkoumaly zónu '${zone?.name}' a vrátily se s bohatou kořistí!"
+                        flavorLog = "Tvoje dívky (${charNames.joinToString(", ")}) prozkoumaly zónu '${zone?.name}' za počasí ${weather.icon} ${weather.name}. Efekt klimatu: ${weather.combatStatBuff}."
                     )
 
                     newReports.add(report)

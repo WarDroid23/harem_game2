@@ -103,7 +103,18 @@ object PartyCombatManager {
                 is PartyMember -> target.statusEffects.add(effect)
                 is CombatEnemy -> target.statusEffects.add(effect)
             }
+            
+            // Trigger status effect haptics
+            HapticManager.vibrateStatusEffect()
         }
+    }
+
+    private fun checkMiss(attackerSpeed: Int, targetSpeed: Int, weatherDodgeBonus: Int): Boolean {
+        // Base evasion chance: 5% + weather bonus + speed difference factor
+        val baseEvasion = 5 + weatherDodgeBonus
+        val speedDiff = (targetSpeed - attackerSpeed).coerceAtMost(25)
+        val totalEvasionChance = (baseEvasion + speedDiff.coerceAtLeast(0) * 0.8f).toInt().coerceIn(2, 40)
+        return Random.nextInt(100) < totalEvasionChance
     }
 
     fun triggerDomainExpansion(session: PartyCombatSession, character: PartyMember): PartyCombatSession {
@@ -510,6 +521,26 @@ object PartyCombatManager {
             tacticalNote = tacticalNote
         )
 
+        val isMiss = checkMiss(activeMember.speed, target.speed, session.weather.dodgeChanceBonus)
+        
+        if (isMiss) {
+            SoundEffectManager.playCombat(CombatSound.DODGE_EVADE)
+            HapticManager.vibrateMiss()
+            
+            val missLog = CombatLogEntry(
+                turn = session.currentRound,
+                type = "system",
+                message = "💨 ${activeMember.name} zaútočila na ${target.name}, ale ten se bleskově vyhnul!",
+                actor = activeMember.name,
+                actionName = "Minutí / Úhyb"
+            )
+            
+            return advanceTurn(session.copy(
+                comboChainCount = 0, // Reset chain on miss
+                combatLogs = listOf(missLog) + session.combatLogs
+            ))
+        }
+
         // Apply damage to enemy
         target.hp = (target.hp - finalDmg).coerceAtLeast(0)
         tryApplyStatusEffect(activeMember, target, isCrit)
@@ -686,10 +717,33 @@ object PartyCombatManager {
                         tacticalNote = tacticalNote
                     )
 
+                    val isMiss = if (skill.category == SkillCategory.PHYSICAL_ATTACK) {
+                        checkMiss(activeMember.speed, target.speed, session.weather.dodgeChanceBonus)
+                    } else false
+
+                    if (isMiss) {
+                        SoundEffectManager.playCombat(CombatSound.DODGE_EVADE)
+                        HapticManager.vibrateMiss()
+
+                        val missLog = CombatLogEntry(
+                            turn = session.currentRound,
+                            type = "system",
+                            message = "💨 ${activeMember.name} použila '${skill.name}', ale ${target.name} se útoku vyhnul!",
+                            actor = activeMember.name,
+                            actionName = "Dovednost Minula"
+                        )
+
+                        return advanceTurn(session.copy(
+                            comboChainCount = 0,
+                            combatLogs = listOf(missLog) + session.combatLogs
+                        ))
+                    }
+
                     target.hp = (target.hp - finalDmg).coerceAtLeast(0)
 
                     if (skill.appliedStatus != null) {
                         target.statusEffects.add(skill.appliedStatus.copy())
+                        HapticManager.vibrateStatusEffect()
                     }
 
                     if (skill.healAmount > 0) {
@@ -697,10 +751,13 @@ object PartyCombatManager {
                         val finalHeal = (skill.healAmount * healBonus).toInt()
                         activeMember.hp = (activeMember.hp + finalHeal).coerceAtMost(activeMember.maxHp)
                         SoundEffectManager.playCombat(CombatSound.HEAL_RESTORE)
+                        HapticManager.vibrateClick()
                     } else if (skill.category == SkillCategory.DARK_MAGIC) {
                         SoundEffectManager.playCombat(CombatSound.DARK_SPELL)
+                        HapticManager.vibrateHeavy()
                     } else {
                         SoundEffectManager.playCombat(CombatSound.SKILL_ACTIVATION)
+                        HapticManager.vibrateHeavy()
                     }
 
                     newLogs.add(
@@ -888,6 +945,162 @@ object PartyCombatManager {
         )
 
         return advanceTurn(nextSession)
+    }
+
+    /**
+     * Tactical Option: Focus Fire on target enemy.
+     * Applies defense debuff to designated enemy, triggers bonus focused damage, and coordinates party priority.
+     */
+    fun executeFocusFire(session: PartyCombatSession, targetEnemyIndex: Int): Pair<PartyCombatSession, String> {
+        val aliveEnemies = session.aliveEnemies
+        if (aliveEnemies.isEmpty()) return Pair(session, "Žádní nepřátelé k zaměření!")
+        val target = aliveEnemies.getOrNull(targetEnemyIndex) ?: aliveEnemies.first()
+
+        // Apply Focus Fire Mark
+        val markEffect = CombatStatusEffect(
+            id = "focus_fire_${System.currentTimeMillis()}",
+            name = "Soustředěný cíl",
+            icon = "🎯",
+            type = "DEF_DEBUFF",
+            value = 35,
+            durationTurns = 2,
+            maxDuration = 2,
+            description = "Cíl je označen pro soustředěnou palbu (-35% obrana, +35% zranitelnost)."
+        )
+        target.statusEffects.removeAll { it.name == "Soustředěný cíl" }
+        target.statusEffects.add(markEffect)
+
+        val activeMember = session.currentActiveMember
+        val baseAtk = activeMember?.attack ?: 25
+        val focusDmg = ((baseAtk * 1.3f) + 15).toInt().coerceAtLeast(18)
+        target.hp = (target.hp - focusDmg).coerceAtLeast(0)
+
+        SoundEffectManager.playCombat(CombatSound.CRITICAL_SUPERNOVA)
+        HapticManager.vibrateHeavy()
+
+        val log = CombatLogEntry(
+            turn = session.currentRound,
+            type = "player_special",
+            message = "🎯 [Soustředěná palba] Zaveleno k prioritní eliminaci cíle ${target.name}! Obrana cíle prolomena o 35% a zasažen za $focusDmg DMG!",
+            actor = activeMember?.name ?: "Pán Dominia",
+            actionName = "Soustředěná palba",
+            damageDealt = focusDmg
+        )
+
+        val newCombo = (session.haremComboGauge + 15).coerceAtMost(session.maxHaremComboGauge)
+        val nextSession = session.copy(
+            selectedTargetEnemyIndex = session.enemies.indexOf(target).coerceAtLeast(0),
+            haremComboGauge = newCombo,
+            comboChainCount = session.comboChainCount + 1,
+            combatLogs = listOf(log) + session.combatLogs
+        )
+
+        if (nextSession.enemies.none { it.isAlive }) {
+            return handleVictory(nextSession)
+        }
+
+        return advanceTurn(nextSession)
+    }
+
+    /**
+     * Tactical Option: All-Out Assault.
+     * Orders the entire party to boost offensive attack power at the expense of a brief defensive gap.
+     */
+    fun executeAllOutAssault(session: PartyCombatSession): Pair<PartyCombatSession, String> {
+        val aliveParty = session.aliveParty
+        if (aliveParty.isEmpty()) return Pair(session, "Žádné bojovnice v družině!")
+
+        aliveParty.forEach { ally ->
+            val assaultBuff = CombatStatusEffect(
+                id = "assault_${System.currentTimeMillis()}_${ally.id}",
+                name = "Totální zteč",
+                icon = "⚔️",
+                type = "ATK_BUFF",
+                value = 30,
+                durationTurns = 2,
+                maxDuration = 2,
+                description = "Bojová vášeň: +30% útočné poškození a zvýšená šance na kritický úder."
+            )
+            ally.statusEffects.removeAll { it.name == "Totální zteč" }
+            ally.statusEffects.add(assaultBuff)
+        }
+
+        SoundEffectManager.playCombat(CombatSound.SKILL_ACTIVATION)
+        HapticManager.vibrateHeavy()
+
+        val log = CombatLogEntry(
+            turn = session.currentRound,
+            type = "player_special",
+            message = "⚔️ [Totální zteč] Pán Dominia zavelel k maximálnímu útoku! Všechny bojovnice získávají +30% k poškození na 2 kola.",
+            actor = "Taktický rozkaz",
+            actionName = "Totální zteč"
+        )
+
+        val nextSession = session.copy(
+            comboChainCount = session.comboChainCount + 1,
+            combatLogs = listOf(log) + session.combatLogs
+        )
+
+        return advanceTurn(nextSession)
+    }
+
+    /**
+     * Tactical Option: Rally and Inspire.
+     * Cleanses debuffs from all companions and restores MP & HP.
+     */
+    fun executeRally(session: PartyCombatSession): Pair<PartyCombatSession, String> {
+        val aliveParty = session.aliveParty
+        if (aliveParty.isEmpty()) return Pair(session, "Žádné bojovnice v družině!")
+
+        var cleansedCount = 0
+        aliveParty.forEach { ally ->
+            val removed = ally.statusEffects.removeAll { it.isDebuff }
+            if (removed) cleansedCount++
+            ally.mana = (ally.mana + 20).coerceAtMost(ally.maxMana)
+            ally.hp = (ally.hp + 25).coerceAtMost(ally.maxHp)
+        }
+
+        SoundEffectManager.playCombat(CombatSound.HEAL_RESTORE)
+        HapticManager.vibrateClick()
+
+        val log = CombatLogEntry(
+            turn = session.currentRound,
+            type = "player_heal",
+            message = "✨ [Bojový pokřik & Povzbuzení] Morálka harému byla obnovena! Očištěno $cleansedCount oslabení, +20 MP a +25 HP pro všechny.",
+            actor = "Pán Dominia",
+            actionName = "Povzbuzení & Pokřik"
+        )
+
+        val nextSession = session.copy(
+            combatLogs = listOf(log) + session.combatLogs
+        )
+
+        return advanceTurn(nextSession)
+    }
+
+    /**
+     * Tactical Option: Retreat / Disengage.
+     * Drops smoke canisters and gracefully exits combat.
+     */
+    fun executeRetreat(session: PartyCombatSession): Pair<PartyCombatSession, String> {
+        SoundEffectManager.playCombat(CombatSound.DODGE_EVADE)
+        HapticManager.vibrateHeavy()
+
+        val log = CombatLogEntry(
+            turn = session.currentRound,
+            type = "system",
+            message = "💨 [Taktický ústup] Družina odpálila dýmovnici a úspěšně ustoupila do bezpečí sídla.",
+            actor = "Pán Dominia",
+            actionName = "Taktický ústup"
+        )
+
+        val nextSession = session.copy(
+            isFinished = true,
+            isVictory = false,
+            combatLogs = listOf(log) + session.combatLogs
+        )
+
+        return Pair(nextSession, "Úspěšný taktický ústup z bojiště!")
     }
 
     /**
@@ -1150,6 +1363,24 @@ object PartyCombatManager {
 
             val isProtected = loyalGuardian != null && Random.nextInt(100) < loyalGuardian.loyaltyProtectLordChancePercent
 
+            val isMiss = checkMiss(enemy.speed, target.speed, session.weather.dodgeChanceBonus)
+            
+            if (isMiss) {
+                SoundEffectManager.playCombat(CombatSound.DODGE_EVADE)
+                HapticManager.vibrateMiss()
+                
+                enemyLogs.add(
+                    CombatLogEntry(
+                        turn = session.currentRound,
+                        type = "system",
+                        message = "💨 ${enemy.name} zaútočil na ${target.name}, ale ten bleskově uhnul!",
+                        actor = enemy.name,
+                        actionName = "Úhyb"
+                    )
+                )
+                return@forEach
+            }
+
             val finalDmg: Int
             if (isProtected && loyalGuardian != null) {
                 val mitigated = (rawFinalDmg * 0.65f).toInt().coerceAtLeast(4)
@@ -1167,9 +1398,11 @@ object PartyCombatManager {
                         actionName = "Ochrana Pána"
                     )
                 )
+                HapticManager.vibrateHeavy()
             } else {
                 finalDmg = rawFinalDmg
                 target.hp = (target.hp - finalDmg).coerceAtLeast(0)
+                if (isSpecial) HapticManager.vibrateHeavy() else HapticManager.vibrateClick()
             }
 
             SoundEffectManager.playCombat(if (isSpecial) CombatSound.BOSS_SPECIAL else CombatSound.ENEMY_STRIKE)
@@ -1229,8 +1462,10 @@ object PartyCombatManager {
                     enemy.hp = (enemy.hp - effect.value).coerceAtLeast(0)
                     if (effect.type == "BLEED") {
                         SoundEffectManager.playCombat(CombatSound.STATUS_TRIGGER_BLEED)
+                        HapticManager.vibrateStatusEffect()
                     } else if (effect.type == "POISON") {
                         SoundEffectManager.playCombat(CombatSound.STATUS_TRIGGER_POISON)
+                        HapticManager.vibrateStatusEffect()
                     }
                     enemyLogs.add(
                         CombatLogEntry(

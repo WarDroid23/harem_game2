@@ -42,6 +42,8 @@ import com.example.haremdark.models.CombatSession
 import com.example.haremdark.models.CombatStatusEffect
 import com.example.haremdark.models.GameSave
 import com.example.haremdark.domain.SoundEffectManager
+import com.example.haremdark.domain.HapticManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.ui.draw.scale
@@ -91,6 +93,7 @@ fun ActiveCombatView(
 
     var selectedActionCategory by remember { mutableIntStateOf(0) }
     var showFullHistoryModal by remember { mutableStateOf(false) }
+    var showTacticalOverlayMenu by remember { mutableStateOf(false) }
     var selectedStatusTooltip by remember { mutableStateOf<String?>(null) }
     var selectedStatusForDetailDialog by remember { mutableStateOf<CombatStatusEffect?>(null) }
 
@@ -256,8 +259,24 @@ fun ActiveCombatView(
                         }
 
                         if (!session.isOver) {
+                            Button(
+                                onClick = {
+                                    HapticManager.vibrateClick()
+                                    showTacticalOverlayMenu = true
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                shape = RoundedCornerShape(6.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A1B9A)),
+                                modifier = Modifier.testTag("arena_tactical_menu_button")
+                            ) {
+                                Text("🎯 Taktika", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFD700))
+                            }
+
                             OutlinedButton(
-                                onClick = { engine.executeCombatTurn("flee") },
+                                onClick = {
+                                    HapticManager.vibrateClick()
+                                    showTacticalOverlayMenu = true
+                                },
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                 shape = RoundedCornerShape(6.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF8A80))
@@ -901,6 +920,342 @@ fun ActiveCombatView(
             onDismiss = { showFullHistoryModal = false }
         )
     }
+
+    // --- TACTICAL OVERLAY MENU IN ARENA ---
+    if (showTacticalOverlayMenu) {
+        ArenaTacticalOverlayMenu(
+            bossName = session.boss.name,
+            onDismiss = { showTacticalOverlayMenu = false },
+            onDefend = {
+                showTacticalOverlayMenu = false
+                fxState.triggerAbility(CombatAbilityType.DEFEND, "Neprostupný kryt", coroutineScope) {
+                    engine.executeCombatTurn("defend")
+                }
+            },
+            onFocusFire = {
+                showTacticalOverlayMenu = false
+                fxState.triggerAbility(CombatAbilityType.HEAVY_STRIKE, "Soustředěná palba", coroutineScope) {
+                    engine.executeCombatTurn("heavy_strike")
+                }
+            },
+            onRetreat = {
+                showTacticalOverlayMenu = false
+                engine.executeCombatTurn("flee")
+            }
+        )
+    }
+}
+
+/**
+ * Tactical Overlay Menu for 1v1 Arena Combat.
+ * Provides Defend, Focus Fire, and Retreat options.
+ */
+@Composable
+fun ArenaTacticalOverlayMenu(
+    bossName: String,
+    onDismiss: () -> Unit,
+    onDefend: () -> Unit,
+    onFocusFire: () -> Unit,
+    onRetreat: () -> Unit
+) {
+    var showRetreatConfirm by remember { mutableStateOf(false) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.75f))
+                .clickable { onDismiss() },
+            contentAlignment = Alignment.Center
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.92f)
+                    .heightIn(max = 620.dp)
+                    .clickable(enabled = false) {}
+                    .testTag("arena_tactical_overlay"),
+                shape = RoundedCornerShape(24.dp),
+                color = Color(0xFF14081E),
+                border = BorderStroke(
+                    width = 1.5.dp,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFFFFD700).copy(alpha = 0.8f),
+                            Color(0xFFFF4081).copy(alpha = 0.5f),
+                            Color(0xFF7B1FA2).copy(alpha = 0.8f)
+                        )
+                    )
+                ),
+                shadowElevation = 24.dp
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Header Bar
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFFFFD700).copy(alpha = 0.2f),
+                                border = BorderStroke(1.dp, Color(0xFFFFD700)),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.GpsFixed,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFFD700),
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+
+                            Column {
+                                Text(
+                                    text = "Taktické Rozkazy",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "Soupeř: $bossName",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFFFF80AB),
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = {
+                                HapticManager.vibrateClick()
+                                onDismiss()
+                            },
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.08f))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Zavřít",
+                                tint = Color.LightGray,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    // Tactical Options List
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // 1. DEFEND
+                        ArenaTacticalCard(
+                            title = "Obrana & Kryt (Defend)",
+                            subtitle = "Neprostupný kryt a magická bariéra",
+                            details = "-65% utrženého zranění v tomto kole a obnova +8 Temné Energie.",
+                            icon = Icons.Default.Shield,
+                            badgeText = "DEFENZÍVA",
+                            badgeColor = Color(0xFF1565C0),
+                            accentColor = Color(0xFF42A5F5),
+                            testTag = "arena_tactical_defend",
+                            onClick = {
+                                HapticManager.vibrateClick()
+                                onDefend()
+                            }
+                        )
+
+                        // 2. FOCUS FIRE
+                        ArenaTacticalCard(
+                            title = "Soustředěná palba (Focus Fire)",
+                            subtitle = "Průrazný úder na slabé místo",
+                            details = "Koncentrovaný těžký útok za 1.5x až 2.2x poškození s vysokou šancí na kritický zásah.",
+                            icon = Icons.Default.GpsFixed,
+                            badgeText = "PRIORITNÍ ZÁSAH",
+                            badgeColor = Color(0xFFC62828),
+                            accentColor = Color(0xFFFF5252),
+                            testTag = "arena_tactical_focus_fire",
+                            onClick = {
+                                HapticManager.vibrateHeavy()
+                                onFocusFire()
+                            }
+                        )
+
+                        // 3. RETREAT
+                        ArenaTacticalCard(
+                            title = "Taktický ústup (Retreat)",
+                            subtitle = "Krycí manévr & bezpečné stažení",
+                            details = "Okamžitě opustí bojiště a zachová plné zdraví i získané prostředky.",
+                            icon = Icons.AutoMirrored.Filled.ExitToApp,
+                            badgeText = "ÚSTUP",
+                            badgeColor = Color(0xFF455A64),
+                            accentColor = Color(0xFFFF8A80),
+                            testTag = "arena_tactical_retreat",
+                            onClick = {
+                                HapticManager.vibrateClick()
+                                showRetreatConfirm = true
+                            }
+                        )
+                    }
+                }
+            }
+
+            if (showRetreatConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showRetreatConfirm = false },
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("💨", fontSize = 20.sp)
+                            Text("Potvrdit ústup z arény?", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        }
+                    },
+                    text = {
+                        Text(
+                            text = "Opravdu chceš opustit tento souboj a stáhnout se zpět?",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                showRetreatConfirm = false
+                                onRetreat()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828)),
+                            modifier = Modifier.testTag("confirm_arena_retreat_button")
+                        ) {
+                            Text("Ano, ustoupit", fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        OutlinedButton(onClick = { showRetreatConfirm = false }) {
+                            Text("Zůstat v boji")
+                        }
+                    },
+                    containerColor = Color(0xFF1E1022),
+                    shape = RoundedCornerShape(16.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArenaTacticalCard(
+    title: String,
+    subtitle: String,
+    details: String,
+    icon: ImageVector,
+    badgeText: String,
+    badgeColor: Color,
+    accentColor: Color,
+    testTag: String,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .border(
+                width = 1.dp,
+                color = accentColor.copy(alpha = 0.45f),
+                shape = RoundedCornerShape(14.dp)
+            )
+            .clickable { onClick() }
+            .testTag(testTag),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1F1228)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = accentColor.copy(alpha = 0.15f),
+                border = BorderStroke(1.dp, accentColor.copy(alpha = 0.5f)),
+                modifier = Modifier.size(44.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = accentColor,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = title,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        color = Color.White
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = badgeColor.copy(alpha = 0.85f)
+                    ) {
+                        Text(
+                            text = badgeText,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+
+                Text(
+                    text = subtitle,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = accentColor
+                )
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Text(
+                    text = details,
+                    fontSize = 10.sp,
+                    color = Color.LightGray.copy(alpha = 0.85f),
+                    lineHeight = 13.sp
+                )
+            }
+
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = accentColor.copy(alpha = 0.7f),
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
 }
 
 @Composable
@@ -910,6 +1265,9 @@ fun StatusEffectBadge(
     color: Color,
     onClick: () -> Unit
 ) {
+    val isBuff = color == Color(0xFF2E7D32) || color == Color(0xFF0288D1) || color == Color(0xFF6A1B9A) ||
+        label.contains("buff", ignoreCase = true) || label.contains("štít", ignoreCase = true) || label.contains("posílení", ignoreCase = true)
+
     Surface(
         shape = RoundedCornerShape(4.dp),
         color = color.copy(alpha = 0.85f),
@@ -920,7 +1278,14 @@ fun StatusEffectBadge(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Text(icon, fontSize = 9.sp)
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(13.dp)) {
+                StatusLottieAura(
+                    isBuff = isBuff,
+                    modifier = Modifier.fillMaxSize(),
+                    glowScale = 1.35f
+                )
+                Text(icon, fontSize = 9.sp)
+            }
             Text(label, fontSize = 9.sp, color = Color.White, fontWeight = FontWeight.Bold)
         }
     }

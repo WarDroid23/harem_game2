@@ -11,6 +11,18 @@ enum class SkillNodeType(val label: String, val badgeColorHex: Long) {
     SYNERGY_MASTERY("Harémová synergie", 0xFFFFD700)
 }
 
+data class SkillUpgradeCost(
+    val goldCost: Int = 0,
+    val darkEnergyCost: Int = 0,
+    val xpCost: Int = 0,
+    val spCost: Int = 0,
+    val darkShards: Int = 0, // temny_strep
+    val manaEssence: Int = 0, // mana_esence
+    val moonDust: Int = 0, // mesicni_prach
+    val dragonBlood: Int = 0, // draci_krev
+    val crystals: Int = 0 // krystal
+)
+
 /**
  * Definition of an individual skill progression node for harem companions.
  */
@@ -40,6 +52,7 @@ data class CharacterSkillNode(
     val damageMitigationPercent: Int = 0,
     val bonusComboGain: Int = 0,
     val manaRegenBonus: Int = 0,
+    val maxRank: Int = 5,
     val specialEffectText: String? = null
 )
 
@@ -464,6 +477,81 @@ object CharacterSkillCatalog {
 
 
     /**
+     * Get the current rank of a skill on a character (0 if locked, 1-5 if unlocked/upgraded).
+     */
+    fun getSkillRank(character: Character, skillId: String): Int {
+        val customRank = character.skillRanks[skillId]
+        if (customRank != null && customRank > 0) return customRank
+        val isUnlocked = character.unlockedPassives.contains(skillId) || character.unlockedCombatSkills.contains(skillId)
+        return if (isUnlocked) 1 else 0
+    }
+
+    /**
+     * Calculate resource and material cost to upgrade a skill node to the next rank.
+     */
+    fun getUpgradeCostForRank(node: CharacterSkillNode, targetRank: Int): SkillUpgradeCost {
+        val tier = node.tier.coerceAtLeast(1)
+        val rankMultiplier = targetRank.coerceAtLeast(1)
+        return when (targetRank) {
+            1 -> SkillUpgradeCost(
+                goldCost = 50 * tier,
+                darkEnergyCost = 20 * tier,
+                xpCost = node.xpCost,
+                spCost = node.spCost,
+                darkShards = 5 * tier,
+                manaEssence = if (tier >= 2) 3 * tier else 0,
+                moonDust = if (tier >= 3) 2 * tier else 0,
+                dragonBlood = if (tier >= 4) 1 else 0,
+                crystals = if (tier >= 3) 2 else 0
+            )
+            2 -> SkillUpgradeCost(
+                goldCost = 100 * tier,
+                darkEnergyCost = 40 * tier,
+                xpCost = (node.xpCost * 1.3f).toInt(),
+                spCost = 1,
+                darkShards = 10 * tier,
+                manaEssence = 6 * tier,
+                moonDust = if (tier >= 2) 4 * tier else 0,
+                dragonBlood = if (tier >= 4) 1 else 0,
+                crystals = 4 * tier
+            )
+            3 -> SkillUpgradeCost(
+                goldCost = 200 * tier,
+                darkEnergyCost = 80 * tier,
+                xpCost = (node.xpCost * 1.8f).toInt(),
+                spCost = 1,
+                darkShards = 18 * tier,
+                manaEssence = 12 * tier,
+                moonDust = 8 * tier,
+                dragonBlood = if (tier >= 3) 2 * tier else 0,
+                crystals = 8 * tier
+            )
+            4 -> SkillUpgradeCost(
+                goldCost = 350 * tier,
+                darkEnergyCost = 150 * tier,
+                xpCost = (node.xpCost * 2.5f).toInt(),
+                spCost = 2,
+                darkShards = 30 * tier,
+                manaEssence = 20 * tier,
+                moonDust = 15 * tier,
+                dragonBlood = 3 * tier,
+                crystals = 15 * tier
+            )
+            else -> SkillUpgradeCost( // Rank 5 - Master Rank
+                goldCost = 600 * tier,
+                darkEnergyCost = 250 * tier,
+                xpCost = (node.xpCost * 3.5f).toInt(),
+                spCost = 2,
+                darkShards = 50 * tier,
+                manaEssence = 35 * tier,
+                moonDust = 25 * tier,
+                dragonBlood = 5 * tier,
+                crystals = 25 * tier
+            )
+        }
+    }
+
+    /**
      * Get nodes grouped by branch.
      */
     fun getSkillTreeForCharacter(character: Character): List<CharacterSkillNode> {
@@ -475,7 +563,7 @@ object CharacterSkillCatalog {
      */
     fun canUnlockNode(character: Character, node: CharacterSkillNode): Boolean {
         if (character.unlockedPassives.contains(node.id) || character.unlockedCombatSkills.contains(node.id)) {
-            return false // Already unlocked
+            return false // Already unlocked (use upgrade instead)
         }
         if (character.level < node.reqLevel) {
             return false
@@ -494,7 +582,26 @@ object CharacterSkillCatalog {
     }
 
     /**
-     * Calculate total combat stat bonuses from all unlocked passives on a character.
+     * Determine if a character meets requirements to enhance an already unlocked skill.
+     */
+    fun canEnhanceNode(character: Character, node: CharacterSkillNode): Pair<Boolean, String> {
+        val currentRank = getSkillRank(character, node.id)
+        if (currentRank <= 0) {
+            return Pair(false, "Schopnost musí být nejprve odemčena.")
+        }
+        if (currentRank >= node.maxRank) {
+            return Pair(false, "Schopnost již dosáhla maximální úrovně (Rank ${node.maxRank}).")
+        }
+        val nextRank = currentRank + 1
+        val reqLevelForNext = node.reqLevel + (nextRank - 1)
+        if (character.level < reqLevelForNext) {
+            return Pair(false, "Pro Rank $nextRank je vyžadována úroveň $reqLevelForNext.")
+        }
+        return Pair(true, "Lze vylepšit na Rank $nextRank.")
+    }
+
+    /**
+     * Calculate total combat stat bonuses from all unlocked passives on a character, scaled by their active rank.
      */
     fun calculatePassiveBonuses(character: Character): CombatPassiveBonuses {
         var bonusAtk = 0
@@ -508,16 +615,19 @@ object CharacterSkillCatalog {
         var manaRegen = 0
 
         ALL_SKILL_NODES.forEach { node ->
-            if (character.unlockedPassives.contains(node.id)) {
-                bonusAtk += node.attackBonus
-                bonusDef += node.defenseBonus
-                bonusHp += node.hpBonus
-                bonusCrit += node.critBonus
-                bonusSpeed += node.speedBonus
-                lifesteal += node.lifestealPercent
-                mitigation += node.damageMitigationPercent
-                comboBonus += node.bonusComboGain
-                manaRegen += node.manaRegenBonus
+            val rank = getSkillRank(character, node.id)
+            if (rank > 0) {
+                // Rank 1 gives 1x, Rank 2 gives 1.4x, Rank 3 gives 1.8x, Rank 4 gives 2.2x, Rank 5 gives 2.7x
+                val rankMultiplier = 1.0f + (rank - 1) * 0.4f
+                bonusAtk += (node.attackBonus * rankMultiplier).toInt()
+                bonusDef += (node.defenseBonus * rankMultiplier).toInt()
+                bonusHp += (node.hpBonus * rankMultiplier).toInt()
+                bonusCrit += (node.critBonus * rankMultiplier).toInt()
+                bonusSpeed += (node.speedBonus * rankMultiplier).toInt()
+                lifesteal += (node.lifestealPercent * rankMultiplier).toInt()
+                mitigation += (node.damageMitigationPercent * rankMultiplier).toInt()
+                comboBonus += (node.bonusComboGain * rankMultiplier).toInt()
+                manaRegen += (node.manaRegenBonus * rankMultiplier).toInt()
             }
         }
 
@@ -535,12 +645,33 @@ object CharacterSkillCatalog {
     }
 
     /**
-     * Get all active skills unlocked by a character.
+     * Get all active skills unlocked by a character, scaled by their rank level.
      */
     fun getUnlockedActiveSkills(character: Character): List<PartyCombatSkill> {
         return ALL_SKILL_NODES.filter { node ->
-            node.activeSkill != null && character.unlockedCombatSkills.contains(node.id)
-        }.mapNotNull { it.activeSkill }
+            node.activeSkill != null && (character.unlockedCombatSkills.contains(node.id) || getSkillRank(character, node.id) > 0)
+        }.mapNotNull { node ->
+            val baseSkill = node.activeSkill ?: return@mapNotNull null
+            val rank = getSkillRank(character, node.id).coerceAtLeast(1)
+            if (rank == 1) {
+                baseSkill
+            } else {
+                // Enhance powerMultiplier (+0.25 per rank), lower mana cost (-2 MP per rank), increase heal
+                val powerBonus = (rank - 1) * 0.25f
+                val manaReduction = ((rank - 1) * 2).coerceAtMost(baseSkill.manaCost - 5)
+                val healBonus = if (baseSkill.healAmount > 0) (rank - 1) * 15 else 0
+                val enhancedStatus = baseSkill.appliedStatus?.let { status ->
+                    status.copy(value = status.value + (rank - 1) * 4)
+                }
+                baseSkill.copy(
+                    name = "${baseSkill.name} (R${rank})",
+                    powerMultiplier = baseSkill.powerMultiplier + powerBonus,
+                    manaCost = (baseSkill.manaCost - manaReduction).coerceAtLeast(5),
+                    healAmount = baseSkill.healAmount + healBonus,
+                    appliedStatus = enhancedStatus
+                )
+            }
+        }
     }
 }
 

@@ -242,6 +242,12 @@ class CombatVisualFxState {
     var hitTargetEnemyIndex by mutableStateOf<Int?>(-1)
     var hitTargetPartyIndex by mutableStateOf<Int?>(-1)
 
+    var animationSpeedMultiplier by mutableStateOf(1.0f)
+
+    private fun getAdjustedDelay(ms: Long): Long {
+        return (ms / animationSpeedMultiplier).toLong().coerceAtLeast(1L)
+    }
+
     /**
      * Dedicated trigger for tactical Lottie animations on skill usage or status triggers.
      */
@@ -305,7 +311,7 @@ class CombatVisualFxState {
 
         floatingTexts.add(item)
         scope.launch {
-            delay(900)
+            delay(getAdjustedDelay(900))
             floatingTexts.remove(item)
         }
     }
@@ -326,7 +332,7 @@ class CombatVisualFxState {
         scope.launch {
             // 1. Ally springs forward
             activeAttackerPartyIndex = attackerPartyIndex
-            delay(120)
+            delay(getAdjustedDelay(120))
 
             // 2. Enemy receives hit impact
             hitTargetEnemyIndex = targetEnemyIndex
@@ -340,7 +346,7 @@ class CombatVisualFxState {
                 }
             })
 
-            delay(280)
+            delay(getAdjustedDelay(280))
             // 3. Reset positions
             activeAttackerPartyIndex = -1
             hitTargetEnemyIndex = -1
@@ -362,7 +368,7 @@ class CombatVisualFxState {
     ) {
         scope.launch {
             activeAttackerEnemyIndex = attackerEnemyIndex
-            delay(120)
+            delay(getAdjustedDelay(120))
 
             hitTargetPartyIndex = targetPartyIndex
             val effectiveType = if (isCrit) CombatAbilityType.CRITICAL_SUPERNOVA else abilityType
@@ -373,7 +379,7 @@ class CombatVisualFxState {
                 }
             })
 
-            delay(280)
+            delay(getAdjustedDelay(280))
             activeAttackerEnemyIndex = -1
             hitTargetPartyIndex = -1
         }
@@ -561,17 +567,18 @@ class CombatVisualFxState {
                     shakeOffsetX.snapTo(shake.first)
                     shakeOffsetY.snapTo(shake.second)
                     shakeRotation.snapTo(shake.third)
-                    delay(26)
+                    delay(getAdjustedDelay(26))
                 }
             }
 
             // 4. Trigger damage and combat resolution right on impact (~40ms)
-            delay(40)
+            delay(getAdjustedDelay(40))
             onImpact?.invoke()
 
             // 5. Run particle simulation loop for ~750ms
             val startTime = System.currentTimeMillis()
-            while (System.currentTimeMillis() - startTime < 800L && particles.isNotEmpty()) {
+            val totalSimulationTime = getAdjustedDelay(800)
+            while (System.currentTimeMillis() - startTime < totalSimulationTime && particles.isNotEmpty()) {
                 val iter = particles.iterator()
                 while (iter.hasNext()) {
                     val p = iter.next()
@@ -579,12 +586,12 @@ class CombatVisualFxState {
                         iter.remove()
                     }
                 }
-                delay(16)
+                delay(getAdjustedDelay(16))
             }
             particles.clear()
 
             // 6. Dismiss banner
-            delay(150)
+            delay(getAdjustedDelay(150))
             activeBanner = null
             isCritBannerActive = false
         }

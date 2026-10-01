@@ -272,6 +272,7 @@ data class Character(
     var relationshipHistory: MutableList<RelationshipRecord> = mutableListOf(),
     var unlockedPassives: MutableList<String> = mutableListOf(),
     var unlockedCombatSkills: MutableList<String> = mutableListOf(),
+    var skillRanks: MutableMap<String, Int> = mutableMapOf(),
     var interactionLogs: MutableList<InteractionLogEntry> = mutableListOf(),
     var moraleHistory: MutableList<MoraleRecord> = mutableListOf(),
     var trainingPresets: MutableList<TrainingPreset> = mutableListOf(),
@@ -297,6 +298,10 @@ data class Character(
     var dailyInteractionsCount: Int = 0,
     var unlockedSkins: MutableList<String> = mutableListOf("default"),
     var equippedSkin: String = "default",
+    var customPaletteId: String = "default",
+    var customPortraitVariantId: String = "default",
+    var unlockedPalettes: MutableList<String> = mutableListOf("default"),
+    var unlockedPortraitVariants: MutableList<String> = mutableListOf("default"),
     var elementalMultipliers: MutableMap<String, Float> = mutableMapOf() // Store as String to avoid serialization issues with Enum if any
 ) {
     val rarityEnum: Rarity

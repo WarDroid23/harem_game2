@@ -100,11 +100,18 @@ fun StatusEffectCountdownBadge(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(3.dp)
         ) {
-            // Icon with miniature circular countdown dial
+            // Icon with miniature circular countdown dial & subtle Lottie animation
             Box(
                 modifier = Modifier.size(if (compact) 18.dp else 22.dp),
                 contentAlignment = Alignment.Center
             ) {
+                // Subtle Lottie Animation: glowing green for buffs, pulsing red for debuffs
+                StatusLottieAura(
+                    isBuff = isBuff,
+                    modifier = Modifier.fillMaxSize(),
+                    glowScale = 1.35f
+                )
+
                 // Circular countdown progress ring
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val strokeWidth = 2.dp.toPx()
@@ -285,6 +292,11 @@ fun CombatStatusEffectDetailDialog(
                             modifier = Modifier.size(46.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
+                                StatusLottieAura(
+                                    isBuff = isBuff,
+                                    modifier = Modifier.fillMaxSize(),
+                                    glowScale = 1.35f
+                                )
                                 Text(effect.icon, fontSize = 24.sp)
                             }
                         }

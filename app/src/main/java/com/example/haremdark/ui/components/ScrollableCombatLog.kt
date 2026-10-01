@@ -32,108 +32,87 @@ import kotlinx.coroutines.launch
  * A highly interactive, styled scrollable combat log component that parses battle history.
  * Custom-styles critical hits, status effect triggers, heals, system updates, and element weaknesses.
  */
+/**
+ * A sleek, semi-transparent overlay for combat logs.
+ * Can be minimized or expanded to show turn-by-turn actions.
+ */
 @Composable
-fun ScrollableCombatLog(
+fun CombatLogOverlay(
     logs: List<CombatLogEntry>,
     modifier: Modifier = Modifier,
-    maxHeightDp: Int = 180,
-    onLogClick: ((CombatLogEntry) -> Unit)? = null
+    initialExpanded: Boolean = false
 ) {
+    var isExpanded by remember { mutableStateOf(initialExpanded) }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
-    // Automatically scroll to the latest combat action when a new log arrives
+    // Auto-scroll to latest
     LaunchedEffect(logs.size) {
         if (logs.isNotEmpty()) {
-            coroutineScope.launch {
-                listState.animateScrollToItem(0)
-            }
+            listState.animateScrollToItem(0)
         }
     }
 
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF13091B)),
-        border = BorderStroke(1.dp, Color(0xFFCE93D8).copy(alpha = 0.35f))
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp)
     ) {
-        Column(modifier = Modifier.padding(10.dp)) {
-            // Header: Title, total count & Auto-scroll indicator
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+        Surface(
+            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+            color = Color(0xCC0D0612), // Semi-transparent dark
+            border = BorderStroke(1.dp, Color(0xFFCE93D8).copy(alpha = 0.3f)),
+            modifier = Modifier.animateContentSize()
+        ) {
+            Column(modifier = Modifier.padding(8.dp)) {
+                // Header / Toggle
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { isExpanded = !isExpanded }
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("📜", fontSize = 14.sp)
-                    Text(
-                        text = "Bojový Protokol Střetnutí",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFFFD700)
-                    )
-                    Badge(
-                        containerColor = Color(0xFFD32F2F),
-                        contentColor = Color.White
-                    ) {
-                        Text("${logs.size}", fontSize = 9.sp)
-                    }
-                }
-
-                // Scroll to Bottom Quick Button
-                if (listState.firstVisibleItemIndex > 0) {
-                    IconButton(
-                        onClick = {
-                            coroutineScope.launch {
-                                listState.animateScrollToItem(0)
-                            }
-                        },
-                        modifier = Modifier.size(24.dp)
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Icon(
-                            imageVector = Icons.Default.ArrowDownward,
-                            contentDescription = "Posunout dolů",
-                            tint = Color(0xFFFF80AB),
-                            modifier = Modifier.size(14.dp)
+                            imageVector = if (isExpanded) Icons.Default.ArrowDownward else Icons.Default.Info,
+                            contentDescription = null,
+                            tint = Color(0xFFFFD700),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = if (isExpanded) "Bojový Protokol" else "Poslední akce: ${logs.firstOrNull()?.message ?: "Zahajování..."}",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White.copy(alpha = 0.9f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
                     }
+                    
+                    if (isExpanded) {
+                        Badge(containerColor = Color(0xFFD32F2F)) {
+                            Text("${logs.size}", fontSize = 9.sp, color = Color.White)
+                        }
+                    }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(6.dp))
-
-            if (logs.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(maxHeightDp.dp)
-                        .background(Color(0xFF0C0512), RoundedCornerShape(8.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Boje nebyly dosud zahájeny.",
-                        color = Color.Gray,
-                        fontSize = 11.sp
-                    )
-                }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(maxHeightDp.dp)
-                        .background(Color(0xFF0C0512), RoundedCornerShape(8.dp))
-                        .padding(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(logs) { entry ->
-                        CombatLogItem(
-                            entry = entry,
-                            onClick = { onLogClick?.invoke(entry) }
-                        )
+                if (isExpanded) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 220.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        contentPadding = PaddingValues(bottom = 8.dp)
+                    ) {
+                        items(logs) { entry ->
+                            CombatLogItemOverlay(entry)
+                        }
                     }
                 }
             }
@@ -142,181 +121,74 @@ fun ScrollableCombatLog(
 }
 
 @Composable
-fun CombatLogItem(
-    entry: CombatLogEntry,
-    onClick: () -> Unit
-) {
-    // Style parsing based on the message content and log type
-    val isCritical = entry.message.contains("KRIT", ignoreCase = true) || entry.type == "player_special" || entry.type == "enemy_special"
-    val isStatusTrigger = entry.message.contains("Omráčen", ignoreCase = true) || 
-                          entry.message.contains("Hoření", ignoreCase = true) ||
-                          entry.message.contains("Otráven", ignoreCase = true) || 
-                          entry.message.contains("Krvácení", ignoreCase = true) ||
-                          entry.message.contains("Stavový", ignoreCase = true) ||
-                          entry.message.contains("Zmrazen", ignoreCase = true)
-    val isRelationshipBonus = entry.message.contains("Pouto", ignoreCase = true) ||
-                              entry.message.contains("Milenka", ignoreCase = true) ||
-                              entry.message.contains("Věrnost", ignoreCase = true) ||
-                              entry.message.contains("Asistence", ignoreCase = true) ||
-                              entry.message.contains("Oddanost", ignoreCase = true) ||
-                              entry.message.contains("Vášeň", ignoreCase = true) ||
-                              entry.message.contains("Affinity", ignoreCase = true) ||
-                              entry.message.contains("Královna", ignoreCase = true)
-
-    val itemBgColor = when {
-        entry.type == "victory" -> Color(0x334CAF50)
-        entry.type == "defeat" -> Color(0x33F44336)
-        isRelationshipBonus -> Color(0x33E91E63)
-        isCritical -> Color(0x44D32F2F)
-        isStatusTrigger -> Color(0x2200E5FF)
-        else -> Color.Transparent
-    }
-
-    val itemBorderColor = when {
-        entry.type == "victory" -> Color(0xFF4CAF50).copy(alpha = 0.5f)
-        entry.type == "defeat" -> Color(0xFFF44336).copy(alpha = 0.5f)
-        isRelationshipBonus -> Color(0xFFFF4081).copy(alpha = 0.6f)
-        isCritical -> Color(0xFFFF5252).copy(alpha = 0.6f)
-        isStatusTrigger -> Color(0xFF00E5FF).copy(alpha = 0.4f)
-        else -> Color.White.copy(alpha = 0.05f)
-    }
-
-    val textColor = when {
-        isRelationshipBonus -> Color(0xFFFF80AB)           // Vibrant pink for relationship bonuses
-        entry.type == "player_attack" || entry.type == "player_spell" -> Color(0xFFFFCC80) // Light orange for player offenses
-        entry.type == "player_heal" -> Color(0xFFA5D6A7)                 // Soft green for healing
-        entry.type == "player_support" -> Color(0xFF80D8FF)              // Soft blue for buffs
-        entry.type == "enemy_attack" || entry.type == "enemy_special" -> Color(0xFFFF8A80) // Soft red for enemy attacks
-        entry.type == "victory" -> Color(0xFFFFD700)                     // Gold for victory
-        entry.type == "defeat" -> Color(0xFFEF5350)                      // Red for defeat
-        entry.type == "system" -> Color(0xFFCFD8DC)                      // Cool gray for environment hazards
+fun CombatLogItemOverlay(entry: CombatLogEntry) {
+    val isCritical = entry.message.contains("KRIT", ignoreCase = true)
+    val isStatus = entry.type == "system" || entry.message.contains("⚡") || entry.message.contains("STAV")
+    
+    val accentColor = when (entry.type) {
+        "player_attack", "player_spell" -> Color(0xFFFFCC80) // Orange
+        "enemy_attack", "enemy_special" -> Color(0xFFFF8A80) // Red
+        "player_heal" -> Color(0xFFA5D6A7) // Green
+        "player_support" -> Color(0xFF80D8FF) // Blue
+        "victory" -> Color(0xFFFFD700) // Gold
+        "defeat" -> Color(0xFFEF5350) // Dark Red
+        "system" -> Color(0xFFB0BEC5) // Gray
         else -> Color.White
     }
 
-    Box(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(itemBgColor)
-            .border(BorderStroke(1.dp, itemBorderColor), RoundedCornerShape(8.dp))
-            .clickable { onClick() }
-            .padding(8.dp)
+            .background(Color.White.copy(alpha = 0.03f), RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            // Header Row: Turn tracker, Actor badge & critical/relationship badge
+        // Turn Badge
+        Surface(
+            shape = RoundedCornerShape(4.dp),
+            color = accentColor.copy(alpha = 0.15f),
+            border = BorderStroke(0.5.dp, accentColor.copy(alpha = 0.4f))
+        ) {
+            Text(
+                text = "T${entry.turn}",
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Black,
+                color = accentColor,
+                modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
+            )
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color(0xFF311B92).copy(alpha = 0.7f)
-                    ) {
-                        Text(
-                            text = "KOLO ${entry.turn}",
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFE040FB),
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.5.dp)
-                        )
-                    }
-
-                    if (entry.actor.isNotBlank()) {
-                        Text(
-                            text = entry.actor,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = if (entry.type.startsWith("player")) Color(0xFFCE93D8) else Color(0xFFFF8A80),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    if (isRelationshipBonus) {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = Color(0xFFC2185B)
-                        ) {
-                            Text(
-                                text = "💖 POUTO BONUS",
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.Black,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.5.dp)
-                            )
-                        }
-                    }
-
-                    if (isCritical) {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = Color(0xFFD32F2F)
-                        ) {
-                            Text(
-                                text = "💥 KRITICKÝ ÚDER",
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.Black,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.5.dp)
-                            )
-                        }
-                    }
-
-                    if (isStatusTrigger) {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = Color(0xFF00B0FF)
-                        ) {
-                            Text(
-                                text = "⚡ STAVOVÝ EFEKT",
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.5.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Message text
-            Text(
-                text = entry.message,
-                color = textColor,
-                fontSize = 11.sp,
-                lineHeight = 15.sp,
-                fontWeight = if (isCritical) FontWeight.Bold else FontWeight.Normal
-            )
-
-            // Optional detailed math calculation / formula line
-            if (!entry.damageCalculation.isNullOrBlank()) {
                 Text(
-                    text = "⚙️ Výpočet: " + entry.damageCalculation,
-                    color = Color.LightGray.copy(alpha = 0.6f),
-                    fontSize = 8.5.sp,
-                    fontFamily = FontFamily.Monospace,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    text = entry.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontSize = 10.sp,
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontWeight = if (isCritical) FontWeight.ExtraBold else FontWeight.Normal
                 )
+                
+                if (entry.damageDealt > 0) {
+                    Text(
+                        text = "-${entry.damageDealt} HP",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Black,
+                        color = if (entry.type.startsWith("player")) Color(0xFFFF5252) else Color(0xFFFF8A80)
+                    )
+                }
             }
-
-            // Optional Narrative Text
+            
             if (!entry.narrativeText.isNullOrBlank()) {
                 Text(
-                    text = "💬 \"${entry.narrativeText}\"",
-                    color = Color(0xFFCE93D8).copy(alpha = 0.7f),
+                    text = entry.narrativeText,
                     fontSize = 9.sp,
-                    fontWeight = FontWeight.Medium
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontFamily = FontFamily.Monospace
                 )
             }
         }

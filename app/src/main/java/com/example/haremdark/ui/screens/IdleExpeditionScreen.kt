@@ -52,6 +52,7 @@ fun IdleExpeditionScreen(
     var selectedZoneForDispatch by remember { mutableStateOf<IdleExpeditionZone?>(null) }
     var selectedCharacterIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var activeReportClaimModal by remember { mutableStateOf<IdleExpeditionReport?>(reports.firstOrNull()) }
+    var selectedZoneForWeatherIntel by remember { mutableStateOf<Pair<IdleExpeditionZone, com.example.haremdark.models.ZoneWeatherCondition>?>(null) }
 
     // Ticking timer state for live countdowns
     var currentTimeMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -224,12 +225,15 @@ fun IdleExpeditionScreen(
 
                 items(IdleExpeditionCatalog.ZONES) { zone ->
                     val isCurrentlyExploring = activeExpeditions.any { it.zoneId == zone.id }
+                    val weather = com.example.haremdark.models.ZoneWeatherSystem.getWeatherForZone(zone.id, currentTimeMillis)
+                    val estGold = (zone.baseGoldReward * weather.goldMultiplier).toInt()
+                    val estDark = (zone.baseDarkEnergyReward * weather.darkEnergyMultiplier).toInt()
 
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF1E0E32)),
-                        border = BorderStroke(1.dp, if (isCurrentlyExploring) Color(0xFFAB47BC) else Color(0xFF381E52))
+                        border = BorderStroke(1.dp, if (isCurrentlyExploring) Color(0xFFAB47BC) else Color(weather.primaryColorHex).copy(alpha = 0.6f))
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             Row(
@@ -261,21 +265,73 @@ fun IdleExpeditionScreen(
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(zone.description, fontSize = 12.sp, color = Color.LightGray)
 
-                            Spacer(modifier = Modifier.height(10.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
 
-                            // Drops preview
+                            // Weather Pill Banner with Intel clickable
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(weather.primaryColorHex).copy(alpha = 0.2f),
+                                border = BorderStroke(1.dp, Color(weather.secondaryColorHex).copy(alpha = 0.4f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selectedZoneForWeatherIntel = Pair(zone, weather)
+                                        HapticManager.vibrateClick()
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(weather.icon, fontSize = 16.sp)
+                                        Text(
+                                            text = "${weather.name} (${weather.dominantElement})",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(weather.secondaryColorHex)
+                                        )
+                                    }
+
+                                    Text(
+                                        text = "🔍 Rozbor počasí",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF80D8FF)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Drops preview with active weather multipliers
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = Color(0xFF140822),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text("🎁 Kořist:", fontSize = 11.sp, color = Color.Gray)
-                                    Text("💰 +${zone.baseGoldReward} Zlata, 🔮 +${zone.baseDarkEnergyReward} TE, ⚙️ Suroviny", fontSize = 11.sp, color = Color(0xFF81D4FA), fontWeight = FontWeight.SemiBold)
+                                Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("🎁 Očekávaná kořist:", fontSize = 11.sp, color = Color.Gray)
+                                        Text("💰 +$estGold Zlata, 🔮 +$estDark TE", fontSize = 11.sp, color = Color(0xFF81D4FA), fontWeight = FontWeight.SemiBold)
+                                    }
+                                    if (weather.boostedMaterials.isNotEmpty()) {
+                                        Text(
+                                            text = "💎 Bonus surovin: +${weather.materialsBonusPercent}% (${weather.boostedMaterials.joinToString(", ")})",
+                                            fontSize = 10.sp,
+                                            color = Color(0xFFFFD54F)
+                                        )
+                                    }
                                 }
                             }
 
@@ -456,6 +512,22 @@ fun IdleExpeditionScreen(
                 }
             },
             containerColor = Color(0xFF1B0B2E)
+        )
+    }
+
+    // --- MODAL: WEATHER INTEL & FORECAST ---
+    selectedZoneForWeatherIntel?.let { (zone, weather) ->
+        com.example.haremdark.ui.components.ZoneWeatherIntelModal(
+            zone = zone,
+            weather = weather,
+            gameState = gameState,
+            engine = engine,
+            onDismiss = { selectedZoneForWeatherIntel = null },
+            onLaunchExpedition = {
+                selectedZoneForWeatherIntel = null
+                selectedZoneForDispatch = zone
+                selectedCharacterIds = emptySet()
+            }
         )
     }
 }

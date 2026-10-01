@@ -52,6 +52,8 @@ import kotlin.math.*
 import kotlin.random.Random
 import com.example.haremdark.data.AffinityData
 import com.example.haremdark.data.AffinityTierInfo
+import com.example.haremdark.data.BondTierCatalog
+import com.example.haremdark.ui.components.BondTierCustomizerModal
 import com.airbnb.lottie.compose.*
 import com.example.haremdark.data.CharacterSkillCatalog
 import com.example.haremdark.data.CharacterSkillNode
@@ -118,7 +120,7 @@ fun CharacterDetailDialog(
     val portraitRes = StaticData.getPortraitForArchetype(currentActiveCharacter.archetypeId)
 
     var selectedSection by remember { mutableIntStateOf(initialTab) }
-    val sectionTabs = listOf("📖 Životopis", "📊 Profil", "🛡️ Výbava", "💖 Náklonnost & Trend", "📖 Příběhy Pouta", "🎙️ Archiv & Hlasy", "🎁 Dary", "📦 Sklad & Inventář", "⚡ Akce", "✨ Dovednosti", "🎯 Výcvik", "📋 Úkoly", "🕰️ Klíčové Momenty", "🖼️ Galerie", "🏆 Milníky", "📜 Historie", "📈 Progrese Statistik")
+    val sectionTabs = listOf("📖 Životopis", "📊 Profil", "🎨 Vizuál Pouta", "🛡️ Výbava", "💖 Náklonnost & Trend", "📖 Příběhy Pouta", "🎙️ Archiv & Hlasy", "🎁 Dary", "📦 Sklad & Inventář", "⚡ Akce", "✨ Dovednosti", "🎯 Výcvik", "📋 Úkoly", "🕰️ Klíčové Momenty", "🖼️ Galerie", "🏆 Milníky", "📜 Historie", "📈 Progrese Statistik")
     var activeEmote by remember { mutableStateOf<String?>(null) }
     var emoteKey by remember { mutableLongStateOf(0L) }
 
@@ -543,24 +545,36 @@ fun CharacterDetailDialog(
                             archetype = archetype,
                             phase = phase,
                             engine = engine,
-                            onOpenAffinityTrend = { selectedSection = 3 },
-                            onOpenStatProgression = { selectedSection = 16 }
+                            onOpenAffinityTrend = { selectedSection = 4 },
+                            onOpenStatProgression = { selectedSection = 17 }
                         )
-                        2 -> EquipmentTab(character = currentActiveCharacter, player = player, onEquip = onEquipItem, onUnequip = onUnequipItem, engine = engine)
-                        3 -> AffinityAndDialogueTab(character = currentActiveCharacter, engine = engine, onTriggerAffinityEffect = triggerAffinityEffect)
-                        4 -> BondStoryTab(
+                        2 -> {
+                            if (engine != null) {
+                                BondVisualsTab(
+                                    character = currentActiveCharacter,
+                                    engine = engine
+                                )
+                            } else {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text("Vizuální přizpůsobení vyžaduje aktivní engine.", color = Color.Gray)
+                                }
+                            }
+                        }
+                        3 -> EquipmentTab(character = currentActiveCharacter, player = player, onEquip = onEquipItem, onUnequip = onUnequipItem, engine = engine)
+                        4 -> AffinityAndDialogueTab(character = currentActiveCharacter, engine = engine, onTriggerAffinityEffect = triggerAffinityEffect)
+                        5 -> BondStoryTab(
                             character = currentActiveCharacter,
                             player = player,
                             engine = engine,
                             onTriggerEmotion = triggerEmotionReaction
                         )
-                        5 -> CharacterArchiveTab(
+                        6 -> CharacterArchiveTab(
                             character = currentActiveCharacter,
                             player = player,
                             engine = engine,
                             onTriggerEmotion = triggerEmotionReaction
                         )
-                        6 -> GiftingAndItemsTab(
+                        7 -> GiftingAndItemsTab(
                             character = currentActiveCharacter,
                             player = player,
                             onGiveDirectGift = { gift ->
@@ -571,7 +585,7 @@ fun CharacterDetailDialog(
                             engine = engine,
                             onTriggerAffinityEffect = triggerAffinityEffect
                         )
-                        7 -> {
+                        8 -> {
                             if (engine != null) {
                                 InventoryManagementPanel(
                                     gameState = currentGameState ?: engine.gameState.value,
@@ -595,7 +609,7 @@ fun CharacterDetailDialog(
                                 )
                             }
                         }
-                        8 -> InteractionsSectionTab(
+                        9 -> InteractionsSectionTab(
                             character = currentActiveCharacter,
                             player = player,
                             onExecuteInteraction = { inter ->
@@ -616,29 +630,29 @@ fun CharacterDetailDialog(
                             onRent = onRent,
                             onUpgradeSkill = onUpgradeSkill
                         )
-                        9 -> SkillTreeTab(
+                        10 -> SkillTreeTab(
                             character = currentActiveCharacter,
                             engine = engine,
                             onUpgradeSkill = onUpgradeSkill
                         )
-                        10 -> TrainingMiniGameComponent(
+                        11 -> TrainingMiniGameComponent(
                             character = currentActiveCharacter,
                             engine = engine
                         )
-                        11 -> DailyAssignmentsTab(
+                        12 -> DailyAssignmentsTab(
                             character = currentActiveCharacter,
                             engine = engine
                         )
-                        12 -> KeyMomentsTab(
+                        13 -> KeyMomentsTab(
                             character = currentActiveCharacter
                         )
-                        13 -> MemoryGalleryTab(character = currentActiveCharacter)
-                        14 -> MilestonesTab(character = currentActiveCharacter)
-                        15 -> SlaveInteractionLogTab(
+                        14 -> MemoryGalleryTab(character = currentActiveCharacter)
+                        15 -> MilestonesTab(character = currentActiveCharacter)
+                        16 -> SlaveInteractionLogTab(
                             character = currentActiveCharacter,
                             engine = engine
                         )
-                        16 -> CharacterStatProgressionVicoChart(
+                        17 -> CharacterStatProgressionVicoChart(
                             character = currentActiveCharacter,
                             currentDay = currentGameState?.player?.day ?: 1,
                             isFullTab = true,
@@ -650,6 +664,68 @@ fun CharacterDetailDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun BondVisualsTab(
+    character: Character,
+    engine: GameEngine
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        val tier = com.example.haremdark.data.BondTierCatalog.getTierForAffinity(character.affinityPoints)
+        
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+            border = BorderStroke(1.dp, Color(tier.palette.primaryColorHex).copy(alpha = 0.5f))
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(tier.icon, fontSize = 32.sp)
+                Column {
+                    Text(
+                        text = tier.stageTitle,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 16.sp,
+                        color = Color(tier.palette.primaryColorHex)
+                    )
+                    Text(
+                        text = "Stupeň Pouta ${tier.tierLevel}",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        Text(
+            text = "Vizuální Přizpůsobení",
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        
+        Text(
+            text = "Díky tvému rostoucímu poutu s ${character.name} můžeš upravit její vzhled a barevnou auru.",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Reuse the logic from the customizer modal inside the tab
+        com.example.haremdark.ui.components.BondTierCustomizerContent(
+            character = character,
+            engine = engine
+        )
     }
 }
 

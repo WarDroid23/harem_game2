@@ -152,6 +152,23 @@ fun KingdomMapView(
                                 }
                             }
                         }
+
+                        // Weather Badge if unlocked
+                        if (isUnlocked) {
+                            val weather = com.example.haremdark.models.ZoneWeatherSystem.getWeatherForDomain(domain.id)
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = 6.dp, y = (-6).dp)
+                                    .size(18.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF1F0D36))
+                                    .border(0.5.dp, Color(weather.secondaryColorHex), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(weather.icon, fontSize = 10.sp)
+                            }
+                        }
                         
                         // Label
                         Box(

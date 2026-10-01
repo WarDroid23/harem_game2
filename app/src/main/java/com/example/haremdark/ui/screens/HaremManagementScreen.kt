@@ -37,6 +37,9 @@ import com.example.haremdark.models.GameSave
 import com.example.haremdark.ui.components.CharacterDiscoveryDialog
 import com.example.haremdark.ui.components.CharacterStatProgressionVicoChart
 import com.example.haremdark.ui.components.RecruitModalDialog
+import com.example.haremdark.ui.components.HaremFavoritesDashboard
+import com.example.haremdark.ui.components.GiftingModal
+import com.example.haremdark.ui.components.InteractionDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,6 +53,8 @@ fun HaremManagementScreen(
     var showRecruitDialog by remember { mutableStateOf(false) }
     var discoveredCharacter by remember { mutableStateOf<Character?>(null) }
     var selectedCharacterForDetail by remember { mutableStateOf<Character?>(null) }
+    var selectedCharacterForGifting by remember { mutableStateOf<Character?>(null) }
+    var selectedCharacterForInteraction by remember { mutableStateOf<Character?>(null) }
 
     val characters = gameState.characters
     val player = gameState.player
@@ -136,6 +141,21 @@ fun HaremManagementScreen(
                         color = Color(0xFF00E676)
                     )
                 }
+            }
+
+            // Top-Level Favorites Quick Access Dashboard
+            if (characters.isNotEmpty()) {
+                HaremFavoritesDashboard(
+                    characters = characters,
+                    gameState = gameState,
+                    engine = engine,
+                    onOpenProfile = { char -> selectedCharacterForDetail = char },
+                    onOpenInteraction = { char -> selectedCharacterForInteraction = char },
+                    onOpenGifting = { char -> selectedCharacterForGifting = char },
+                    onOpenLoadout = { char -> selectedCharacterForDetail = char },
+                    onOpenSkillTree = { char -> selectedCharacterForDetail = char },
+                    onOpenChamber = null
+                )
             }
 
             // Search Bar
@@ -270,6 +290,47 @@ fun HaremManagementScreen(
                 Button(onClick = { selectedCharacterForDetail = null }) {
                     Text("Zavřít")
                 }
+            }
+        )
+    }
+
+    // Direct Gifting Modal
+    selectedCharacterForGifting?.let { char ->
+        val currentConcubine = characters.firstOrNull { it.id == char.id } ?: char
+        GiftingModal(
+            character = currentConcubine,
+            gameState = gameState,
+            engine = engine,
+            onDismiss = { selectedCharacterForGifting = null }
+        )
+    }
+
+    // Direct Interaction Dialog
+    selectedCharacterForInteraction?.let { char ->
+        val currentConcubine = characters.firstOrNull { it.id == char.id } ?: char
+        InteractionDialog(
+            character = currentConcubine,
+            player = player,
+            onDismiss = { selectedCharacterForInteraction = null },
+            onExecuteInteraction = { interaction ->
+                val (success, msg) = engine.executeInteraction(currentConcubine.id, interaction)
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            },
+            onCourtRomance = {
+                val (success, msg) = engine.courtRomance(currentConcubine.id)
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            },
+            onMarry = {
+                val (success, msg) = engine.marryConcubine(currentConcubine.id)
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            },
+            onRent = { client, days ->
+                val (success, msg) = engine.rentSlave(currentConcubine.id, client, days)
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            },
+            onUpgradeSkill = { skill ->
+                val (success, msg) = engine.upgradeCharacterSkill(currentConcubine.id, skill)
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
             }
         )
     }

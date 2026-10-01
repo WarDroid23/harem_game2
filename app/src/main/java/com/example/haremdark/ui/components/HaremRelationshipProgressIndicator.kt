@@ -31,20 +31,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.haremdark.data.AffinityData
-import com.example.haremdark.data.AffinityTierInfo
+import com.example.haremdark.data.BondTierCatalog
 import com.example.haremdark.domain.HapticManager
 import com.example.haremdark.domain.SoundEffectManager
 import com.example.haremdark.models.Character
 import com.example.haremdark.models.HaremCharacter
+import com.example.haremdark.models.BondTierMilestone
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.PI
 
 /**
  * Custom Compose component showcasing visual relationship progress indicators
- * for Harem relationship levels.
- *
- * Supports both Character and HaremCharacter models with interactive arc gauges,
- * multi-tier milestone timelines, attribute matrices, and perk details.
+ * for Harem relationship levels, now fully integrated with the Bond Tier system.
  */
 
 @Composable
@@ -60,12 +59,18 @@ fun HaremRelationshipProgressIndicator(
     onInteract: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val currentTier = AffinityData.getTierForPoints(affinityPoints)
-    val tiers = AffinityData.TIERS
-    val (currentInTier, tierSpan) = AffinityData.getProgressInTier(affinityPoints)
+    val bondTier = BondTierCatalog.getTierForAffinity(affinityPoints)
+    val tiers = BondTierCatalog.BOND_TIERS
+    
+    val palette = bondTier.palette
+    val primaryColor = Color(palette.primaryColorHex)
+    
+    val currentInTier = (affinityPoints - bondTier.minAffinityPoints).coerceAtLeast(0)
+    val nextTier = tiers.getOrNull(bondTier.tierLevel)
+    val tierSpan = if (nextTier != null) (nextTier.minAffinityPoints - bondTier.minAffinityPoints) else 100
     val progressFraction = (currentInTier.toFloat() / tierSpan.toFloat()).coerceIn(0f, 1f)
 
-    var selectedTierIndex by remember { mutableIntStateOf((currentTier.level - 1).coerceIn(0, tiers.size - 1)) }
+    var selectedTierIndex by remember { mutableIntStateOf((bondTier.tierLevel - 1).coerceIn(0, tiers.size - 1)) }
     var showPerksDialog by remember { mutableStateOf(false) }
 
     val animatedProgress by animateFloatAsState(
@@ -79,8 +84,8 @@ fun HaremRelationshipProgressIndicator(
             .fillMaxWidth()
             .padding(vertical = 6.dp),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF160B24)),
-        border = BorderStroke(1.5.dp, Color(currentTier.colorHex).copy(alpha = 0.5f)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F0814)),
+        border = BorderStroke(1.5.dp, primaryColor.copy(alpha = 0.6f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
     ) {
         Column(
@@ -99,7 +104,7 @@ fun HaremRelationshipProgressIndicator(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(currentTier.icon, fontSize = 22.sp)
+                    Text(bondTier.icon, fontSize = 22.sp)
                     Column {
                         Text(
                             text = "Pouto vztahu & Náklonnost",
@@ -108,20 +113,20 @@ fun HaremRelationshipProgressIndicator(
                             color = Color(0xFFFFD700)
                         )
                         Text(
-                            text = "Úroveň ${currentTier.level}: ${currentTier.title}",
+                            text = bondTier.stageTitle,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(currentTier.colorHex)
+                            color = primaryColor
                         )
                     }
                 }
 
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = Color(currentTier.colorHex).copy(alpha = 0.2f),
-                    border = BorderStroke(1.dp, Color(currentTier.colorHex)),
+                    color = primaryColor.copy(alpha = 0.2f),
+                    border = BorderStroke(1.dp, primaryColor),
                     modifier = Modifier.clickable {
-                        SoundEffectManager.playRelationshipTier(currentTier.level)
+                        SoundEffectManager.playRelationshipTier(bondTier.tierLevel)
                         HapticManager.vibrateClick()
                         showPerksDialog = true
                     }
@@ -151,11 +156,7 @@ fun HaremRelationshipProgressIndicator(
             ) {
                 RelationshipArcGauge(
                     progress = animatedProgress,
-                    tierColor = Color(currentTier.colorHex),
-                    currentPoints = currentInTier,
-                    maxPoints = tierSpan,
-                    totalPoints = affinityPoints,
-                    tier = currentTier,
+                    tierColor = primaryColor,
                     modifier = Modifier.fillMaxSize()
                 )
 
@@ -176,7 +177,7 @@ fun HaremRelationshipProgressIndicator(
                     )
 
                     Text(
-                        text = currentTier.icon,
+                        text = bondTier.icon,
                         fontSize = 32.sp,
                         modifier = Modifier.graphicsLayer {
                             scaleX = heartPulseScale.value
@@ -194,7 +195,7 @@ fun HaremRelationshipProgressIndicator(
                         text = "$currentInTier / $tierSpan PTS",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(currentTier.colorHex)
+                        color = primaryColor
                     )
                 }
             }
@@ -202,7 +203,7 @@ fun HaremRelationshipProgressIndicator(
             // Multi-Stage Node Milestone Bar
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    text = "Milníky vztahu (Úrovně 1 - ${tiers.size})",
+                    text = "Milníky vztahu (Stupně 1 - ${tiers.size})",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White.copy(alpha = 0.7f)
@@ -210,7 +211,7 @@ fun HaremRelationshipProgressIndicator(
 
                 RelationshipMilestoneTimeline(
                     tiers = tiers,
-                    currentTierLevel = currentTier.level,
+                    currentTierLevel = bondTier.tierLevel,
                     affinityPoints = affinityPoints,
                     selectedIndex = selectedTierIndex,
                     onSelectTier = { idx ->
@@ -221,13 +222,14 @@ fun HaremRelationshipProgressIndicator(
             }
 
             // Selected Milestone Info Preview Box
-            val previewTier = tiers.getOrElse(selectedTierIndex) { currentTier }
-            val isUnlocked = affinityPoints >= previewTier.minPoints
+            val previewTier = tiers.getOrElse(selectedTierIndex) { bondTier }
+            val isUnlocked = affinityPoints >= previewTier.minAffinityPoints
+            val previewColor = Color(previewTier.palette.primaryColorHex)
 
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = Color(0xFF211135),
-                border = BorderStroke(1.dp, if (isUnlocked) Color(previewTier.colorHex).copy(alpha = 0.6f) else Color.Gray.copy(alpha = 0.3f)),
+                color = Color(0xFF1A1226),
+                border = BorderStroke(1.dp, if (isUnlocked) previewColor.copy(alpha = 0.6f) else Color.Gray.copy(alpha = 0.3f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -245,10 +247,10 @@ fun HaremRelationshipProgressIndicator(
                         ) {
                             Text(previewTier.icon, fontSize = 16.sp)
                             Text(
-                                text = "Lvl ${previewTier.level}: ${previewTier.title}",
+                                text = "${previewTier.stageTitle}: ${previewTier.name}",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isUnlocked) Color(previewTier.colorHex) else Color.Gray
+                                color = if (isUnlocked) previewColor else Color.Gray
                             )
                         }
 
@@ -257,7 +259,7 @@ fun HaremRelationshipProgressIndicator(
                             color = if (isUnlocked) Color(0xFF2E7D32) else Color(0xFF424242)
                         ) {
                             Text(
-                                text = if (isUnlocked) "ODEMČENO" else "ZAMČENO (${previewTier.minPoints} PTS)",
+                                text = if (isUnlocked) "ODEMČENO" else "ZAMČENO (${previewTier.minAffinityPoints} PTS)",
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
@@ -267,21 +269,21 @@ fun HaremRelationshipProgressIndicator(
                     }
 
                     Text(
-                        text = "• Bojový bonus: ${previewTier.combatBonusDescription}",
+                        text = "• Bojový bonus: ${previewTier.combatPerkSummary}",
                         fontSize = 11.sp,
                         color = Color.White.copy(alpha = 0.9f)
                     )
                     Text(
-                        text = "• Výhoda komnat: ${previewTier.perkDescription}",
+                        text = "• Výhoda harému: ${previewTier.haremPerkSummary}",
                         fontSize = 11.sp,
                         color = Color(0xFFFFD700).copy(alpha = 0.9f)
                     )
                 }
             }
 
-            // Sub-Attribute Breakdown (Affection, Loyalty, Morale, Trust)
+            // Sub-Attribute Breakdown
             RelationshipSubAttributesView(
-                affection = affinityPoints.coerceIn(0, 100),
+                affection = affinityPoints,
                 loyalty = loyalty,
                 morale = morale,
                 trust = trust,
@@ -343,8 +345,8 @@ fun HaremRelationshipProgressIndicator(
 
     if (showPerksDialog) {
         RelationshipPerksDetailDialog(
-            tier = currentTier,
-            allTiers = tiers,
+            currentBondTier = bondTier,
+            allBondTiers = tiers,
             affinityPoints = affinityPoints,
             onDismiss = { showPerksDialog = false }
         )
@@ -405,14 +407,20 @@ fun CompactRelationshipProgressIndicator(
     affinityPoints: Int,
     modifier: Modifier = Modifier
 ) {
-    val currentTier = AffinityData.getTierForPoints(affinityPoints)
-    val (currentInTier, tierSpan) = AffinityData.getProgressInTier(affinityPoints)
+    val bondTier = BondTierCatalog.getTierForAffinity(affinityPoints)
+    val tiers = BondTierCatalog.BOND_TIERS
+    
+    val currentInTier = (affinityPoints - bondTier.minAffinityPoints).coerceAtLeast(0)
+    val nextTier = tiers.getOrNull(bondTier.tierLevel)
+    val tierSpan = if (nextTier != null) (nextTier.minAffinityPoints - bondTier.minAffinityPoints) else 100
     val progress = (currentInTier.toFloat() / tierSpan.toFloat()).coerceIn(0f, 1f)
+    
+    val primaryColor = Color(bondTier.palette.primaryColorHex)
 
     Surface(
         shape = RoundedCornerShape(10.dp),
-        color = Color(currentTier.colorHex).copy(alpha = 0.12f),
-        border = BorderStroke(1.dp, Color(currentTier.colorHex).copy(alpha = 0.35f)),
+        color = primaryColor.copy(alpha = 0.12f),
+        border = BorderStroke(1.dp, primaryColor.copy(alpha = 0.35f)),
         modifier = modifier.fillMaxWidth()
     ) {
         Column(
@@ -428,12 +436,12 @@ fun CompactRelationshipProgressIndicator(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(currentTier.icon, fontSize = 12.sp)
+                    Text(bondTier.icon, fontSize = 12.sp)
                     Text(
-                        text = "Úroveň ${currentTier.level}: ${currentTier.title}",
+                        text = bondTier.stageTitle,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(currentTier.colorHex)
+                        color = primaryColor
                     )
                 }
                 Text(
@@ -461,7 +469,7 @@ fun CompactRelationshipProgressIndicator(
                             Brush.horizontalGradient(
                                 colors = listOf(
                                     Color(0xFFFF4081),
-                                    Color(currentTier.colorHex)
+                                    primaryColor
                                 )
                             )
                         )
@@ -478,10 +486,6 @@ fun CompactRelationshipProgressIndicator(
 private fun RelationshipArcGauge(
     progress: Float,
     tierColor: Color,
-    currentPoints: Int,
-    maxPoints: Int,
-    totalPoints: Int,
-    tier: AffinityTierInfo,
     modifier: Modifier = Modifier
 ) {
     Canvas(modifier = modifier) {
@@ -525,7 +529,7 @@ private fun RelationshipArcGauge(
             )
 
             // Glowing Arc Tip Indicator Dot
-            val endAngleRad = Math.toRadians((startAngle + progressSweep).toDouble())
+            val endAngleRad = ((startAngle + progressSweep) * PI / 180f).toDouble()
             val tipX = center.x + radius * cos(endAngleRad).toFloat()
             val tipY = center.y + radius * sin(endAngleRad).toFloat()
 
@@ -544,7 +548,7 @@ private fun RelationshipArcGauge(
         // Tick marks at 25%, 50%, 75%
         for (i in 0..4) {
             val tickAngle = startAngle + (sweepAngle / 4f) * i
-            val tickRad = Math.toRadians(tickAngle.toDouble())
+            val tickRad = (tickAngle * PI / 180f).toDouble()
             val innerR = radius - 12.dp.toPx()
             val outerR = radius + 12.dp.toPx()
 
@@ -569,7 +573,7 @@ private fun RelationshipArcGauge(
  */
 @Composable
 private fun RelationshipMilestoneTimeline(
-    tiers: List<AffinityTierInfo>,
+    tiers: List<BondTierMilestone>,
     currentTierLevel: Int,
     affinityPoints: Int,
     selectedIndex: Int,
@@ -605,7 +609,7 @@ private fun RelationshipMilestoneTimeline(
                 brush = Brush.horizontalGradient(
                     colors = listOf(
                         Color(0xFFE91E63),
-                        Color(tiers[(currentTierLevel - 1).coerceIn(0, tiers.size - 1)].colorHex)
+                        Color(tiers[(currentTierLevel - 1).coerceIn(0, tiers.size - 1)].palette.primaryColorHex)
                     )
                 ),
                 start = Offset(0f, size.height / 2),
@@ -622,10 +626,10 @@ private fun RelationshipMilestoneTimeline(
             verticalAlignment = Alignment.CenterVertically
         ) {
             tiers.forEachIndexed { index, tier ->
-                val isUnlocked = affinityPoints >= tier.minPoints
-                val isCurrent = currentTierLevel == tier.level
+                val isUnlocked = affinityPoints >= tier.minAffinityPoints
+                val isCurrent = currentTierLevel == tier.tierLevel
                 val isSelected = selectedIndex == index
-                val tierColor = Color(tier.colorHex)
+                val tierColor = Color(tier.palette.primaryColorHex)
 
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -656,7 +660,7 @@ private fun RelationshipMilestoneTimeline(
                     Spacer(modifier = Modifier.height(2.dp))
 
                     Text(
-                        text = "Lvl ${tier.level}",
+                        text = "St.${tier.tierLevel}",
                         fontSize = 9.sp,
                         fontWeight = if (isCurrent || isSelected) FontWeight.ExtraBold else FontWeight.Normal,
                         color = if (isUnlocked) Color.White else Color.Gray
@@ -668,7 +672,7 @@ private fun RelationshipMilestoneTimeline(
 }
 
 /**
- * Breakdown of sub-attributes (Affection, Loyalty, Morale, Trust, Desire)
+ * Breakdown of sub-attributes
  */
 @Composable
 private fun RelationshipSubAttributesView(
@@ -693,7 +697,7 @@ private fun RelationshipSubAttributesView(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            AttributeChip("💖 Náklonnost", "$affection%", Color(0xFFFF4081), affection / 100f, Modifier.weight(1f))
+            AttributeChip("💖 Pouto", "$affection pts", Color(0xFFFF4081), (affection / 250f).coerceIn(0f, 1f), Modifier.weight(1f))
             AttributeChip("🛡️ Loajalita", "$loyalty%", Color(0xFF4CAF50), loyalty / 100f, Modifier.weight(1f))
             AttributeChip("✨ Morálka", "$morale%", Color(0xFFFFD700), morale / 100f, Modifier.weight(1f))
             AttributeChip("💎 Důvěra", "$trust%", Color(0xFF00BCD4), trust / 100f, Modifier.weight(1f))
@@ -760,12 +764,12 @@ private fun AttributeChip(
 }
 
 /**
- * Dialog displaying full perk breakdown and dialogue quotes for all Relationship Tiers
+ * Dialog displaying full perk breakdown and dialogue quotes for all Bond Tiers
  */
 @Composable
 private fun RelationshipPerksDetailDialog(
-    tier: AffinityTierInfo,
-    allTiers: List<AffinityTierInfo>,
+    currentBondTier: BondTierMilestone,
+    allBondTiers: List<BondTierMilestone>,
     affinityPoints: Int,
     onDismiss: () -> Unit
 ) {
@@ -777,7 +781,7 @@ private fun RelationshipPerksDetailDialog(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("👑", fontSize = 24.sp)
-                Text("Přehled výhod úrovní vztahu", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("Výhody Stupňů Pouta", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
         },
         text = {
@@ -785,9 +789,9 @@ private fun RelationshipPerksDetailDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                items(allTiers, key = { it.level }) { itemTier ->
-                    val isUnlocked = affinityPoints >= itemTier.minPoints
-                    val tierColor = Color(itemTier.colorHex)
+                items(allBondTiers, key = { it.tierLevel }) { itemTier ->
+                    val isUnlocked = affinityPoints >= itemTier.minAffinityPoints
+                    val tierColor = Color(itemTier.palette.primaryColorHex)
 
                     Surface(
                         shape = RoundedCornerShape(12.dp),
@@ -810,7 +814,7 @@ private fun RelationshipPerksDetailDialog(
                                 ) {
                                     Text(itemTier.icon, fontSize = 16.sp)
                                     Text(
-                                        text = "Lvl ${itemTier.level}: ${itemTier.title}",
+                                        text = "${itemTier.stageTitle}",
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (isUnlocked) tierColor else Color.Gray
@@ -822,7 +826,7 @@ private fun RelationshipPerksDetailDialog(
                                     color = if (isUnlocked) Color(0xFF2E7D32) else Color(0xFF424242)
                                 ) {
                                     Text(
-                                        text = if (isUnlocked) "ODEMČENO" else "${itemTier.minPoints} PTS",
+                                        text = if (isUnlocked) "ODEMČENO" else "${itemTier.minAffinityPoints} PTS",
                                         fontSize = 8.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White,
@@ -832,12 +836,12 @@ private fun RelationshipPerksDetailDialog(
                             }
 
                             Text(
-                                text = "⚔️ ${itemTier.combatBonusDescription}",
+                                text = "⚔️ ${itemTier.combatPerkSummary}",
                                 fontSize = 10.sp,
                                 color = Color.White.copy(alpha = 0.9f)
                             )
                             Text(
-                                text = "✨ ${itemTier.perkDescription}",
+                                text = "✨ ${itemTier.haremPerkSummary}",
                                 fontSize = 10.sp,
                                 color = Color(0xFFFFD700).copy(alpha = 0.9f)
                             )

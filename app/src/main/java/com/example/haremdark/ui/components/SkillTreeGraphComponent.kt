@@ -34,6 +34,7 @@ import com.example.haremdark.models.Character
 fun SkillTreeGraphComponent(
     character: Character,
     onUnlock: (CharacterSkillNode) -> Unit,
+    onEnhanceWithResources: ((CharacterSkillNode) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val skills = CharacterSkillCatalog.ALL_SKILL_NODES
@@ -198,36 +199,55 @@ fun SkillTreeGraphComponent(
         )
     }
 
-    // Node Detail & Unlock Dialog (Tap action)
+    // Node Detail & Unlock/Enhance Dialog (Tap action)
     if (selectedNodeDetail != null) {
         val node = selectedNodeDetail!!
-        val isUnlocked = character.unlockedCombatSkills.contains(node.id) || character.unlockedPassives.contains(node.id)
+        val rank = CharacterSkillCatalog.getSkillRank(character, node.id)
+        val isUnlocked = rank > 0
         val canUnlock = CharacterSkillCatalog.canUnlockNode(character, node)
+        val (canEnhance, enhanceMsg) = CharacterSkillCatalog.canEnhanceNode(character, node)
+        val nextRank = if (rank <= 0) 1 else rank + 1
+        val upgradeCost = CharacterSkillCatalog.getUpgradeCostForRank(node, nextRank)
 
         AlertDialog(
             onDismissRequest = { selectedNodeDetail = null },
             confirmButton = {
-                if (!isUnlocked && canUnlock) {
-                    Button(
-                        onClick = {
-                            onUnlock(node)
-                            selectedNodeDetail = null
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700))
-                    ) {
-                        Text("Odemknout (${node.spCost} SP)", color = Color.Black, fontWeight = FontWeight.Bold)
-                    }
-                } else {
-                    TextButton(onClick = { selectedNodeDetail = null }) {
-                        Text("Zavřít")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (onEnhanceWithResources != null && (canUnlock || canEnhance)) {
+                        Button(
+                            onClick = {
+                                onEnhanceWithResources(node)
+                                selectedNodeDetail = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF))
+                        ) {
+                            Text(
+                                if (rank == 0) "✨ Odemknout (Suroviny)" else "🚀 Vylepšit na Rank $nextRank",
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                    } else if (!isUnlocked && canUnlock) {
+                        Button(
+                            onClick = {
+                                onUnlock(node)
+                                selectedNodeDetail = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD700))
+                        ) {
+                            Text("Odemknout (${node.spCost} SP)", color = Color.Black, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        TextButton(onClick = { selectedNodeDetail = null }) {
+                            Text("Zavřít")
+                        }
                     }
                 }
             },
             dismissButton = {
-                if (!isUnlocked && !canUnlock) {
-                    TextButton(onClick = { selectedNodeDetail = null }) {
-                        Text("Zavřít")
-                    }
+                TextButton(onClick = { selectedNodeDetail = null }) {
+                    Text("Zavřít")
                 }
             },
             title = {
@@ -238,12 +258,25 @@ fun SkillTreeGraphComponent(
                     Text(node.icon, fontSize = 28.sp)
                     Column {
                         Text(node.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(
-                            text = if (isUnlocked) "✨ Masterováno" else if (canUnlock) "🟢 Dostupné k odemčení" else "🔒 Uzamčeno",
-                            fontSize = 11.sp,
-                            color = if (isUnlocked) Color(0xFFFFD700) else if (canUnlock) Color(0xFF00E5FF) else Color.Gray,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = if (isUnlocked) Color(0xFFFFD700).copy(alpha = 0.2f) else Color.Gray.copy(alpha = 0.2f)
+                            ) {
+                                Text(
+                                    text = if (rank > 0) "⭐ RANK $rank / ${node.maxRank}" else "🔒 Uzamčeno",
+                                    fontSize = 10.sp,
+                                    color = if (rank > 0) Color(0xFFFFD700) else Color.LightGray,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+                            }
+                            Text(
+                                text = node.nodeType.label,
+                                fontSize = 10.sp,
+                                color = Color(node.nodeType.badgeColorHex)
+                            )
+                        }
                     }
                 }
             },
@@ -251,24 +284,57 @@ fun SkillTreeGraphComponent(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(node.description, fontSize = 13.sp, color = Color.White)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("• Typ: ${node.nodeType.label}", fontSize = 12.sp, color = Color(0xFFE1BEE7))
-                    if (node.activeSkill != null) {
-                        Text("• Mana cena: ${node.activeSkill.manaCost} MP", fontSize = 12.sp, color = Color(0xFF80D8FF))
-                        Text("• Cooldown: ${node.activeSkill.cooldownTurns} kola", fontSize = 12.sp, color = Color(0xFFFFE082))
-                        if (node.activeSkill.powerMultiplier > 1f) {
-                            Text("• Síla úderu: ${(node.activeSkill.powerMultiplier * 100).toInt()}%", fontSize = 12.sp, color = Color(0xFFFFD700))
+                    
+                    Surface(
+                        color = Color(0xFF221133),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text("⚡ Bojové parametry (Rank ${rank.coerceAtLeast(1)}):", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFFFF80AB))
+                            if (node.activeSkill != null) {
+                                val act = node.activeSkill
+                                Text("• Mana cena: ${act.manaCost} MP", fontSize = 12.sp, color = Color(0xFF80D8FF))
+                                Text("• Cooldown: ${act.cooldownTurns} kola", fontSize = 12.sp, color = Color(0xFFFFE082))
+                                if (act.powerMultiplier > 1f) {
+                                    val multiplier = act.powerMultiplier + (rank.coerceAtLeast(1) - 1) * 0.25f
+                                    Text("• Síla úderu: ${(multiplier * 100).toInt()}%", fontSize = 12.sp, color = Color(0xFFFFD700))
+                                }
+                            }
+                            if (node.attackBonus > 0) Text("• Bonus Útok: +${node.attackBonus * rank.coerceAtLeast(1)}", fontSize = 12.sp, color = Color(0xFFFF80AB))
+                            if (node.defenseBonus > 0) Text("• Bonus Obrana: +${node.defenseBonus * rank.coerceAtLeast(1)}", fontSize = 12.sp, color = Color(0xFF80D8FF))
+                            if (node.hpBonus > 0) Text("• Bonus HP: +${node.hpBonus * rank.coerceAtLeast(1)}", fontSize = 12.sp, color = Color(0xFF69F0AE))
+                            if (node.lifestealPercent > 0) Text("• Lifesteal: +${node.lifestealPercent * rank.coerceAtLeast(1)}%", fontSize = 12.sp, color = Color(0xFFFF5252))
                         }
                     }
-                    if (node.attackBonus > 0) Text("• Bonus Útok: +${node.attackBonus}", fontSize = 12.sp, color = Color(0xFFFF80AB))
-                    if (node.defenseBonus > 0) Text("• Bonus Obrana: +${node.defenseBonus}", fontSize = 12.sp, color = Color(0xFF80D8FF))
-                    if (node.hpBonus > 0) Text("• Bonus HP: +${node.hpBonus}", fontSize = 12.sp, color = Color(0xFF69F0AE))
-                    if (node.reqLevel > 1) {
-                        Text("• Požadovaná úroveň: ${node.reqLevel} (Aktuálně: ${character.level})", fontSize = 12.sp, color = if (character.level >= node.reqLevel) Color(0xFF69F0AE) else Color(0xFFFF5252))
+
+                    if (nextRank <= node.maxRank) {
+                        Surface(
+                            color = Color(0xFF16252E),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text("💎 Náklady na vylepšení (Rank $nextRank):", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFF00E5FF))
+                                Text("• Zlato: ${upgradeCost.goldCost}💰 • Temná E.: ${upgradeCost.darkEnergyCost}🔮 • ZK: ${upgradeCost.xpCost}", fontSize = 11.sp, color = Color.LightGray)
+                                val matText = buildString {
+                                    if (upgradeCost.darkShards > 0) append("💎 Střepy: ${upgradeCost.darkShards}  ")
+                                    if (upgradeCost.manaEssence > 0) append("✨ Esence: ${upgradeCost.manaEssence}  ")
+                                    if (upgradeCost.moonDust > 0) append("🌙 Prach: ${upgradeCost.moonDust}  ")
+                                    if (upgradeCost.dragonBlood > 0) append("🩸 Krev: ${upgradeCost.dragonBlood}  ")
+                                }
+                                if (matText.isNotEmpty()) {
+                                    Text("• Suroviny: $matText", fontSize = 11.sp, color = Color(0xFFFFD700))
+                                }
+                            }
+                        }
                     }
-                    if (node.reqAffinityLevel > 1) {
-                        Text("• Požadovaná náklonnost: ${node.reqAffinityLevel} (Aktuálně: ${character.affinityLevel})", fontSize = 12.sp, color = if (character.affinityLevel >= node.reqAffinityLevel) Color(0xFF69F0AE) else Color(0xFFFF5252))
-                    }
-                    Text("• Cena v SP: ${node.spCost}", fontSize = 12.sp, color = Color(0xFFFFD700), fontWeight = FontWeight.Bold)
                 }
             },
             containerColor = Color(0xFF1A1125),

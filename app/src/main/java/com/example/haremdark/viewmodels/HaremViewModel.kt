@@ -18,7 +18,8 @@ data class HaremFilterCriteria(
     val role: String = "Všechny",
     val affinityLevel: String = "Všechny",
     val loyaltyLevel: String = "Všechny",
-    val moraleStatus: String = "Všechny"
+    val moraleStatus: String = "Všechny",
+    val onlyFavorites: Boolean = false
 )
 
 class HaremViewModel(private val engine: GameEngine) : ViewModel() {
@@ -48,9 +49,14 @@ class HaremViewModel(private val engine: GameEngine) : ViewModel() {
         
         var list = gameState.characters
 
+        // 0. Favorites Only Toggle
+        if (criteria.onlyFavorites) {
+            list = list.filter { it.oblibena || it.isPinned }
+        }
+
         // 1. Status Filter
         list = when (criteria.status) {
-            "Oblíbená" -> list.filter { it.oblibena }
+            "Oblíbená", "Oblíbené" -> list.filter { it.oblibena || it.isPinned }
             "Ve vztahu" -> list.filter { it.jeManzelkou || it.partnerka }
             "Na nájmu" -> list.filter { it.naNajmu }
             "Březí" -> list.filter { it.tehotna }
