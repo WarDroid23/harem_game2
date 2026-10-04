@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.haremdark.domain.CombatSound
 import com.example.haremdark.domain.GameEngine
 import com.example.haremdark.domain.PartyCombatManager
 import com.example.haremdark.domain.SoundEffectManager
@@ -32,6 +33,8 @@ import com.example.haremdark.models.CombatLogEntry
 import com.example.haremdark.models.CombatStatusEffect
 import com.example.haremdark.models.GameSave
 import com.example.haremdark.models.PartyCombatSession
+import com.example.haremdark.models.PartyCombatSkill
+import com.example.haremdark.models.QueuedCombatSkill
 import com.example.haremdark.models.SkillCategory
 import com.example.haremdark.models.SkillTargetType
 import com.example.haremdark.models.FormationPosition
@@ -60,6 +63,11 @@ fun PartyCombatScreen(
     var showTacticalOverlayMenu by remember { mutableStateOf(false) }
     var showTacticalContextDetails by remember { mutableStateOf(false) }
     val combatScrollState = rememberScrollState()
+
+    // Tactical Skill Queue states
+    val tacticalSkillQueue = remember { mutableStateListOf<QueuedCombatSkill>() }
+    var isExecutingQueue by remember { mutableStateOf(false) }
+    var executingQueueStepIndex by remember { mutableIntStateOf(-1) }
 
     // Sync FX animation speed with session speed
     LaunchedEffect(session.animationSpeedMultiplier) {
@@ -668,11 +676,132 @@ fun PartyCombatScreen(
                 )
             }
 
+            // Tactical Skill Queue Sequential Execution Loop
+            fun executeTacticalSkillQueue() {
+                if (tacticalSkillQueue.isEmpty() || isExecutingQueue) return
+                coroutineScope.launch {
+                    isExecutingQueue = true
+                    var currentSessionState = session
+                    val totalSteps = tacticalSkillQueue.size
+
+                    for (i in 0 until totalSteps) {
+                        if (currentSessionState.isFinished) break
+                        executingQueueStepIndex = i
+                        val queued = tacticalSkillQueue[i]
+
+                        val isAlly = queued.skill.targetType == SkillTargetType.SINGLE_ALLY || queued.skill.targetType == SkillTargetType.ALL_ALLIES
+                        val isFinisherCrit = (i == 2 || queued.skill.powerMultiplier >= 1.4f)
+
+                        val animType = when {
+                            queued.skill.animationType == "DARK_BURST" -> CombatAbilityType.DARK_BURST
+                            queued.skill.animationType == "SHADOW_CURSE" -> CombatAbilityType.SHADOW_CURSE
+                            queued.skill.animationType == "BLEED_STRIKE" -> CombatAbilityType.BLEED_STRIKE
+                            queued.skill.animationType == "HEAVY_STRIKE" -> CombatAbilityType.HEAVY_STRIKE
+                            queued.skill.animationType == "HAREM_SUPPORT" -> CombatAbilityType.HAREM_SUPPORT
+                            queued.skill.animationType == "DEFEND" -> CombatAbilityType.DEFEND
+                            queued.skill.category == SkillCategory.ULTIMATE_COMBO -> CombatAbilityType.CHAR_SPECIAL
+                            else -> CombatAbilityType.SLASH
+                        }
+
+                        val comboBonusMultiplier = when (i) {
+                            0 -> 1.0f
+                            1 -> 1.15f
+                            else -> 1.30f
+                        }
+                        val casterMember = currentSessionState.party.getOrNull(queued.casterIndex)
+                        val estimatedDmg = (((casterMember?.attack ?: 20) * queued.skill.powerMultiplier * comboBonusMultiplier) * (if (isFinisherCrit) 1.6f else 1.0f)).toInt()
+
+                        if (isFinisherCrit) HapticManager.vibrateCritical() else HapticManager.vibrateHeavy()
+                        SoundEffectManager.playCombat(if (isFinisherCrit) CombatSound.CRITICAL_HIT else CombatSound.PLAYER_SLASH)
+
+                        if (isAlly) {
+                            fxState.triggerAbility(animType, queued.skill.name, coroutineScope, isCritical = isFinisherCrit)
+                            fxState.triggerFloatingText(
+                                text = "+${estimatedDmg.coerceAtLeast(30)} HP",
+                                isHeal = true,
+                                isEnemyTarget = false,
+                                scope = coroutineScope
+                            )
+                        } else {
+                            fxState.triggerAttackSequence(
+                                attackerPartyIndex = queued.casterIndex,
+                                targetEnemyIndex = queued.targetEnemyIndex,
+                                abilityType = animType,
+                                customName = "[KOMBO ${i + 1}/$totalSteps] ${queued.skill.icon} ${queued.skill.name}",
+                                damageText = "-$estimatedDmg HP${if (isFinisherCrit) " ⚡" else ""}",
+                                isCrit = isFinisherCrit,
+                                scope = coroutineScope
+                            )
+                        }
+
+                        val advanceTurnAtEnd = (i == totalSteps - 1)
+                        val (nextSession, _) = PartyCombatManager.executeTacticalQueueStep(
+                            session = currentSessionState,
+                            queued = queued,
+                            stepIndex = i,
+                            totalSteps = totalSteps,
+                            advanceTurnAtEnd = advanceTurnAtEnd
+                        )
+                        currentSessionState = nextSession
+                        onSessionUpdated(nextSession)
+
+                        val delayMs = (750 / session.animationSpeedMultiplier.coerceAtLeast(0.5f)).toLong()
+                        kotlinx.coroutines.delay(delayMs)
+                    }
+
+                    tacticalSkillQueue.clear()
+                    executingQueueStepIndex = -1
+                    isExecutingQueue = false
+                }
+            }
+
+            // --- TACTICAL SKILL QUEUE COMPONENT ---
+            TacticalQueueBar(
+                queue = tacticalSkillQueue,
+                isExecuting = isExecutingQueue,
+                executingIndex = executingQueueStepIndex,
+                onExecuteQueue = { executeTacticalSkillQueue() },
+                onRemoveSkill = { idx ->
+                    if (!isExecutingQueue && idx in tacticalSkillQueue.indices) {
+                        tacticalSkillQueue.removeAt(idx)
+                        HapticManager.vibrateClick()
+                    }
+                },
+                onClearQueue = {
+                    if (!isExecutingQueue) {
+                        tacticalSkillQueue.clear()
+                        HapticManager.vibrateClick()
+                    }
+                }
+            )
+
             // --- COMMAND ACTION CONSOLE ---
             PartyCommandConsole(
                 activeMember = activeMember,
                 targetEnemyName = targetEnemy?.name ?: "Nepřítel",
                 playerItems = gameState.player.items,
+                queueCount = tacticalSkillQueue.size,
+                maxQueueCount = 3,
+                isExecutingQueue = isExecutingQueue,
+                onAddToQueue = { skill ->
+                    if (!isExecutingQueue && tacticalSkillQueue.size < 3) {
+                        val casterIndex = session.currentTurnIndex
+                        val casterName = activeMember?.name ?: "Bojovnice"
+                        val targetEnemyIndex = session.selectedTargetEnemyIndex
+                        val targetName = targetEnemy?.name ?: "Nepřítel"
+                        tacticalSkillQueue.add(
+                            QueuedCombatSkill(
+                                casterIndex = casterIndex,
+                                casterName = casterName,
+                                skill = skill,
+                                targetEnemyIndex = targetEnemyIndex,
+                                targetName = targetName
+                            )
+                        )
+                        HapticManager.vibrateHeavy()
+                        SoundEffectManager.playCombat(CombatSound.SKILL_ACTIVATION)
+                    }
+                },
                 onOpenTacticalMenu = { showTacticalOverlayMenu = true },
                 onBasicAttack = {
                     coroutineScope.launch {

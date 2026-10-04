@@ -283,6 +283,7 @@ data class Character(
     var keyMemories: MutableList<KeyMemory> = mutableListOf(),
     var traits: MutableList<String> = mutableListOf(),
     var milestoneRewardsUnlocked: MutableSet<Int> = mutableSetOf(),
+    var lastAcknowledgedAffinityMilestone: Int = 0,
     var totalTrainingSessions: Int = 0,
     var completedPresets: MutableSet<String> = mutableSetOf(),
     var dailyAssignment: String? = null,

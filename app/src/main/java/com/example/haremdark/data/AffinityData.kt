@@ -851,6 +851,54 @@ object AffinityData {
         return result
     }
 
+    val AFFINITY_MILESTONES = listOf(30, 70, 120, 180, 250, 350)
+
+    fun getCrossedMilestones(points: Int): List<Int> {
+        return AFFINITY_MILESTONES.filter { points >= it }
+    }
+
+    fun getHighestMilestoneCrossed(points: Int): Int? {
+        return AFFINITY_MILESTONES.filter { points >= it }.maxOrNull()
+    }
+
+    fun getMilestoneBadgeInfo(milestoneThreshold: Int): Pair<String, String> {
+        return when (milestoneThreshold) {
+            30 -> Pair("⛓️ První Pouto", "Pokorná služebná (30 pts)")
+            70 -> Pair("💎 Důvěrnice", "Důvěrnice komnat (70 pts)")
+            120 -> Pair("💖 Oddaná Milenka", "Oddaná milenka (120 pts)")
+            180 -> Pair("👑 Paní Komnat", "Paní komnat harému (180 pts)")
+            250 -> Pair("✨ Spřízněná Duše", "Spřízněná duše (250 pts)")
+            350 -> Pair("🌌 Temná Královna", "Věčná královna Dominia (350 pts)")
+            else -> Pair("⭐ Milník Pouta", "Milník oddanosti ($milestoneThreshold pts)")
+        }
+    }
+
+    fun getCelebratoryMilestoneLine(character: Character, milestoneThreshold: Int): String {
+        val tier = when (milestoneThreshold) {
+            30 -> 2
+            70 -> 3
+            120 -> 4
+            180 -> 5
+            250 -> 6
+            350 -> 6
+            else -> getLevelForPoints(character.affinityPoints)
+        }
+        val lines = getDialoguesForTier(character.archetypeId, tier)
+        return lines.firstOrNull() ?: getRandomActiveDialogue(character)
+    }
+
+    fun getAllUnlockedFlavorDialogues(character: Character): List<String> {
+        val currentTier = getLevelForPoints(character.affinityPoints)
+        val all = mutableListOf<String>()
+        for (t in 1..currentTier) {
+            all.addAll(getDialoguesForTier(character.archetypeId, t))
+        }
+        if (all.isEmpty()) {
+            all.add(getRandomActiveDialogue(character))
+        }
+        return all.distinct()
+    }
+
     fun getPassiveDialogues(character: Character): List<String> {
         val tier = getLevelForPoints(character.affinityPoints)
         return getDialoguesForTier(character.archetypeId, tier)

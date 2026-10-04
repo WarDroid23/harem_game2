@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -297,6 +298,313 @@ fun HaremUltimateComboGauge(
 }
 
 /**
+ * Tactical Skill Queue Bar: allows players to stack up to 3 abilities with sequential
+ * animation, combo multipliers (+15% on 2nd, +30% & guaranteed crit on 3rd), and target indicators.
+ */
+@Composable
+fun TacticalQueueBar(
+    queue: List<QueuedCombatSkill>,
+    isExecuting: Boolean,
+    executingIndex: Int,
+    onExecuteQueue: () -> Unit,
+    onRemoveSkill: (Int) -> Unit,
+    onClearQueue: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xEE1E0B2B)
+        ),
+        border = BorderStroke(
+            1.dp,
+            if (isExecuting) Color(0xFF00E5FF).copy(alpha = 0.85f)
+            else if (queue.size == 3) Color(0xFFFFD700).copy(alpha = 0.85f)
+            else Color(0xFFAB47BC).copy(alpha = 0.45f)
+        ),
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("tactical_queue_bar")
+    ) {
+        Column(
+            modifier = Modifier.padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            // Header Row: Title, Queue counter, and dynamic combo badge
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("⚡", fontSize = 14.sp)
+                    Text(
+                        text = "Taktická Fronta",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        color = Color(0xFFE1BEE7)
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF4A148C).copy(alpha = 0.6f)
+                    ) {
+                        Text(
+                            text = "${queue.size}/3",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFFD700),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+
+                // Dynamic Combo Multiplier Badge
+                val comboText = when (queue.size) {
+                    0 -> "Volno (přidej skilly)"
+                    1 -> "Kombo: x1.0"
+                    2 -> "⚡ Kombo x1.15 (+15% DMG)"
+                    else -> "🔥 MAX x1.30 & Zaručený Krit!"
+                }
+                val comboColor = when (queue.size) {
+                    0 -> Color.Gray
+                    1 -> Color(0xFFB39DDB)
+                    2 -> Color(0xFFFFD54F)
+                    else -> Color(0xFFFF5252)
+                }
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = comboColor.copy(alpha = 0.18f),
+                    border = BorderStroke(1.dp, comboColor.copy(alpha = 0.5f))
+                ) {
+                    Text(
+                        text = comboText,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = comboColor,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            // 3-Slot Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                for (slotIndex in 0 until 3) {
+                    val queuedItem = queue.getOrNull(slotIndex)
+                    val isCurrentStep = (isExecuting && executingIndex == slotIndex)
+
+                    val infiniteTransition = rememberInfiniteTransition(label = "slot_pulse_$slotIndex")
+                    val pulseScale by infiniteTransition.animateFloat(
+                        initialValue = 1.0f,
+                        targetValue = if (isCurrentStep) 1.04f else 1.0f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(400, easing = FastOutSlowInEasing),
+                            repeatMode = RepeatMode.Reverse
+                        ),
+                        label = "scale"
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = when {
+                            isCurrentStep -> Color(0xFF00E5FF).copy(alpha = 0.25f)
+                            queuedItem != null -> Color(0xFF2E123F).copy(alpha = 0.95f)
+                            else -> Color(0x333F1D50)
+                        },
+                        border = BorderStroke(
+                            width = if (isCurrentStep) 2.dp else 1.dp,
+                            color = when {
+                                isCurrentStep -> Color(0xFF00E5FF)
+                                queuedItem != null -> Color(0xFFFFD700).copy(alpha = 0.6f)
+                                else -> Color(0xFFAB47BC).copy(alpha = 0.3f)
+                            }
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(68.dp)
+                            .scale(pulseScale)
+                            .testTag("tactical_queue_slot_$slotIndex")
+                    ) {
+                        if (queuedItem != null) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(4.dp),
+                                verticalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                // Step indicator + dismiss button
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "#${slotIndex + 1} ${queuedItem.casterName.take(6)}",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isCurrentStep) Color(0xFF00E5FF) else Color(0xFFFFD700),
+                                        maxLines = 1
+                                    )
+                                    if (!isExecuting) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(18.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFFB71C1C).copy(alpha = 0.7f))
+                                                .clickable { onRemoveSkill(slotIndex) }
+                                                .testTag("tactical_queue_remove_$slotIndex"),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = "✕",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                        }
+                                    } else if (isCurrentStep) {
+                                        Text(
+                                            text = "⚡ AKCE",
+                                            fontSize = 8.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = Color(0xFF00E5FF)
+                                        )
+                                    }
+                                }
+
+                                // Skill Icon & Name
+                                Text(
+                                    text = "${queuedItem.skill.icon} ${queuedItem.skill.name}",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+
+                                // Target enemy chip
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "➔ ${queuedItem.targetName.take(8)}",
+                                        fontSize = 8.sp,
+                                        color = Color(0xFFFF8A80),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "${queuedItem.skill.manaCost}M",
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF81D4FA)
+                                    )
+                                }
+                            }
+                        } else {
+                            // Empty slot placeholder
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = "+ Slot ${slotIndex + 1}",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.Gray.copy(alpha = 0.8f)
+                                )
+                                Text(
+                                    text = "Volný",
+                                    fontSize = 8.sp,
+                                    color = Color.Gray.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Bottom Buttons (when queue has at least 1 skill)
+            if (queue.isNotEmpty() || isExecuting) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
+                        onClick = onExecuteQueue,
+                        enabled = !isExecuting && queue.isNotEmpty(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(42.dp)
+                            .testTag("execute_tactical_queue_button"),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (queue.size == 3) Color(0xFFD81B60) else Color(0xFF7B1FA2),
+                            disabledContainerColor = Color(0xFF4A148C).copy(alpha = 0.4f)
+                        )
+                    ) {
+                        if (isExecuting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Probihá kombo (${executingIndex + 1}/${queue.size})...",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            val multiplierLabel = when (queue.size) {
+                                1 -> "1.0x"
+                                2 -> "1.15x"
+                                else -> "1.30x MAX"
+                            }
+                            Text(
+                                text = "Spustit Kombo (${queue.size}/3) • $multiplierLabel",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    if (!isExecuting) {
+                        OutlinedButton(
+                            onClick = onClearQueue,
+                            modifier = Modifier
+                                .height(42.dp)
+                                .testTag("clear_tactical_queue_button"),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, Color(0xFFEF5350).copy(alpha = 0.7f)),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF8A80)),
+                            contentPadding = PaddingValues(horizontal = 8.dp)
+                        ) {
+                            Text("🗑️ Vymazat", fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
  * Command Console with Action Tabs: Attack, Skills, Defend, Items.
  */
 @Composable
@@ -306,6 +614,10 @@ fun PartyCommandConsole(
     playerItems: List<InventoryItem>,
     onBasicAttack: () -> Unit,
     onSkillSelect: (PartyCombatSkill) -> Unit,
+    onAddToQueue: ((PartyCombatSkill) -> Unit)? = null,
+    queueCount: Int = 0,
+    maxQueueCount: Int = 3,
+    isExecutingQueue: Boolean = false,
     onDefend: () -> Unit,
     onUseItem: (InventoryItem) -> Unit,
     onOpenTacticalMenu: (() -> Unit)? = null,
@@ -444,8 +756,7 @@ fun PartyCommandConsole(
                                 val canAfford = (activeMember?.mana ?: 0) >= skill.manaCost
                                 Card(
                                     modifier = Modifier
-                                        .width(180.dp)
-                                        .clickable(enabled = canAfford) { onSkillSelect(skill) }
+                                        .width(200.dp)
                                         .border(1.dp, if (canAfford) Color(0xFFAB47BC) else Color.Gray.copy(alpha = 0.3f), RoundedCornerShape(10.dp)),
                                     colors = CardDefaults.cardColors(
                                         containerColor = if (canAfford) Color(0xFF2A1032) else Color(0xFF1E1622)
@@ -454,7 +765,7 @@ fun PartyCommandConsole(
                                 ) {
                                     Column(
                                         modifier = Modifier.padding(8.dp),
-                                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
@@ -477,6 +788,46 @@ fun PartyCommandConsole(
                                             maxLines = 2,
                                             overflow = TextOverflow.Ellipsis
                                         )
+
+                                        // Action buttons: Okamžitě & + Do fronty
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Button(
+                                                onClick = { onSkillSelect(skill) },
+                                                enabled = canAfford && !isExecutingQueue,
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(34.dp)
+                                                    .testTag("skill_instant_${skill.id}"),
+                                                shape = RoundedCornerShape(6.dp),
+                                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7B1FA2))
+                                            ) {
+                                                Text("Okamžitě", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                            }
+
+                                            if (onAddToQueue != null) {
+                                                val canQueue = canAfford && queueCount < maxQueueCount && !isExecutingQueue
+                                                Button(
+                                                    onClick = { onAddToQueue(skill) },
+                                                    enabled = canQueue,
+                                                    modifier = Modifier
+                                                        .weight(1.1f)
+                                                        .height(34.dp)
+                                                        .testTag("skill_queue_${skill.id}"),
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                                                    colors = ButtonDefaults.buttonColors(
+                                                        containerColor = Color(0xFF00897B),
+                                                        disabledContainerColor = Color.Gray.copy(alpha = 0.2f)
+                                                    )
+                                                ) {
+                                                    Text("+ Fronta", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }

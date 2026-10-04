@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,6 +52,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import kotlin.math.*
 import kotlin.random.Random
 import com.example.haremdark.data.AffinityData
+import com.example.haremdark.domain.HapticManager
 import com.example.haremdark.data.AffinityTierInfo
 import com.example.haremdark.data.BondTierCatalog
 import com.example.haremdark.ui.components.BondTierCustomizerModal
@@ -151,12 +153,64 @@ fun CharacterDetailDialog(
         }
     }
 
+    // Affinity Milestone Flavor Dialogue states & trigger
+    val crossedMilestone = remember(currentActiveCharacter.affinityPoints) {
+        AffinityData.getHighestMilestoneCrossed(currentActiveCharacter.affinityPoints)
+    }
+    var isMilestoneCelebration by remember(currentActiveCharacter.id) {
+        mutableStateOf(
+            crossedMilestone != null && crossedMilestone > currentActiveCharacter.lastAcknowledgedAffinityMilestone
+        )
+    }
+
+    var currentBubbleDialogue by remember(currentActiveCharacter.id, currentActiveCharacter.affinityPoints) {
+        mutableStateOf(
+            if (isMilestoneCelebration && crossedMilestone != null) {
+                AffinityData.getCelebratoryMilestoneLine(currentActiveCharacter, crossedMilestone)
+            } else {
+                AffinityData.getRandomActiveDialogue(currentActiveCharacter)
+            }
+        )
+    }
+
+    val milestoneBadgeInfo = remember(crossedMilestone) {
+        crossedMilestone?.let { AffinityData.getMilestoneBadgeInfo(it) } ?: Pair("Pouto", "Počátek pouta")
+    }
+
+    val triggerCycleDialogue: () -> Unit = {
+        HapticManager.vibrateClick()
+        val unlockedDialogues = AffinityData.getAllUnlockedFlavorDialogues(currentActiveCharacter)
+        val remaining = unlockedDialogues.filter { it != currentBubbleDialogue }
+        val next = remaining.randomOrNull() ?: unlockedDialogues.randomOrNull() ?: "„Můj pane, má oddanost patří jen tobě.“"
+        currentBubbleDialogue = next
+        if (isMilestoneCelebration && crossedMilestone != null) {
+            currentActiveCharacter.lastAcknowledgedAffinityMilestone = crossedMilestone
+            isMilestoneCelebration = false
+        }
+        val randomEmotion = listOf(
+            CharacterEmotionType.BLUSH,
+            CharacterEmotionType.LOVE,
+            CharacterEmotionType.CHEER,
+            CharacterEmotionType.SPARKLE
+        ).random()
+        triggerEmotionReaction(randomEmotion)
+    }
+
     LaunchedEffect(currentActiveCharacter.affinityPoints, currentActiveCharacter.affinityLevel) {
         if (currentActiveCharacter.affinityPoints > previousAffinityPoints) {
             val isHighAffinity = (currentActiveCharacter.affinityPoints - previousAffinityPoints) >= 15 || currentActiveCharacter.affinityLevel >= 4
             particleBurstType = if (isHighAffinity) AffinityBurstType.LOVE_BURST else AffinityBurstType.HEARTS
             particleIntensity = if (isHighAffinity) 1.4f else 1.0f
             particleBurstTrigger = System.currentTimeMillis()
+
+            val highestCrossed = AffinityData.getHighestMilestoneCrossed(currentActiveCharacter.affinityPoints)
+            if (highestCrossed != null && highestCrossed > currentActiveCharacter.lastAcknowledgedAffinityMilestone) {
+                isMilestoneCelebration = true
+                currentBubbleDialogue = AffinityData.getCelebratoryMilestoneLine(currentActiveCharacter, highestCrossed)
+                triggerAffinityEffect(AffinityBurstType.DEVOTION_GOLD, 1.5f)
+                triggerEmotionReaction(CharacterEmotionType.SPARKLE)
+                HapticManager.vibrateHeavy()
+            }
         }
         previousAffinityPoints = currentActiveCharacter.affinityPoints
     }
@@ -230,6 +284,7 @@ fun CharacterDetailDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(138.dp)
+                        .clickable { triggerCycleDialogue() }
                 ) {
                     // Dynamic Mood Background Asset Layer
                     Image(
@@ -463,6 +518,15 @@ fun CharacterDetailDialog(
                         )
                     }
                 }
+
+                // --- INTERACTIVE AFFINITY MILESTONE FLAVOR SPEECH BUBBLE ---
+                CharacterMilestoneSpeechBubble(
+                    character = currentActiveCharacter,
+                    currentDialogue = currentBubbleDialogue,
+                    isMilestoneCelebration = isMilestoneCelebration,
+                    milestoneTitle = milestoneBadgeInfo.first,
+                    onBubbleTap = triggerCycleDialogue
+                )
 
                 // --- VISUAL PROGRESS BARS FOR ALL PARTY MEMBERS (Health, Mana, Affinity) ---
                 val allCharacters = engine?.gameState?.value?.characters ?: listOf(character)
@@ -1843,7 +1907,38 @@ fun ProfileAndStatsTab(
                         },
                     color = Color(affinityTier.colorHex)
                 )
-                Text("💭 \"${AffinityData.getRandomActiveDialogue(character)}\"", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f), fontWeight = FontWeight.Medium)
+                var affinityTabQuote by remember(character.id, character.affinityPoints) {
+                    mutableStateOf(AffinityData.getRandomActiveDialogue(character))
+                }
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Black.copy(alpha = 0.25f),
+                    border = BorderStroke(1.dp, Color(affinityTier.colorHex).copy(alpha = 0.35f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            HapticManager.vibrateClick()
+                            val pool = AffinityData.getAllUnlockedFlavorDialogues(character)
+                            affinityTabQuote = pool.filter { it != affinityTabQuote }.randomOrNull() ?: pool.randomOrNull() ?: affinityTabQuote
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text("💭", fontSize = 14.sp)
+                        Text(
+                            text = if (affinityTabQuote.startsWith("„") || affinityTabQuote.startsWith("\"")) affinityTabQuote else "„$affinityTabQuote“",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text("🔄", fontSize = 11.sp, color = Color.Gray)
+                    }
+                }
                 Text("⚔️ Pasivní boj: ${affinityTier.combatBonusDescription}", fontSize = 10.sp, color = Color(0xFFFF80AB), fontWeight = FontWeight.SemiBold)
                 if (onOpenAffinityTrend != null) {
                     Button(

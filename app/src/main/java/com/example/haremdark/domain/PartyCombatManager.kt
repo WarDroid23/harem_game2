@@ -936,6 +936,217 @@ object PartyCombatManager {
     }
 
     /**
+     * Executes a single step of the Tactical Skill Queue.
+     * Applies combo multiplier (+15% on 2nd, +30% & guaranteed crit on 3rd).
+     * If advanceTurnAtEnd is false, turns are NOT advanced to enemies, allowing sequential chaining.
+     */
+    fun executeTacticalQueueStep(
+        session: PartyCombatSession,
+        queued: QueuedCombatSkill,
+        stepIndex: Int,
+        totalSteps: Int,
+        advanceTurnAtEnd: Boolean
+    ): Pair<PartyCombatSession, String> {
+        val member = session.party.getOrNull(queued.casterIndex)?.takeIf { it.isAlive }
+            ?: session.currentActiveMember
+            ?: return Pair(session, "Bojovnice pro krok fronty není dostupná!")
+
+        val skill = queued.skill
+
+        // Deduct Mana if available, otherwise reduce effect
+        val hasEnoughMana = member.mana >= skill.manaCost
+        if (hasEnoughMana) {
+            member.mana = (member.mana - skill.manaCost).coerceAtLeast(0)
+        }
+
+        val newLogs = mutableListOf<CombatLogEntry>()
+        val comboBonusMultiplier = when (stepIndex) {
+            0 -> 1.0f
+            1 -> 1.15f
+            else -> 1.30f
+        }
+        val isFinisherCrit = (stepIndex == 2 || (member.critRatePercent > 0 && kotlin.random.Random.nextInt(100) < member.critRatePercent))
+
+        val comboPrefix = "[KOMBO ${stepIndex + 1}/$totalSteps${if (stepIndex == 1) " +15%" else if (stepIndex == 2) " 🔥MAX +30%" else ""}]"
+
+        var stepMessage = ""
+
+        when (skill.targetType) {
+            SkillTargetType.SINGLE_ENEMY -> {
+                val aliveEnemies = session.enemies.filter { it.isAlive }
+                if (aliveEnemies.isEmpty()) {
+                    return Pair(session, "Žádní nepřátelé k zasažení!")
+                }
+
+                // If originally queued target is dead, auto-retarget to lowest HP alive enemy
+                val target = session.enemies.getOrNull(queued.targetEnemyIndex)?.takeIf { it.isAlive }
+                    ?: aliveEnemies.minByOrNull { it.hp }
+                    ?: aliveEnemies.first()
+
+                val affinityMult = getEffectiveAffinityMultiplier(member, session.weather)
+                val elementMult = getElementMultiplier(member.element, target.element)
+
+                val baseAtkVal = ((member.attack * skill.powerMultiplier) + skill.baseDamageBonus).toInt()
+                val defMitigation = (target.defense * 0.25f).toInt()
+                val critMult = if (isFinisherCrit) 1.6f else 1.0f
+
+                val finalDmg = (((baseAtkVal * affinityMult * elementMult * comboBonusMultiplier * critMult) - defMitigation).toInt())
+                    .coerceAtLeast(15)
+
+                target.hp = (target.hp - finalDmg).coerceAtLeast(0)
+
+                // Apply status effect if any
+                val appliedStatuses = mutableListOf<CombatStatusEffect>()
+                skill.appliedStatus?.let { eff ->
+                    val applied = eff.copy()
+                    target.statusEffects.removeAll { it.name == applied.name }
+                    target.statusEffects.add(applied)
+                    appliedStatuses.add(applied)
+                }
+
+                val critTag = if (isFinisherCrit) " ⚡ KRITICKÝ ZÁSAH!" else ""
+                val statusText = if (appliedStatuses.isNotEmpty()) " a aplikovala ${appliedStatuses.joinToString { it.name }}" else ""
+                val msg = "$comboPrefix ${skill.icon} ${member.name} zasáhla cíl ${target.name} za $finalDmg DMG$critTag$statusText!"
+                stepMessage = msg
+
+                newLogs.add(
+                    CombatLogEntry(
+                        turn = session.currentRound,
+                        type = if (isFinisherCrit) "player_special" else "player_attack",
+                        message = msg,
+                        actor = member.name,
+                        actionName = "${skill.icon} ${skill.name}",
+                        damageDealt = finalDmg,
+                        isCritical = isFinisherCrit,
+                        targetName = target.name,
+                        statusEffectsApplied = appliedStatuses
+                    )
+                )
+            }
+            SkillTargetType.ALL_ENEMIES -> {
+                val aliveEnemies = session.enemies.filter { it.isAlive }
+                var totalDmg = 0
+                val appliedStatuses = mutableListOf<CombatStatusEffect>()
+
+                aliveEnemies.forEach { enemy ->
+                    val elementMult = getElementMultiplier(member.element, enemy.element)
+                    val baseAtkVal = ((member.attack * skill.powerMultiplier * 0.85f) + skill.baseDamageBonus).toInt()
+                    val defMitigation = (enemy.defense * 0.2f).toInt()
+                    val critMult = if (isFinisherCrit) 1.5f else 1.0f
+                    val dmg = (((baseAtkVal * elementMult * comboBonusMultiplier * critMult) - defMitigation).toInt()).coerceAtLeast(12)
+
+                    enemy.hp = (enemy.hp - dmg).coerceAtLeast(0)
+                    totalDmg += dmg
+
+                    skill.appliedStatus?.let { eff ->
+                        val applied = eff.copy()
+                        enemy.statusEffects.removeAll { it.name == applied.name }
+                        enemy.statusEffects.add(applied)
+                        appliedStatuses.add(applied)
+                    }
+                }
+
+                val msg = "$comboPrefix ${skill.icon} ${member.name} zasáhla plošně nepřátelskou linii za celkem $totalDmg DMG!"
+                stepMessage = msg
+
+                newLogs.add(
+                    CombatLogEntry(
+                        turn = session.currentRound,
+                        type = "player_spell",
+                        message = msg,
+                        actor = member.name,
+                        actionName = "${skill.icon} ${skill.name}",
+                        damageDealt = totalDmg,
+                        isCritical = isFinisherCrit,
+                        targetName = "Celá linie nepřátel",
+                        statusEffectsApplied = appliedStatuses
+                    )
+                )
+            }
+            SkillTargetType.SINGLE_ALLY, SkillTargetType.ALL_ALLIES, SkillTargetType.SELF -> {
+                val healTarget = if (skill.targetType == SkillTargetType.SINGLE_ALLY) {
+                    session.party.getOrNull(queued.targetEnemyIndex)?.takeIf { it.isAlive }
+                        ?: session.aliveParty.minByOrNull { it.hp }
+                        ?: member
+                } else member
+
+                val healAmount = ((skill.healAmount.coerceAtLeast(35) + (member.attack * 0.5f)) * comboBonusMultiplier).toInt()
+                val appliedStatuses = mutableListOf<CombatStatusEffect>()
+
+                if (skill.targetType == SkillTargetType.ALL_ALLIES) {
+                    session.aliveParty.forEach { ally ->
+                        ally.hp = (ally.hp + healAmount).coerceAtMost(ally.maxHp)
+                        skill.appliedStatus?.let { eff ->
+                            val applied = eff.copy()
+                            ally.statusEffects.removeAll { it.name == applied.name }
+                            ally.statusEffects.add(applied)
+                            appliedStatuses.add(applied)
+                        }
+                    }
+                    val msg = "$comboPrefix ${skill.icon} ${member.name} podpořila a vyléčila celou družinu (+${healAmount} HP všem)!"
+                    stepMessage = msg
+                    newLogs.add(
+                        CombatLogEntry(
+                            turn = session.currentRound,
+                            type = "player_buff",
+                            message = msg,
+                            actor = member.name,
+                            actionName = "${skill.icon} ${skill.name}",
+                            healingReceived = healAmount,
+                            targetName = "Celá družina",
+                            statusEffectsApplied = appliedStatuses
+                        )
+                    )
+                } else {
+                    healTarget.hp = (healTarget.hp + healAmount).coerceAtMost(healTarget.maxHp)
+                    skill.appliedStatus?.let { eff ->
+                        val applied = eff.copy()
+                        healTarget.statusEffects.removeAll { it.name == applied.name }
+                        healTarget.statusEffects.add(applied)
+                        appliedStatuses.add(applied)
+                    }
+                    val msg = "$comboPrefix ${skill.icon} ${member.name} posílila ${healTarget.name} (+${healAmount} HP)!"
+                    stepMessage = msg
+                    newLogs.add(
+                        CombatLogEntry(
+                            turn = session.currentRound,
+                            type = "player_buff",
+                            message = msg,
+                            actor = member.name,
+                            actionName = "${skill.icon} ${skill.name}",
+                            healingReceived = healAmount,
+                            targetName = healTarget.name,
+                            statusEffectsApplied = appliedStatuses
+                        )
+                    )
+                }
+            }
+        }
+
+        val comboGain = 10 + (stepIndex * 5)
+        val updatedCombo = (session.haremComboGauge + comboGain).coerceAtMost(session.maxHaremComboGauge)
+        val updatedChain = session.comboChainCount + 1
+
+        val nextSession = session.copy(
+            haremComboGauge = updatedCombo,
+            comboChainCount = updatedChain,
+            combatLogs = newLogs + session.combatLogs
+        )
+
+        // If all enemies dead, victory immediately
+        if (nextSession.enemies.none { it.isAlive }) {
+            return handleVictory(nextSession)
+        }
+
+        // If advanceTurnAtEnd is requested (final skill in queue), trigger advanceTurn
+        if (advanceTurnAtEnd) {
+            return advanceTurn(nextSession)
+        }
+
+        return Pair(nextSession, stepMessage)
+    }
+
+    /**
      * Set active member to Defending stance (Takes 60% less damage and recovers Mana).
      */
     fun executeDefend(session: PartyCombatSession): Pair<PartyCombatSession, String> {

@@ -478,3 +478,17 @@ data class TacticalLoadout(
     val formationMap: Map<String, FormationPosition>, // Character ID -> Position
     val elementalConfigs: Map<String, String> // Character ID -> Element Name
 )
+
+/**
+ * An ability queued in the Tactical Skill Queue.
+ */
+@Serializable
+data class QueuedCombatSkill(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val casterIndex: Int,
+    val casterName: String,
+    val skill: PartyCombatSkill,
+    val targetEnemyIndex: Int,
+    val targetName: String
+)
+
