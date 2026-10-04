@@ -1137,55 +1137,14 @@ fun PartyCombatLogModal(
                         }
                     }
 
-                    LazyColumn(
+                    TurnByTurnCombatLogComponent(
+                        logs = logs,
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxWidth()
-                            .background(Color(0xFF0C0610), RoundedCornerShape(8.dp))
-                            .padding(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        val reversedLogs = logs.reversed()
-                        items(reversedLogs) { entry ->
-                            val tacticalType = TacticalAnimationType.fromLogEntry(entry.type, entry.message, entry.actionName)
-                            val logColor = when (entry.type) {
-                                "player_attack", "player_spell" -> Color(0xFFFFCC80)
-                                "enemy_attack", "enemy_special" -> Color(0xFFFF8A80)
-                                "player_heal" -> Color(0xFFA5D6A7)
-                                "player_support" -> Color(0xFF80D8FF)
-                                "victory" -> Color(0xFFFFD700)
-                                "defeat" -> Color(0xFFE53935)
-                                else -> Color(0xFFE0E0E0)
-                            }
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                TacticalLottieMicroBadge(
-                                    animationType = tacticalType,
-                                    sizeDp = 18.dp,
-                                    showBorder = false
-                                )
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "[Kolo ${entry.turn}] ${entry.message}",
-                                        color = logColor,
-                                        fontSize = 11.sp,
-                                        lineHeight = 15.sp
-                                    )
-                                    if (entry.damageCalculation != null) {
-                                        Text(
-                                            text = entry.damageCalculation,
-                                            color = Color(0xFFB388FF).copy(alpha = 0.8f),
-                                            fontSize = 9.sp,
-                                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
+                            .fillMaxWidth(),
+                        maxHeight = 440.dp,
+                        showHeaderStats = true
+                    )
                 } else {
                     // Tab 1: Elemental Calculations Breakdown
                     if (elementalBreakdowns.isEmpty()) {

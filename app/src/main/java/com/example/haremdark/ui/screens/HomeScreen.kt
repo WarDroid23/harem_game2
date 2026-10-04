@@ -1,5 +1,6 @@
 package com.example.haremdark.ui.screens
 
+import androidx.compose.animation.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -9,11 +10,14 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -45,15 +49,18 @@ fun HomeScreen(
     val context = LocalContext.current
     val player = gameState.player
     val favorite = gameState.characters.firstOrNull { it.oblibena }
-    val showEventLog = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
+    val showEventLog = remember { mutableStateOf(true) }
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(top = 10.dp, bottom = 220.dp)
+            contentPadding = PaddingValues(top = 10.dp, bottom = if (showEventLog.value) 170.dp else 90.dp)
         ) {
         // Hero Image Banner
         item {
@@ -429,6 +436,39 @@ fun HomeScreen(
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 80.dp) // Leave space for navigation bar
             )
+        }
+
+        // Floating Quick Scroll to Top Button
+        val showScrollToTop by remember {
+            derivedStateOf { listState.firstVisibleItemIndex > 1 }
+        }
+
+        AnimatedVisibility(
+            visible = showScrollToTop,
+            enter = fadeIn() + scaleIn(),
+            exit = fadeOut() + scaleOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = if (showEventLog.value) 160.dp else 84.dp)
+        ) {
+            FloatingActionButton(
+                onClick = {
+                    com.example.haremdark.domain.HapticManager.vibrateClick()
+                    coroutineScope.launch {
+                        listState.animateScrollToItem(0)
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                shape = CircleShape,
+                modifier = Modifier.size(42.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowUp,
+                    contentDescription = "Zpět nahoru",
+                    modifier = Modifier.size(22.dp)
+                )
+            }
         }
     }
 }

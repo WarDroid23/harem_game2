@@ -67,6 +67,7 @@ fun TacticalOverlayMenu(
     onRetreat: () -> Unit,
     onAllOutAssault: (() -> Unit)? = null,
     onRally: (() -> Unit)? = null,
+    onActivateAffinityBuff: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     if (!visible) return
@@ -326,6 +327,27 @@ fun TacticalOverlayMenu(
                                     onClick = {
                                         HapticManager.vibrateClick()
                                         onRally()
+                                        onDismiss()
+                                    }
+                                )
+                            }
+                        }
+
+                        // CHARACTER-SPECIFIC AFFINITY SPECIAL ABILITY BUFF
+                        if (activeMember != null && !activeMember.isPlayer && activeMember.characterSpecificBuffName.isNotBlank() && onActivateAffinityBuff != null) {
+                            item {
+                                TacticalActionCard(
+                                    title = "✨ Afinitní schopnost: ${activeMember.characterSpecificBuffName}",
+                                    subtitle = "Úroveň ${activeMember.relationshipTierLevel} (${activeMember.relationshipStageName})",
+                                    details = activeMember.characterSpecificBuffSummary,
+                                    icon = Icons.Default.AutoFixHigh,
+                                    badgeText = "AFINITNÍ BUFF",
+                                    badgeColor = Color(0xFF6A1B9A),
+                                    accentColor = Color(0xFFE040FB),
+                                    testTag = "tactical_option_affinity_buff",
+                                    onClick = {
+                                        HapticManager.vibrateHeavy()
+                                        onActivateAffinityBuff()
                                         onDismiss()
                                     }
                                 )

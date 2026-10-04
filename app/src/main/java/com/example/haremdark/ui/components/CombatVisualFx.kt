@@ -436,7 +436,9 @@ class CombatVisualFxState {
             }
             triggerTacticalLottie(tacticalType, title)
 
-            if (isCritical || type == CombatAbilityType.CRITICAL_SUPERNOVA) {
+            if (isCritical || type == CombatAbilityType.CRITICAL_SUPERNOVA || type == CombatAbilityType.HAREM_ULTIMATE || type == CombatAbilityType.CHAR_SPECIAL) {
+                HapticManager.vibrateUltimateExplosion()
+            } else if (isCritical) {
                 HapticManager.vibrateCritical()
             } else if (type.shakeIntensityPx >= 20f) {
                 HapticManager.vibrateHeavy()

@@ -583,7 +583,9 @@ object PartyCombatManager {
             actionName = "Základní útok (Kombo x$newChain)",
             damageDealt = finalDmg,
             damageCalculation = formulaStr,
-            elementalBreakdown = breakdown
+            elementalBreakdown = breakdown,
+            targetName = target.name,
+            isCritical = isCrit
         )
 
         // Check for Devotion Assist from loyal harem companions
@@ -770,7 +772,10 @@ object PartyCombatManager {
                             damageDealt = finalDmg,
                             damageCalculation = formulaStr,
                             elementalBreakdown = breakdown,
-                            narrativeText = skill.voiceQuote ?: "${activeMember.name} soustředila svou sílu do zničujícího úderu."
+                            narrativeText = skill.voiceQuote ?: "${activeMember.name} soustředila svou sílu do zničujícího úderu.",
+                            statusEffectsApplied = if (skill.appliedStatus != null) listOf(skill.appliedStatus.copy()) else emptyList(),
+                            targetName = target.name,
+                            isCritical = false
                         )
                     )
 
@@ -830,7 +835,9 @@ object PartyCombatManager {
                         message = "${skill.icon} ${activeMember.name} zasáhla celou skupinu nepřátel dovedností '${skill.name}' za celkem $totalDmg poškození!",
                         actor = activeMember.name,
                         actionName = skill.name,
-                        damageDealt = totalDmg
+                        damageDealt = totalDmg,
+                        statusEffectsApplied = if (skill.appliedStatus != null) listOf(skill.appliedStatus.copy()) else emptyList(),
+                        targetName = "Všichni nepřátelé"
                     )
                 )
             }
@@ -856,7 +863,10 @@ object PartyCombatManager {
                             type = "player_heal",
                             message = "${skill.icon} ${activeMember.name} vyléčila spojenkyni ${targetAlly.name} o +$healed HP!",
                             actor = activeMember.name,
-                            actionName = skill.name
+                            actionName = skill.name,
+                            statusEffectsApplied = if (skill.appliedStatus != null) listOf(skill.appliedStatus.copy()) else emptyList(),
+                            targetName = targetAlly.name,
+                            healingReceived = healed
                         )
                     )
                 }
@@ -882,7 +892,9 @@ object PartyCombatManager {
                         type = "player_support",
                         message = "${skill.icon} ${activeMember.name} požehnala celému týmu dovedností '${skill.name}'!",
                         actor = activeMember.name,
-                        actionName = skill.name
+                        actionName = skill.name,
+                        statusEffectsApplied = if (skill.appliedStatus != null) listOf(skill.appliedStatus.copy()) else emptyList(),
+                        targetName = "Celá družina"
                     )
                 )
             }
@@ -899,7 +911,10 @@ object PartyCombatManager {
                         type = "player_support",
                         message = "${skill.icon} ${activeMember.name} aktivovala '${skill.name}'!",
                         actor = activeMember.name,
-                        actionName = skill.name
+                        actionName = skill.name,
+                        statusEffectsApplied = if (skill.appliedStatus != null) listOf(skill.appliedStatus.copy()) else emptyList(),
+                        targetName = activeMember.name,
+                        healingReceived = skill.healAmount
                     )
                 )
             }
@@ -984,7 +999,9 @@ object PartyCombatManager {
             message = "🎯 [Soustředěná palba] Zaveleno k prioritní eliminaci cíle ${target.name}! Obrana cíle prolomena o 35% a zasažen za $focusDmg DMG!",
             actor = activeMember?.name ?: "Pán Dominia",
             actionName = "Soustředěná palba",
-            damageDealt = focusDmg
+            damageDealt = focusDmg,
+            statusEffectsApplied = listOf(markEffect),
+            targetName = target.name
         )
 
         val newCombo = (session.haremComboGauge + 15).coerceAtMost(session.maxHaremComboGauge)
@@ -1033,7 +1050,19 @@ object PartyCombatManager {
             type = "player_special",
             message = "⚔️ [Totální zteč] Pán Dominia zavelel k maximálnímu útoku! Všechny bojovnice získávají +30% k poškození na 2 kola.",
             actor = "Taktický rozkaz",
-            actionName = "Totální zteč"
+            actionName = "Totální zteč",
+            statusEffectsApplied = listOf(
+                CombatStatusEffect(
+                    id = "assault_buff",
+                    name = "Totální zteč",
+                    icon = "⚔️",
+                    type = "ATK_BUFF",
+                    value = 30,
+                    durationTurns = 2,
+                    description = "+30% útočné poškození pro celou družinu."
+                )
+            ),
+            targetName = "Celá družina"
         )
 
         val nextSession = session.copy(
@@ -1068,10 +1097,67 @@ object PartyCombatManager {
             type = "player_heal",
             message = "✨ [Bojový pokřik & Povzbuzení] Morálka harému byla obnovena! Očištěno $cleansedCount oslabení, +20 MP a +25 HP pro všechny.",
             actor = "Pán Dominia",
-            actionName = "Povzbuzení & Pokřik"
+            actionName = "Povzbuzení & Pokřik",
+            targetName = "Celá družina",
+            healingReceived = 25
         )
 
         val nextSession = session.copy(
+            combatLogs = listOf(log) + session.combatLogs
+        )
+
+        return advanceTurn(nextSession)
+    }
+
+    /**
+     * Activate active character's affinity-based special ability / temporary combat buff.
+     */
+    fun executeCharacterAffinityBuff(session: PartyCombatSession): Pair<PartyCombatSession, String> {
+        val activeMember = session.currentActiveMember ?: return Pair(session, "Žádná aktivní postava na řadě!")
+        if (activeMember.isPlayer) {
+            return Pair(session, "Pán Dominia nemá speciální afinitní schopnost družky.")
+        }
+        if (activeMember.characterSpecificBuffName.isBlank()) {
+            return Pair(session, "${activeMember.name} nemá odemčenou afinitní schopnost (vyžaduje vyšší afinitu).")
+        }
+
+        val buffName = activeMember.characterSpecificBuffName
+        val buffIcon: String = activeMember.characterSpecificBuffIcon.ifBlank { "✨" }
+        val buffSummary: String = activeMember.characterSpecificBuffSummary.ifBlank { "Afinitní speciální schopnost aktivována!" }
+
+        val affinityBuff = CombatStatusEffect(
+            id = "affinity_buff_${System.currentTimeMillis()}_${activeMember.id}",
+            name = buffName,
+            icon = buffIcon,
+            type = "AFFINITY_BUFF",
+            value = 40,
+            durationTurns = 3,
+            maxDuration = 3,
+            description = "Afinitní schopnost (Úroveň ${activeMember.relationshipTierLevel}): $buffSummary"
+        )
+
+        activeMember.statusEffects.removeAll { it.type == "AFFINITY_BUFF" }
+        activeMember.statusEffects.add(affinityBuff)
+
+        activeMember.hp = (activeMember.hp + 30).coerceAtMost(activeMember.maxHp)
+        activeMember.mana = (activeMember.mana + 25).coerceAtMost(activeMember.maxMana)
+
+        SoundEffectManager.playCombat(CombatSound.SKILL_ACTIVATION)
+        HapticManager.vibrateHeavy()
+
+        val log = CombatLogEntry(
+            turn = session.currentRound,
+            type = "player_special",
+            message = "$buffIcon [Afinitní schopnost: $buffName] ${activeMember.name} (Afinita ${activeMember.relationshipStageName}) uvolnila své pouto lásky! Získává mocný afinitní buff na 3 kola (+40% síla, +30 HP, +25 MP).",
+            actor = activeMember.name,
+            actionName = buffName,
+            statusEffectsApplied = listOf(affinityBuff),
+            targetName = activeMember.name,
+            healingReceived = 30
+        )
+
+        val nextSession = session.copy(
+            comboChainCount = session.comboChainCount + 1,
             combatLogs = listOf(log) + session.combatLogs
         )
 
@@ -1140,7 +1226,21 @@ object PartyCombatManager {
             actor = "Celý Harém Dominia",
             actionName = "Nespoutaný hněv Harému",
             damageDealt = comboDmgPerEnemy * aliveEnemies.size,
-            narrativeText = "Spojené pouto lásky, poslušnosti a temné magie proťalo bojiště v oslnivé vlně extáze a zkázy!"
+            narrativeText = "Spojené pouto lásky, poslušnosti a temné magie proťalo bojiště v oslnivé vlně extáze a zkázy!",
+            statusEffectsApplied = listOf(
+                CombatStatusEffect(
+                    id = "stun_combo",
+                    name = "Omráčení z komba",
+                    icon = "💫",
+                    type = "STUN",
+                    value = 1,
+                    durationTurns = 1,
+                    description = "Nepřítel je ochromen silou společného komba."
+                )
+            ),
+            targetName = "Všichni nepřátelé",
+            isCritical = true,
+            healingReceived = 35
         )
 
         val nextSession = session.copy(
@@ -1418,7 +1518,9 @@ object PartyCombatManager {
                     actionName = if (isSpecial) "Drtivý úder" else "Útok",
                     damageDealt = finalDmg,
                     damageCalculation = formulaStr,
-                    elementalBreakdown = enemyBreakdown
+                    elementalBreakdown = enemyBreakdown,
+                    targetName = target.name,
+                    isCritical = isSpecial
                 )
             )
 
@@ -1512,7 +1614,9 @@ object PartyCombatManager {
                                 message = "${hazard.icon} [TERÉNNÍ HAZARD] ${hazard.title} zasáhl ${victim.name} za $dmg poškození! Aplikován stav '${hazard.statusEffectToApply?.name ?: "Zranění"}'.",
                                 actor = hazard.name,
                                 actionName = hazard.title,
-                                damageDealt = dmg
+                                damageDealt = dmg,
+                                statusEffectsApplied = if (hazard.statusEffectToApply != null) listOf(hazard.statusEffectToApply) else emptyList(),
+                                targetName = victim.name
                             )
                         )
                     } else if (livingEnemies.isNotEmpty()) {
@@ -1531,7 +1635,9 @@ object PartyCombatManager {
                                 message = "${hazard.icon} [TERÉNNÍ HAZARD] ${hazard.title} udeřil do ${victim.name} za $dmg poškození! Utrpěn stav '${hazard.statusEffectToApply?.name ?: "Zranění"}'.",
                                 actor = hazard.name,
                                 actionName = hazard.title,
-                                damageDealt = dmg
+                                damageDealt = dmg,
+                                statusEffectsApplied = if (hazard.statusEffectToApply != null) listOf(hazard.statusEffectToApply) else emptyList(),
+                                targetName = victim.name
                             )
                         )
                     }

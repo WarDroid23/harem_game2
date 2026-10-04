@@ -1864,6 +1864,13 @@ fun ProfileAndStatsTab(
             }
         }
 
+        // Unlocked Unique Affinity Combat Buffs & Cumulative Passive Bonuses
+        CharacterAffinityCombatBuffsCard(
+            character = character,
+            modifier = Modifier.fillMaxWidth(),
+            onOpenMilestonesList = onOpenAffinityTrend
+        )
+
         // Radar Chart of Character Stats & Affinity Tier Growth
         CharacterRadarChart(character = character)
 
@@ -5212,13 +5219,28 @@ fun MilestonesTab(character: Character) {
     )
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("🏆 Milníky oddanosti", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        // --- UNIQUE CHARACTER AFFINITY COMBAT BUFFS & MILESTONES ---
+        CharacterAffinityCombatBuffsCard(
+            character = character,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        // --- LOYALTY THRESHOLDS ---
+        Text(
+            text = "👑 Milníky oddanosti & loajality",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
         
         thresholds.forEach { (threshold, reward) ->
-            val isUnlocked = character.milestoneRewardsUnlocked.contains(threshold)
+            val isUnlocked = character.milestoneRewardsUnlocked.contains(threshold) || character.loajalita >= threshold
             val progress = (character.loajalita.toFloat() / threshold.toFloat()).coerceAtMost(1f)
             
             Card(

@@ -3,7 +3,9 @@ package com.example.haremdark.ui.components
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.example.haremdark.domain.HapticManager
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.*
@@ -56,6 +58,8 @@ fun PartyCombatScreen(
     var selectedStatusEffectForDetail by remember { mutableStateOf<CombatStatusEffect?>(null) }
     var isAutoBattle by remember { mutableStateOf(false) }
     var showTacticalOverlayMenu by remember { mutableStateOf(false) }
+    var showTacticalContextDetails by remember { mutableStateOf(false) }
+    val combatScrollState = rememberScrollState()
 
     // Sync FX animation speed with session speed
     LaunchedEffect(session.animationSpeedMultiplier) {
@@ -220,7 +224,7 @@ fun PartyCombatScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Main Combat Layout with Screen Shake and Camera Impact Scale
+        // Main Combat Layout with Smooth Scrolling and Screen Shake
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -229,187 +233,206 @@ fun PartyCombatScreen(
                     rotationZ = shakeRot
                 }
                 .offset { IntOffset(shakeX.roundToInt(), shakeY.roundToInt()) }
-                .padding(10.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+                .verticalScroll(combatScrollState)
+                .padding(horizontal = 8.dp, vertical = 6.dp)
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // --- TOP BAR: TITLE, ROUND, SYNERGIES, AUDIO, LOGS, FLEE ---
+            // --- STREAMLINED TACTICAL COMBAT TOP BAR ---
             Card(
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xCC1A0D22)),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                colors = CardDefaults.cardColors(containerColor = Color(0xDD180A22)),
+                border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.35f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    // Row 1: Battle Identity & Controls
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (session.totalWaves > 1) {
+                        // Left: Wave + Round + Encounter Title
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            if (session.totalWaves > 1) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFF6A1B9A),
+                                    border = BorderStroke(0.5.dp, Color(0xFFFFD700))
+                                ) {
+                                    Text(
+                                        "🌊 ${session.currentWave}/${session.totalWaves}",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Color(0xFFFFD700),
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
-                                color = Color(0xFF7B1FA2),
-                                border = BorderStroke(1.dp, Color(0xFFFFD700))
+                                color = Color(0xFFC2185B)
                             ) {
                                 Text(
-                                    "🌊 VLNA ${session.currentWave}/${session.totalWaves}",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = Color(0xFFFFD700),
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    "K${session.currentRound}",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                                 )
                             }
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = Color(0xFFC2185B)
-                        ) {
-                            Text(
-                                "KOLO ${session.currentRound}",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-
-                        Column {
                             Text(
                                 text = session.encounterTitle,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp,
                                 color = Color(0xFFFFD700),
-                                maxLines = 1
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.widthIn(max = 135.dp)
                             )
-                            if (session.activeSynergies.isNotEmpty()) {
+                        }
+
+                        // Right: Tactical Action Controls
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            // Auto-Battle Toggle
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (isAutoBattle) Color(0xFF00E676).copy(alpha = 0.2f) else Color.Transparent,
+                                border = BorderStroke(0.5.dp, if (isAutoBattle) Color(0xFF00E676) else Color.Transparent)
+                            ) {
+                                IconButton(
+                                    onClick = {
+                                        HapticManager.vibrateClick()
+                                        isAutoBattle = !isAutoBattle
+                                    },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isAutoBattle) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                        contentDescription = "Auto-Battle",
+                                        tint = if (isAutoBattle) Color(0xFF00E676) else Color.Gray,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+
+                            // Speed Multiplier
+                            val speeds = listOf(1.0f, 1.5f, 2.0f)
+                            val speedLabels = listOf("1x", "1.5x", "2x")
+                            val speedIdx = speeds.indexOf(session.animationSpeedMultiplier).coerceAtLeast(0)
+                            TextButton(
+                                onClick = {
+                                    HapticManager.vibrateClick()
+                                    val nextIdx = (speedIdx + 1) % speeds.size
+                                    onSessionUpdated(session.copy(animationSpeedMultiplier = speeds[nextIdx]))
+                                },
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                modifier = Modifier.height(26.dp)
+                            ) {
                                 Text(
-                                    text = session.activeSynergies.joinToString(" • ") { "${it.icon} ${it.name}" },
-                                    fontSize = 9.sp,
-                                    color = Color(0xFFFF80AB),
-                                    maxLines = 1
+                                    text = speedLabels[speedIdx],
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFFFF80AB)
+                                )
+                            }
+
+                            // Sound Mute Toggle
+                            IconButton(
+                                onClick = {
+                                    HapticManager.vibrateClick()
+                                    SoundEffectManager.toggleMute()
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                                    contentDescription = "Zvuk",
+                                    tint = if (isMuted) Color.Red else Color(0xFFFFD700),
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+
+                            // Combat Logs Modal
+                            IconButton(
+                                onClick = {
+                                    HapticManager.vibrateClick()
+                                    showLogsModal = true
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                BadgedBox(badge = {
+                                    if (session.combatLogs.isNotEmpty()) {
+                                        Badge(
+                                            containerColor = Color(0xFFC2185B),
+                                            contentColor = Color.White
+                                        ) {
+                                            Text("${session.combatLogs.size}", fontSize = 7.sp)
+                                        }
+                                    }
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Default.HistoryEdu,
+                                        contentDescription = "Deník",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                }
+                            }
+
+                            // Tactical Overlay Menu
+                            IconButton(
+                                onClick = {
+                                    HapticManager.vibrateClick()
+                                    showTacticalOverlayMenu = true
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.GpsFixed,
+                                    contentDescription = "Taktické menu",
+                                    tint = Color(0xFFFFD700),
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+
+                            // Retreat
+                            IconButton(
+                                onClick = {
+                                    HapticManager.vibrateClick()
+                                    coroutineScope.launch {
+                                        val (next, _) = PartyCombatManager.executeRetreat(session)
+                                        onSessionUpdated(next)
+                                    }
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                                    contentDescription = "Ústup",
+                                    tint = Color(0xFFFF8A80),
+                                    modifier = Modifier.size(15.dp)
                                 )
                             }
                         }
                     }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        IconButton(
-                            onClick = { isAutoBattle = !isAutoBattle },
-                            modifier = Modifier.size(30.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isAutoBattle) Icons.Default.PlayArrow else Icons.Default.Pause,
-                                contentDescription = "Auto-Battle",
-                                tint = if (isAutoBattle) Color(0xFF69F0AE) else Color.Gray,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Animation Speed Toggle
-                        val speeds = listOf(1.0f, 1.5f, 2.0f)
-                        val speedLabels = listOf("1x", "1.5x", "2x")
-                        val speedIdx = speeds.indexOf(session.animationSpeedMultiplier).coerceAtLeast(0)
-
-                        IconButton(
-                            onClick = {
-                                val nextIdx = (speedIdx + 1) % speeds.size
-                                onSessionUpdated(session.copy(animationSpeedMultiplier = speeds[nextIdx]))
-                            },
-                            modifier = Modifier.size(30.dp)
-                        ) {
-                            Text(
-                                text = speedLabels[speedIdx],
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFC2185B)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { SoundEffectManager.toggleMute() },
-                            modifier = Modifier.size(30.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
-                                contentDescription = "Zvuk",
-                                tint = if (isMuted) Color.Red else Color(0xFFFFD700),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { showElementalSynergyModal = true },
-                            modifier = Modifier.size(30.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Shield,
-                                contentDescription = "Elementární Synergie",
-                                tint = if (session.elementalSynergies.isNotEmpty()) Color(0xFF69F0AE) else Color(0xFFB388FF),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { showLogsModal = true },
-                            modifier = Modifier.size(30.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.HistoryEdu,
-                                contentDescription = "Deník",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { showTacticalOverlayMenu = true },
-                            modifier = Modifier.size(30.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.GpsFixed,
-                                contentDescription = "Taktické menu",
-                                tint = Color(0xFFFFD700),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { showTacticalOverlayMenu = true },
-                            modifier = Modifier.size(30.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                                contentDescription = "Ústup",
-                                tint = Color(0xFFFF8A80),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // --- ELEMENTAL SYNERGY PASSIVE BUFFS BANNER ---
-            if (session.elementalSynergies.isNotEmpty()) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xD8200D35),
-                    border = BorderStroke(1.dp, Color(0xFFAB47BC).copy(alpha = 0.6f)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showElementalSynergyModal = true }
-                ) {
+                    // Row 2: Compact Tactical Context Strip (Climate + Synergies + Hazard in 1 Line)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0x66000000))
+                            .padding(horizontal = 6.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -418,81 +441,159 @@ fun PartyCombatScreen(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("🛡️", fontSize = 12.sp)
-                            Text(
-                                text = "Elementární Synergie: " + session.elementalSynergies.joinToString(" • ") { "${it.icon} ${it.name} (-${(it.damageResistancePercent * 100).toInt()}%)" },
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFFE1BEE7),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Text(
-                            text = "INFO ➔",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFFFD54F)
-                        )
-                    }
-                }
-            }
+                            // Climate Chip
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0x33FFD700),
+                                modifier = Modifier.clickable {
+                                    HapticManager.vibrateClick()
+                                    showTacticalContextDetails = !showTacticalContextDetails
+                                }
+                            ) {
+                                Text(
+                                    text = "${session.weather.icon} ${session.weather.name}",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFFD700),
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+                            }
 
-            // --- DYNAMIC WEATHER & STATUS EFFECT BANNER ---
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = Color(0x991C0E28),
-                border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.3f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(session.weather.icon, fontSize = 16.sp)
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Klima: ${session.weather.name}",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFFFD700)
-                            )
-                            if (session.weather.statusEffectName != null) {
+                            // Synergy Chip (if any)
+                            if (session.elementalSynergies.isNotEmpty()) {
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
-                                    color = Color(0xFFC2185B).copy(alpha = 0.7f)
+                                    color = Color(0x44AB47BC),
+                                    modifier = Modifier.clickable {
+                                        HapticManager.vibrateClick()
+                                        showElementalSynergyModal = true
+                                    }
                                 ) {
                                     Text(
-                                        text = session.weather.statusEffectName!!,
-                                        fontSize = 8.sp,
+                                        text = "🛡️ ${session.elementalSynergies.size} syn",
+                                        fontSize = 9.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                        color = Color(0xFFE1BEE7),
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+
+                            // Hazard Chip (if hazard is present)
+                            session.environmentalHazard?.let { haz ->
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color(0x44EF5350),
+                                    modifier = Modifier.clickable {
+                                        HapticManager.vibrateClick()
+                                        showTacticalContextDetails = !showTacticalContextDetails
+                                    }
+                                ) {
+                                    Text(
+                                        text = "⚠️ ${haz.name} (${session.hazardCountdown}k)",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFFF8A80),
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                                     )
                                 }
                             }
                         }
-                        Text(
-                            text = session.weather.description,
-                            fontSize = 9.sp,
-                            color = Color(0xFFE1BEE7),
-                            maxLines = 1
-                        )
+
+                        // Toggle Info Details button
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable {
+                                HapticManager.vibrateClick()
+                                showTacticalContextDetails = !showTacticalContextDetails
+                            }
+                        ) {
+                            Text(
+                                text = if (showTacticalContextDetails) "Sbalit ▲" else "Detaily ▼",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFFFD54F)
+                            )
+                        }
+                    }
+
+                    // Expandable Details (Full synergy, weather & hazard banners)
+                    AnimatedVisibility(
+                        visible = showTacticalContextDetails,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.padding(top = 4.dp)
+                        ) {
+                            // Full Synergies info if any
+                            if (session.elementalSynergies.isNotEmpty()) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xD8200D35),
+                                    border = BorderStroke(1.dp, Color(0xFFAB47BC).copy(alpha = 0.6f)),
+                                    modifier = Modifier.fillMaxWidth().clickable { showElementalSynergyModal = true }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "🛡️ Elementární Synergie: " + session.elementalSynergies.joinToString(" • ") { "${it.icon} ${it.name} (-${(it.damageResistancePercent * 100).toInt()}%)" },
+                                            fontSize = 9.5.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color(0xFFE1BEE7),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Text("INFO ➔", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFD54F))
+                                    }
+                                }
+                            }
+
+                            // Full Climate info
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0x991C0E28),
+                                border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.3f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(session.weather.icon, fontSize = 14.sp)
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Klima: ${session.weather.name}",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFFFFD700)
+                                        )
+                                        Text(
+                                            text = session.weather.description,
+                                            fontSize = 8.5.sp,
+                                            color = Color(0xFFE1BEE7),
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Hazard Banner
+                            EnvironmentalHazardBanner(
+                                hazard = session.environmentalHazard,
+                                countdown = session.hazardCountdown,
+                                lastTriggerMessage = session.lastHazardTriggerMessage
+                            )
+                        }
                     }
                 }
             }
-
-            // --- ENVIRONMENTAL HAZARDS & TERRAIN MODIFIERS BANNER ---
-            EnvironmentalHazardBanner(
-                hazard = session.environmentalHazard,
-                countdown = session.hazardCountdown,
-                lastTriggerMessage = session.lastHazardTriggerMessage
-            )
 
             // --- ENEMY BATTLE LINE ---
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -661,6 +762,80 @@ fun PartyCombatScreen(
                     }
                 }
             )
+
+            // Extra breathing space for floating controls & navigation bars
+            Spacer(modifier = Modifier.height(60.dp))
+        }
+
+        // Floating Quick-Scroll Buttons (Smooth Navigation Up/Down in Battle)
+        val showScrollToTop by remember {
+            derivedStateOf { combatScrollState.value > 220 }
+        }
+        val showScrollToActions by remember {
+            derivedStateOf { combatScrollState.value < (combatScrollState.maxValue - 200) && combatScrollState.maxValue > 300 }
+        }
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 12.dp, bottom = 16.dp)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AnimatedVisibility(
+                    visible = showScrollToTop,
+                    enter = fadeIn() + scaleIn(),
+                    exit = fadeOut() + scaleOut()
+                ) {
+                    FloatingActionButton(
+                        onClick = {
+                            HapticManager.vibrateClick()
+                            coroutineScope.launch {
+                                combatScrollState.animateScrollTo(0)
+                            }
+                        },
+                        containerColor = Color(0xEE2A123D),
+                        contentColor = Color(0xFFFFD700),
+                        shape = CircleShape,
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowUp,
+                            contentDescription = "Nahoru k nepřátelům",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = showScrollToActions,
+                    enter = fadeIn() + scaleIn(),
+                    exit = fadeOut() + scaleOut()
+                ) {
+                    ExtendedFloatingActionButton(
+                        onClick = {
+                            HapticManager.vibrateClick()
+                            coroutineScope.launch {
+                                combatScrollState.animateScrollTo(combatScrollState.maxValue)
+                            }
+                        },
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f),
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.height(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("K akcím", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
     }
 
@@ -759,6 +934,20 @@ fun PartyCombatScreen(
                 coroutineScope.launch {
                     val (next, _) = PartyCombatManager.executeRally(session)
                     fxState.triggerAbility(CombatAbilityType.HAREM_SUPPORT, "Bojový Pokřik", coroutineScope)
+                    onSessionUpdated(next)
+                }
+            },
+            onActivateAffinityBuff = {
+                showTacticalOverlayMenu = false
+                coroutineScope.launch {
+                    val (next, _) = PartyCombatManager.executeCharacterAffinityBuff(session)
+                    fxState.triggerAbility(CombatAbilityType.CHAR_SPECIAL, activeMember?.characterSpecificBuffName ?: "Afinitní Buff", coroutineScope, isCritical = true)
+                    fxState.triggerFloatingText(
+                        text = "+40% Síla & Buff",
+                        isHeal = true,
+                        isEnemyTarget = false,
+                        scope = coroutineScope
+                    )
                     onSessionUpdated(next)
                 }
             },

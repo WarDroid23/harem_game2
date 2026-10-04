@@ -123,6 +123,31 @@ object HapticManager {
     }
 
     /**
+     * Powerful multi-stage vibration for high-damage special abilities and ultimate combo triggers.
+     */
+    fun vibrateUltimateExplosion() {
+        if (!isHapticsEnabled) return
+        try {
+            val ctx = appContext ?: return
+            val vibrator = getVibrator(ctx) ?: return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(
+                    VibrationEffect.createWaveform(
+                        longArrayOf(0, 50, 40, 80, 50, 150),
+                        intArrayOf(0, 180, 0, 255, 0, 255),
+                        -1
+                    )
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(250)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error vibrating ultimate explosion", e)
+        }
+    }
+
+    /**
      * Miss / Evasion haptic feedback with a very short, sharp pulse.
      */
     fun vibrateMiss() {

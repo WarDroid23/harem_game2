@@ -34,6 +34,7 @@ import com.example.haremdark.data.StaticData
 import com.example.haremdark.data.BondTierCatalog
 import com.example.haremdark.domain.HapticManager
 import com.example.haremdark.domain.SoundEffectManager
+import com.example.haremdark.ui.sound.LocalSoundManager
 import com.example.haremdark.models.Character
 import com.example.haremdark.models.getRelationship
 
@@ -126,6 +127,7 @@ fun CharacterCard(
         val archetype = StaticData.ARCHETYPES[character.archetypeId]
         val phase = StaticData.DEGRADATION_PHASES[character.fazeZkazenosti]
         val bondPalette = BondTierCatalog.getActivePalette(character)
+        val soundManager = LocalSoundManager.current
         val bondTier = BondTierCatalog.getTierForAffinity(character.affinityPoints)
         val palettePrimaryColor = Color(bondPalette.primaryColorHex)
 
@@ -139,7 +141,7 @@ fun CharacterCard(
                     shape = RoundedCornerShape(16.dp)
                 )
                 .clickable {
-                    SoundEffectManager.playRelationshipTier(bondTier.tierLevel)
+                    soundManager.playCharacterSelection(character.name, character.voicePackId)
                     HapticManager.vibrateClick()
                     onDetailClick()
                 },

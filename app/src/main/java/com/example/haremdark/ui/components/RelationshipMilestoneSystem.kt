@@ -143,17 +143,26 @@ fun RelationshipMilestoneSystem(
                 
                 HorizontalDivider(alpha = 0.1f)
 
+                val charSpecificBuff = AffinityData.getCharacterSpecificBuff(character.archetypeId, currentTier.level)
+
                 MilestoneBenefitRow(
-                    icon = "💬",
-                    label = "Unikátní dialogy:",
-                    value = "Odemčeno ${currentTier.level} sad reakcí",
-                    color = Color(currentTier.colorHex)
+                    icon = charSpecificBuff.icon,
+                    label = "Unikátní bojová schopnost:",
+                    value = "${charSpecificBuff.name}: ${charSpecificBuff.perkEffectSummary}",
+                    color = Color(0xFFFFD700)
                 )
 
                 MilestoneBenefitRow(
                     icon = "⚔️",
-                    label = "Bojová synergie:",
+                    label = "Bojová synergie & pasivky:",
                     value = currentTier.combatBonusDescription,
+                    color = Color(currentTier.colorHex)
+                )
+
+                MilestoneBenefitRow(
+                    icon = "💬",
+                    label = "Unikátní dialogy:",
+                    value = "Odemčeno ${currentTier.level} sad reakcí",
                     color = Color(currentTier.colorHex)
                 )
 

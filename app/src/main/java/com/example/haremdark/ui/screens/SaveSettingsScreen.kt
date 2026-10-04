@@ -295,87 +295,9 @@ fun SaveSettingsScreen(
             }
         }
 
-        // Dedicated Audio Volume Settings Card
+        // Dedicated SoundManager Control & Live Soundboard Card
         item {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.VolumeUp,
-                            contentDescription = "Zvuk",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Column {
-                            Text(
-                                "Nastavení zvuků & hlasitosti",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                "Nezávisle uprav hlasitost hudby, efektů a hlasů",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-
-                    // BGM Volume Slider
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("🎵 Hudba v pozadí / Atmosféra", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                            Text("${(bgmVolume * 100).toInt()}%", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                        }
-                        Slider(
-                            value = bgmVolume,
-                            onValueChange = { SoundEffectManager.setBgmVolume(it) },
-                            valueRange = 0f..1f
-                        )
-                    }
-
-                    // SFX Volume Slider
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("🔔 Zvukové efekty UI & Boje (SFX)", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                            Text("${(sfxVolume * 100).toInt()}%", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                        }
-                        Slider(
-                            value = sfxVolume,
-                            onValueChange = { SoundEffectManager.setSfxVolume(it) },
-                            valueRange = 0f..1f
-                        )
-                    }
-
-                    // Voice Clips Volume Slider
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("🗣️ Hlasy a hlášky postav", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                            Text("${(voiceVolume * 100).toInt()}%", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                        }
-                        Slider(
-                            value = voiceVolume,
-                            onValueChange = { SoundEffectManager.setVoiceVolume(it) },
-                            valueRange = 0f..1f
-                        )
-                    }
-                }
-            }
+            com.example.haremdark.ui.sound.SoundManagerControlCard()
         }
 
         // Text-to-Speech (TTS) Configuration Card

@@ -94,6 +94,7 @@ fun ActiveCombatView(
     var selectedActionCategory by remember { mutableIntStateOf(0) }
     var showFullHistoryModal by remember { mutableStateOf(false) }
     var showTacticalOverlayMenu by remember { mutableStateOf(false) }
+    var showRadialSwapDialog by remember { mutableStateOf(false) }
     var selectedStatusTooltip by remember { mutableStateOf<String?>(null) }
     var selectedStatusForDetailDialog by remember { mutableStateOf<CombatStatusEffect?>(null) }
 
@@ -942,6 +943,28 @@ fun ActiveCombatView(
                 showTacticalOverlayMenu = false
                 engine.executeCombatTurn("flee")
             }
+        )
+    }
+
+    // Floating Radial Character Swap Button
+    FloatingActionButton(
+        onClick = { showRadialSwapDialog = true },
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+        modifier = Modifier
+            .fillMaxSize()
+            .wrapContentSize(Alignment.BottomEnd)
+            .padding(bottom = 90.dp, end = 16.dp)
+    ) {
+        Icon(Icons.Default.Autorenew, contentDescription = "Rychlá výměna bojovnice")
+    }
+
+    if (showRadialSwapDialog) {
+        CombatRadialCharacterSwapDialog(
+            gameState = gameState,
+            engine = engine,
+            currentDeployedId = session.deployedCharacterId,
+            onDismiss = { showRadialSwapDialog = false }
         )
     }
 }

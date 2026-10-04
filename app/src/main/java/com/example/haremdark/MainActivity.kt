@@ -43,6 +43,7 @@ import com.example.haremdark.domain.NavSound
 import kotlinx.coroutines.launch
 
 import com.example.haremdark.ui.theme.HaremDarkTheme
+import com.example.haremdark.ui.sound.*
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -109,13 +110,17 @@ class MainActivity : ComponentActivity() {
 
             val activeDomainId = gameState.currentDomainId
 
-            HaremDarkTheme(
-                themeName = currentTheme,
-                isLightMode = isLightMode,
-                activeCharacter = activeGirl,
-                activeDomainId = activeDomainId
-            ) {
-                ModalNavigationDrawer(
+            val soundManager = rememberSoundManager()
+            var showSoundManagerDialog by remember { mutableStateOf(false) }
+
+            CompositionLocalProvider(LocalSoundManager provides soundManager) {
+                HaremDarkTheme(
+                    themeName = currentTheme,
+                    isLightMode = isLightMode,
+                    activeCharacter = activeGirl,
+                    activeDomainId = activeDomainId
+                ) {
+                    ModalNavigationDrawer(
                     drawerState = drawerState,
                     drawerContent = {
                         ModalDrawerSheet(
@@ -631,9 +636,9 @@ class MainActivity : ComponentActivity() {
                                 )
                                 QuickNavDrawerItem(
                                     icon = Icons.Default.ShowChart,
-                                    title = "Analýza Výkonu (30 dní)",
-                                    subtitle = "Trendy produkce a morálka harému",
-                                    isSelected = currentRoute == "dashboard_charts",
+                                    title = "Správa Surovin & Vlivu (Grafy)",
+                                    subtitle = "Vico grafy růstu měny, materiálů a vlivu",
+                                    isSelected = currentRoute in listOf("dashboard_charts", "resource_dashboard"),
                                     onClick = {
                                         coroutineScope.launch { drawerState.close() }
                                         SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
@@ -649,6 +654,17 @@ class MainActivity : ComponentActivity() {
                                         coroutineScope.launch { drawerState.close() }
                                         SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
                                         navController.navigate("skill_tree") { launchSingleTop = true }
+                                    }
+                                )
+                                QuickNavDrawerItem(
+                                    icon = Icons.Default.Shield,
+                                    title = "Vybavení Postav (Sloty)",
+                                    subtitle = "Nasaď zbraně, zbroje a relikvie z událostí",
+                                    isSelected = currentRoute in listOf("equipment", "gear_management"),
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        SoundEffectManager.playNavigation(NavSound.MENU_CLICK)
+                                        navController.navigate("equipment") { launchSingleTop = true }
                                     }
                                 )
 
@@ -784,6 +800,17 @@ class MainActivity : ComponentActivity() {
                                     }
                                 )
                                 QuickNavDrawerItem(
+                                    icon = Icons.Default.VolumeUp,
+                                    title = "Správce Zvuku",
+                                    subtitle = "Hudba, atmosféra & zvukové efekty",
+                                    isSelected = false,
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        soundManager.playMenuClick()
+                                        showSoundManagerDialog = true
+                                    }
+                                )
+                                QuickNavDrawerItem(
                                     icon = Icons.Default.Hub,
                                     title = "Síť Vztahů (Graph)",
                                     subtitle = "Konstelace harému & synergie",
@@ -803,23 +830,21 @@ class MainActivity : ComponentActivity() {
                     Scaffold(
                         snackbarHost = { SnackbarHost(snackbarHostState) },
                         topBar = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
-                                    Icon(Icons.Default.Menu, contentDescription = "Menu")
+                            GameTopBar(
+                                player = gameState.player,
+                                onMenuClick = { coroutineScope.launch { drawerState.open() } },
+                                timeOfDayDay = gameState.player.day,
+                                soundManager = soundManager,
+                                onOpenSoundSettings = { showSoundManagerDialog = true },
+                                onRestClick = { showRestDialog = true },
+                                onQuickSaveClick = { 
+                                    coroutineScope.launch {
+                                        engine.quickSaveSuspend()
+                                        snackbarHostState.showSnackbar("💾 Uloženo do DataStore (Pán, ${gameState.characters.size} dívek, výbava)")
+                                        Toast.makeText(context, "⚡ DataStore: Rychlé uložení dokončeno!", Toast.LENGTH_SHORT).show()
+                                    }
                                 }
-                                GameTopBar(
-                                    player = gameState.player,
-                                    onRestClick = { showRestDialog = true },
-                                    onQuickSaveClick = { 
-                                        coroutineScope.launch {
-                                            engine.quickSaveSuspend()
-                                            snackbarHostState.showSnackbar("💾 Uloženo do DataStore (Pán, ${gameState.characters.size} dívek, výbava)")
-                                            Toast.makeText(context, "⚡ DataStore: Rychlé uložení dokončeno!", Toast.LENGTH_SHORT).show()
-                                        }
-                                    },
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
+                            )
                         },
                     bottomBar = {
                         NavigationBar(
@@ -1017,6 +1042,13 @@ class MainActivity : ComponentActivity() {
                             composable("achievements") {
                                 com.example.haremdark.ui.screens.AchievementScreen(gameState = gameState, engine = engine, onMenuClick = { coroutineScope.launch { drawerState.open() } })
                             }
+                            composable("character_stats_summary") {
+                                com.example.haremdark.ui.screens.CharacterStatsSummaryScreen(
+                                    gameState = gameState,
+                                    engine = engine,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
                             composable("guild") {
                                 GuildScreen(engine = engine)
                             }
@@ -1093,6 +1125,12 @@ class MainActivity : ComponentActivity() {
                                     onBack = { navController.popBackStack() }
                                 )
                             }
+                            composable("resource_dashboard") {
+                                DashboardChartScreen(
+                                    engine = engine,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
                             composable("skill_tree") {
                                 SkillTreeScreen(
                                     engine = engine,
@@ -1105,6 +1143,51 @@ class MainActivity : ComponentActivity() {
                                     engine = engine,
                                     onBack = { navController.popBackStack() }
                                 )
+                            }
+                            composable("equipment") {
+                                EquipmentScreen(
+                                    gameState = gameState,
+                                    engine = engine,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable("gear_management") {
+                                EquipmentScreen(
+                                    gameState = gameState,
+                                    engine = engine,
+                                    onBack = { navController.popBackStack() }
+                                )
+                            }
+                            composable("sound_manager") {
+                                Scaffold(
+                                    topBar = {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            IconButton(onClick = { navController.popBackStack() }) {
+                                                Icon(Icons.Default.ArrowBack, contentDescription = "Zpět")
+                                            }
+                                            Text(
+                                                "Správce Zvuku & Atmosféry",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                ) { padding ->
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(padding)
+                                            .padding(16.dp)
+                                            .verticalScroll(rememberScrollState())
+                                    ) {
+                                        SoundManagerControlCard(soundManager = soundManager)
+                                    }
+                                }
                             }
                         }
 
@@ -1196,6 +1279,15 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 }
+
+                // SoundManager Control Dialog
+                if (showSoundManagerDialog) {
+                    SoundManagerDialog(
+                        onDismissRequest = { showSoundManagerDialog = false },
+                        soundManager = soundManager
+                    )
+                }
+                    }
                 }
             }
         }

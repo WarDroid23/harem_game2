@@ -1820,7 +1820,8 @@ class GameEngine(private val context: Context) {
 
         val tierInfo = com.example.haremdark.data.AffinityData.getTierForPoints(character.affinityPoints)
         val levelUpAnnouncement = if (newAffinityLevel > prevAffinityLevel) {
-            "\n🌟 Pouto posíleno! ${character.name} dosáhla úrovně vztahu ${tierInfo.level}: ${tierInfo.title}! ${tierInfo.combatBonusDescription}"
+            val buff = com.example.haremdark.data.AffinityData.getCharacterSpecificBuff(character.archetypeId, newAffinityLevel)
+            "\n🌟 Pouto posíleno! ${character.name} dosáhla milníku vztahu ${tierInfo.level}: ${tierInfo.title}!\n🏆 Odemčena unikátní bojová schopnost '${buff.icon} ${buff.name}': ${buff.perkEffectSummary} (${tierInfo.combatBonusDescription})!"
         } else ""
 
         // Unique unlocked dialogue based on affinity tier & archetype
@@ -4257,9 +4258,14 @@ class GameEngine(private val context: Context) {
             checkAndUnlockBondSkin(updatedChar)
         }
         
+        val milestoneToast = if (newAffinityLvl > prevAffinityLevel) {
+            val buff = com.example.haremdark.data.AffinityData.getCharacterSpecificBuff(character.archetypeId, newAffinityLvl)
+            "\n🏆 Dosažen milník náklonnosti (Úroveň $newAffinityLvl)! Odemčena bojová schopnost '${buff.icon} ${buff.name}': ${buff.perkEffectSummary}!"
+        } else ""
+
         addPlayerXp(12)
         progressMission("GIFT", 1, characterId = characterId)
-        return Pair(true, msg)
+        return Pair(true, "$msg$milestoneToast")
     }
 
     private fun checkAndUnlockBondSkin(character: Character) {
@@ -5070,6 +5076,28 @@ class GameEngine(private val context: Context) {
             hazardCountdown = environmentalHazard.triggerIntervalTurns
         )
         SoundEffectManager.playCombat(CombatSound.COMBAT_START)
+    }
+
+    fun switchCombatCharacter(characterId: String) {
+        val session = _combatState.value ?: return
+        val currentGameState = _gameState.value
+        val newChar = currentGameState.characters.firstOrNull { it.id == characterId } ?: return
+
+        val updatedEntries = listOf(
+            CombatLogEntry(
+                turn = session.turnCount,
+                type = "system",
+                message = "🔄 Střídání v boji: Do první linie nastoupila ${newChar.name} (${newChar.role})!"
+            )
+        ) + session.logEntries
+
+        _combatState.value = session.copy(
+            deployedCharacterId = characterId,
+            logEntries = updatedEntries,
+            log = updatedEntries.map { it.message }
+        )
+        SoundEffectManager.playCharacterVoice(newChar.id, com.example.haremdark.domain.CharacterVoiceType.TAP_GREETING)
+        autoSave()
     }
 
     fun executeCombatTurn(action: String, itemId: String? = null) {
@@ -6570,8 +6598,6 @@ class GameEngine(private val context: Context) {
         val newUnlocks = mutableListOf<String>()
         val currentUnlocks = player.unlockedAchievements.toMutableList()
 
-        val allAchs = com.example.haremdark.models.AchievementList.allAchievements
-        
         fun award(id: String) {
             if (!currentUnlocks.contains(id)) {
                 currentUnlocks.add(id)
@@ -6579,33 +6605,72 @@ class GameEngine(private val context: Context) {
             }
         }
 
-        // Conditions
+        // Combat Milestones
+        if (player.battlesWon >= 1) award("ach_first_win")
+        if (player.battlesWon >= 10) award("ach_battles_10")
         if (player.battlesWon >= 100) award("ach_battles_100")
+        if (current.defeatedBosses.size >= 3) award("ach_boss_slayer")
+        if (current.characters.any { it.level >= 10 }) award("ach_arena_champion")
+
+        // Relationship & Harem Milestones
+        if (current.characters.any { com.example.haremdark.models.BondingLevel.fromAffinity(it.affinityPoints).ordinal + 1 >= 2 }) award("ach_first_love")
+        if (current.characters.any { com.example.haremdark.models.BondingLevel.fromAffinity(it.affinityPoints).ordinal + 1 >= 4 }) award("ach_rel_soulmate")
         if (current.characters.any { it.affinityPoints >= 100 }) award("ach_max_affinity")
+        if (current.characters.size >= 5) award("ach_harem_5")
         if (current.characters.size >= 10) award("ach_harem_10")
         if (current.characters.size >= 20) award("ach_harem_20")
-        
         val totalAffinity = current.characters.sumOf { it.affinityPoints }
         if (totalAffinity >= 250) award("ach_affinity_total")
-        
-        if (current.defeatedBosses.size >= 3) award("ach_boss_slayer")
-        
-        if (current.characters.any { it.level >= 10 }) award("ach_arena_champion")
-        
+        if (current.characters.any { it.getRelationship() == com.example.haremdark.models.RelStatus.BLOOD_SISTER }) award("ach_blood_sister")
+
+        // Wealth Milestones
+        if (player.gold >= 1000) award("ach_wealth_1k")
         if (player.gold >= 10000) award("ach_wealthy")
-        
+
+        // Dominion Milestones
         val fortressLevel = current.buildings.firstOrNull { it.type == "pevnost" }?.level ?: 1
         if (fortressLevel >= 5) award("ach_domain_max")
-        
-        if (current.characters.any { it.getRelationship() == com.example.haremdark.models.RelStatus.BLOOD_SISTER }) award("ach_blood_sister")
-        
+        if (current.buildings.sumOf { it.level } >= 10) award("ach_buildings_10")
+
+        // Exploration Milestones
+        if (current.completedQuests.size >= 10 || current.gameLog.size >= 10) award("ach_events_10")
+
         if (newUnlocks.isNotEmpty()) {
             val updatedPlayer = player.copy(unlockedAchievements = currentUnlocks)
             updateState { it.copy(player = updatedPlayer) }
+            SoundEffectManager.playHarem(HaremSound.SKILL_UNLOCK)
             autoSave()
         }
-        
+
         return newUnlocks
+    }
+
+    fun claimAchievementReward(achievementId: String): Boolean {
+        val ach = com.example.haremdark.models.AchievementList.allAchievements.find { it.id == achievementId }
+            ?: return false
+        val current = _gameState.value
+        if (!current.player.unlockedAchievements.contains(achievementId)) return false
+
+        var success = false
+        updateState { state ->
+            val updatedPlayer = state.player.copy(
+                gold = state.player.gold + ach.rewardGold,
+                xp = state.player.xp + ach.rewardXp
+            )
+            val titleToSet = ach.titleReward ?: (if (ach.isTitle) ach.id else null)
+            val finalPlayer = if (state.player.activeTitle == null && titleToSet != null) {
+                updatedPlayer.copy(activeTitle = titleToSet)
+            } else {
+                updatedPlayer
+            }
+            success = true
+            state.copy(player = finalPlayer)
+        }
+        if (success) {
+            SoundEffectManager.playHarem(HaremSound.GIFT)
+            autoSave()
+        }
+        return success
     }
 
     fun setActiveTitle(titleId: String?): Boolean {
@@ -7592,4 +7657,114 @@ class GameEngine(private val context: Context) {
         }
         autoSave()
     }
+
+    // --- RANDOM NARRATIVE EVENT GENERATOR & RESOLUTION ---
+    fun triggerRandomNarrativeEvent(category: EventCategory? = null): NarrativeEvent {
+        val event = RandomNarrativeEventGenerator.generateEvent(_gameState.value, category)
+        addLog("🎲 Spuštěna náhodná událost: '${event.title}' (${event.category.displayName})")
+        return event
+    }
+
+    fun resolveNarrativeEventChoice(event: NarrativeEvent, choiceId: String): Pair<EventOutcome, Boolean> {
+        val choice = event.choices.find { it.id == choiceId } ?: event.choices.first()
+        val current = _gameState.value
+        val player = current.player
+
+        // 1. Deduct Choice Costs
+        if (choice.costGold > 0) player.gold = (player.gold - choice.costGold).coerceAtLeast(0)
+        if (choice.costDarkEnergy > 0) player.darkEnergy = (player.darkEnergy - choice.costDarkEnergy).coerceAtLeast(0)
+        if (choice.costSexEnergy > 0) player.sexEnergy = (player.sexEnergy - choice.costSexEnergy).coerceAtLeast(0)
+
+        // 2. Evaluate Skill Check if required
+        val isSuccess = if (choice.skillCheck != null) {
+            val skillLvl = player.skills[choice.skillCheck.skillKey] ?: 0
+            val successRate = (choice.skillCheck.baseSuccessPercent + (skillLvl * 10)).coerceIn(10, 95)
+            Random.nextInt(100) < successRate
+        } else {
+            true
+        }
+
+        val outcome = if (isSuccess) choice.successOutcome else (choice.failureOutcome ?: choice.successOutcome)
+
+        // 3. Apply Resource & Progression Deltas
+        player.gold = (player.gold + outcome.goldDelta).coerceAtLeast(0)
+        player.mana = (player.mana + outcome.manaDelta).coerceIn(0, player.maxMana)
+        player.darkEnergy = (player.darkEnergy + outcome.darkEnergyDelta).coerceIn(0, player.maxDarkEnergy)
+        player.sexEnergy = (player.sexEnergy + outcome.sexEnergyDelta).coerceIn(0, player.maxSexEnergy)
+        player.influence = (player.influence + outcome.influenceDelta).coerceIn(0, player.maxInfluence)
+        player.reputation = (player.reputation + outcome.reputationDelta).coerceAtLeast(0)
+        player.inquisitionInfluence = (player.inquisitionInfluence + outcome.inquisitionAlertDelta).coerceIn(0, 100)
+
+        // Materials
+        outcome.materialsReward.forEach { (mat, amt) ->
+            when (mat) {
+                "wood" -> player.wood = (player.wood + amt).coerceAtLeast(0)
+                "stone" -> player.stone = (player.stone + amt).coerceAtLeast(0)
+                "iron" -> player.iron = (player.iron + amt).coerceAtLeast(0)
+                else -> {
+                    val cur = player.craftingResources[mat] ?: 0
+                    player.craftingResources[mat] = (cur + amt).coerceAtLeast(0)
+                }
+            }
+        }
+
+        // Item reward
+        if (outcome.itemReward != null) {
+            player.items.add(outcome.itemReward)
+        }
+
+        // Character recruitment
+        if (outcome.recruitedGirlName != null && outcome.recruitedGirlArchetype != null) {
+            val newChar = Character(
+                id = "c_${java.util.UUID.randomUUID().toString().take(8)}",
+                name = outcome.recruitedGirlName,
+                age = Random.nextInt(19, 26),
+                archetypeId = outcome.recruitedGirlArchetype,
+                hp = 100,
+                maxHp = 100,
+                srdce = 65,
+                poslusnost = 35,
+                vlhkost = 50,
+                submisivita = 35,
+                loajalita = 35,
+                duvera = 30,
+                touha = 55,
+                strach = 30,
+                role = outcome.recruitedGirlRole ?: "Přijatá z události"
+            )
+            updateState { it.copy(characters = it.characters + newChar) }
+        }
+
+        if (outcome.haremExp > 0) addHaremExp(outcome.haremExp)
+        if (outcome.playerXp > 0) addPlayerXp(outcome.playerXp)
+
+        // Morale impact on harem
+        if (outcome.moraleDelta != 0) {
+            updateState { state ->
+                val updatedChars = state.characters.map { c ->
+                    c.copy(morale = (c.morale + outcome.moraleDelta).coerceIn(10, 100))
+                }
+                state.copy(characters = updatedChars)
+            }
+        }
+
+        // Add to influence log if influence changed
+        if (outcome.influenceDelta != 0) {
+            val infEntry = InfluenceLogEntry(
+                day = player.day,
+                characterId = "event_${event.id}",
+                characterName = event.title,
+                choiceDescription = choice.choiceText,
+                influenceChange = outcome.influenceDelta,
+                reason = outcome.outcomeTitle
+            )
+            updateState { it.copy(influenceLog = it.influenceLog + infEntry) }
+        }
+
+        addLog("📜 Událost '${event.title}': ${outcome.logSummary}")
+        autoSave()
+
+        return Pair(outcome, isSuccess)
+    }
 }
+

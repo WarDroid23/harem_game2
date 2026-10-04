@@ -39,7 +39,7 @@ fun ActivitiesScreen(
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("🗺️ Mapa", "🏹 Lov", "🏛️ Dražba", "⚔️ Souboje", "🧪 Alchymie", "📜 Úkoly", "💰 Bounty", "📚 Kodex")
+    val tabs = listOf("🗺️ Mapa", "🎲 Události", "🏹 Lov", "🏛️ Dražba", "⚔️ Souboje", "🧪 Alchymie", "📜 Úkoly", "💰 Bounty", "📚 Kodex")
 
     Column(
         modifier = modifier
@@ -67,13 +67,14 @@ fun ActivitiesScreen(
 
         when (selectedTab) {
             0 -> WorldMapScreen(gameState, engine)
-            1 -> HuntingTab(gameState, engine)
-            2 -> AuctionTab(gameState, engine)
-            3 -> CombatTab(gameState, combatSession, engine)
-            4 -> AlchemyTab(gameState, engine)
-            5 -> QuestsTab(gameState, engine)
-            6 -> BountiesTab(gameState, engine)
-            7 -> CodexTab(gameState, engine)
+            1 -> RandomEncountersScreen(gameState, engine)
+            2 -> HuntingTab(gameState, engine)
+            3 -> AuctionTab(gameState, engine)
+            4 -> CombatTab(gameState, combatSession, engine)
+            5 -> AlchemyTab(gameState, engine)
+            6 -> QuestsTab(gameState, engine)
+            7 -> BountiesTab(gameState, engine)
+            8 -> CodexTab(gameState, engine)
         }
     }
 }

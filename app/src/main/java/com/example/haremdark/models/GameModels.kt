@@ -322,6 +322,18 @@ data class Character(
         if (newSkins.isNotEmpty()) {
             unlockedSkins.addAll(newSkins)
         }
+
+        val calculatedLevel = when {
+            affinityPoints >= 251 -> 6
+            affinityPoints >= 181 -> 5
+            affinityPoints >= 121 -> 4
+            affinityPoints >= 71 -> 3
+            affinityPoints >= 31 -> 2
+            else -> 1
+        }
+        if (calculatedLevel > affinityLevel) {
+            affinityLevel = calculatedLevel
+        }
     }
 
     var loyalty: Int
@@ -687,27 +699,61 @@ fun Character.addStatRecord(record: StatRecord) {
 
 
 
+enum class AchievementCategory(val displayName: String, val icon: String) {
+    ALL("Všechny milníky", "🌟"),
+    COMBAT("Boj & Souboje", "⚔️"),
+    RELATIONSHIPS("Vztahy & Harém", "💞"),
+    DOMINION("Dominium & Budovy", "🏰"),
+    WEALTH("Bohatství & Obchod", "💰"),
+    EXPLORATION("Průzkum & Události", "📜")
+}
+
 @Serializable
 data class Achievement(
     val id: String,
     val title: String,
     val description: String,
     val badgeIcon: String,
-    val isTitle: Boolean = false
-)
+    val isTitle: Boolean = false,
+    val categoryName: String = "COMBAT",
+    val targetValue: Int = 1,
+    val rewardGold: Int = 100,
+    val rewardXp: Int = 50,
+    val titleReward: String? = null
+) {
+    val category: AchievementCategory
+        get() = try { AchievementCategory.valueOf(categoryName) } catch (e: Exception) { AchievementCategory.COMBAT }
+}
 
 object AchievementList {
     val allAchievements = listOf(
-        Achievement("ach_battles_100", "Bůh války", "Vyhraj 100 bitev.", "⚔️", true),
-        Achievement("ach_max_affinity", "Nejhlubší pouto", "Dosáhni maximální náklonnosti (100) u jedné z dívek.", "💞", true),
-        Achievement("ach_harem_10", "Sběratel krásy", "Získej alespoň 10 dívek do svého harému.", "👥", true),
-        Achievement("ach_harem_20", "Pán harému", "Shromáždi ohromných 20 dívek ve svém harému.", "👑", true),
-        Achievement("ach_affinity_total", "Casanova podsvětí", "Dosáhni celkové náklonnosti (Affinity) 250 napříč harémem.", "💖", true),
-        Achievement("ach_boss_slayer", "Ničitel bossů", "Poraz alespoň 3 bosse ve výpravách.", "💀", true),
-        Achievement("ach_arena_champion", "Král Arény", "Dostaň tvou dívku na úroveň 10 pomocí arénových bojů.", "⚔️", true),
-        Achievement("ach_wealthy", "Midasův dotek", "Našetři alespoň 10 000 zlatých.", "💰", true),
-        Achievement("ach_domain_max", "Temný vládce", "Vylepši svou Pevnost na úroveň 5.", "🏰", true),
-        Achievement("ach_blood_sister", "Krvavá přísaha", "Získej dívku se vztahem 'Krvavá sestra'.", "🩸", true)
+        // COMBAT
+        Achievement("ach_first_win", "První krev", "Vyhraj své první bojové střetnutí v dominiu.", "⚔️", isTitle = true, categoryName = "COMBAT", targetValue = 1, rewardGold = 250, rewardXp = 100, titleReward = "První dobyvatel"),
+        Achievement("ach_battles_10", "Osvědčený gladiátor", "Vyhraj 10 bitev v dominiu.", "🗡️", isTitle = false, categoryName = "COMBAT", targetValue = 10, rewardGold = 500, rewardXp = 250),
+        Achievement("ach_battles_100", "Bůh války", "Vyhraj 100 bitev v dominiu.", "⚔️", isTitle = true, categoryName = "COMBAT", targetValue = 100, rewardGold = 2500, rewardXp = 1000, titleReward = "Bůh války"),
+        Achievement("ach_boss_slayer", "Ničitel bossů", "Poraz alespoň 3 nebezpečné bosse ve výpravách.", "💀", isTitle = true, categoryName = "COMBAT", targetValue = 3, rewardGold = 1000, rewardXp = 500, titleReward = "Ničitel bossů"),
+        Achievement("ach_arena_champion", "Král Arény", "Vytrénuj bojovnici v aréně na úroveň 10.", "🏆", isTitle = true, categoryName = "COMBAT", targetValue = 10, rewardGold = 1500, rewardXp = 750, titleReward = "Král Arény"),
+
+        // RELATIONSHIPS
+        Achievement("ach_first_love", "První jiskra", "Dosáhni úrovně vztahu 'Důvěrnice' (Rank 2+) u libovolné dívky.", "🌸", isTitle = false, categoryName = "RELATIONSHIPS", targetValue = 2, rewardGold = 300, rewardXp = 150),
+        Achievement("ach_rel_soulmate", "Spřízněná duše", "Dosáhni úrovně vztahu 'Spřízněná duše' nebo 'Manželka' (Rank 4+).", "💍", isTitle = true, categoryName = "RELATIONSHIPS", targetValue = 4, rewardGold = 1000, rewardXp = 500, titleReward = "Spřízněná duše"),
+        Achievement("ach_max_affinity", "Nejhlubší pouto", "Dosáhni maximální náklonnosti (100) u jedné z dívek.", "💞", isTitle = true, categoryName = "RELATIONSHIPS", targetValue = 100, rewardGold = 2000, rewardXp = 800, titleReward = "Nejhlubší pouto"),
+        Achievement("ach_harem_5", "Krásná společnost", "Shromáždi 5 dívek ve svém harému.", "👥", isTitle = false, categoryName = "RELATIONSHIPS", targetValue = 5, rewardGold = 500, rewardXp = 300),
+        Achievement("ach_harem_10", "Sběratel krásy", "Shromáždi 10 dívek do svého harému.", "👑", isTitle = true, categoryName = "RELATIONSHIPS", targetValue = 10, rewardGold = 1500, rewardXp = 600, titleReward = "Sběratel krásy"),
+        Achievement("ach_harem_20", "Pán harému", "Shromáždi ohromných 20 dívek ve svém harému.", "👑", isTitle = true, categoryName = "RELATIONSHIPS", targetValue = 20, rewardGold = 3500, rewardXp = 1500, titleReward = "Pán harému"),
+        Achievement("ach_affinity_total", "Casanova podsvětí", "Dosáhni celkové náklonnosti 250 napříč všemi dívkami.", "💖", isTitle = true, categoryName = "RELATIONSHIPS", targetValue = 250, rewardGold = 2000, rewardXp = 1000, titleReward = "Casanova podsvětí"),
+        Achievement("ach_blood_sister", "Krvavá přísaha", "Získej dívku se vztahem nebo stavem 'Krvavá sestra'.", "🩸", isTitle = true, categoryName = "RELATIONSHIPS", targetValue = 1, rewardGold = 1500, rewardXp = 700, titleReward = "Krvavá přísaha"),
+
+        // WEALTH
+        Achievement("ach_wealth_1k", "Kupecký start", "Našetři v pokladnici alespoň 1 000 zlatých.", "🪙", isTitle = false, categoryName = "WEALTH", targetValue = 1000, rewardGold = 300, rewardXp = 150),
+        Achievement("ach_wealthy", "Midasův dotek", "Našetři alespoň 10 000 zlatých v pokladnici.", "💰", isTitle = true, categoryName = "WEALTH", targetValue = 10000, rewardGold = 2500, rewardXp = 1000, titleReward = "Midasův dotek"),
+
+        // DOMINION
+        Achievement("ach_domain_max", "Temný vládce", "Vylepši svou Pevnost v dominiu na úroveň 5.", "🏰", isTitle = true, categoryName = "DOMINION", targetValue = 5, rewardGold = 3000, rewardXp = 1200, titleReward = "Temný vládce"),
+        Achievement("ach_buildings_10", "Architekt podsvětí", "Postav nebo vylepši budovy v dominiu celkově 10x.", "🏛️", isTitle = false, categoryName = "DOMINION", targetValue = 10, rewardGold = 800, rewardXp = 400),
+
+        // EXPLORATION
+        Achievement("ach_events_10", "Cestovatel osudu", "Absolvuj a vyřeš 10 náhodných příběhových událostí.", "📜", isTitle = false, categoryName = "EXPLORATION", targetValue = 10, rewardGold = 600, rewardXp = 300)
     )
 }
 
@@ -811,7 +857,11 @@ data class CombatLogEntry(
     val damageDealt: Int = 0,
     val damageCalculation: String? = null,
     val narrativeText: String? = null,
-    val elementalBreakdown: ElementalDamageBreakdown? = null
+    val elementalBreakdown: ElementalDamageBreakdown? = null,
+    val statusEffectsApplied: List<CombatStatusEffect> = emptyList(),
+    val targetName: String = "",
+    val isCritical: Boolean = false,
+    val healingReceived: Int = 0
 )
 
 @Serializable
