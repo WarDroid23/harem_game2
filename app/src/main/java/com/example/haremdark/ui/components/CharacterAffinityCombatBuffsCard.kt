@@ -40,7 +40,8 @@ import com.example.haremdark.domain.HapticManager
 import com.example.haremdark.models.Character
 
 /**
- * Data bundle representing an individual affinity milestone and its unique unlocked combat rewards.
+ * Data bundle representing an individual affinity milestone and its unique unlocked combat rewards
+ * and passive resource generation bonuses.
  */
 data class AffinityMilestoneReward(
     val tierLevel: Int,
@@ -48,11 +49,12 @@ data class AffinityMilestoneReward(
     val characterSpecificBuff: CharacterSpecificBuff,
     val isUnlocked: Boolean,
     val progress: Float,
-    val pointsNeededToUnlock: Int
+    val pointsNeededToUnlock: Int,
+    val resourceBonus: com.example.haremdark.data.AffinityMilestoneBonus? = null
 )
 
 /**
- * Calculates all milestone rewards and cumulative passive bonuses for a character.
+ * Calculates all milestone rewards and cumulative passive combat and resource generation bonuses for a character.
  */
 object AffinityMilestoneCalculator {
 
@@ -62,6 +64,7 @@ object AffinityMilestoneCalculator {
 
         return AffinityData.TIERS.map { tierInfo ->
             val buff = AffinityData.getCharacterSpecificBuff(archetype, tierInfo.level)
+            val res = com.example.haremdark.data.AffinityMilestoneBonusCatalog.getBonusForMilestone(archetype, tierInfo.minPoints)
             val isUnlocked = currentPoints >= tierInfo.minPoints
             val progress = if (tierInfo.minPoints == 0) {
                 1.0f
@@ -76,7 +79,8 @@ object AffinityMilestoneCalculator {
                 characterSpecificBuff = buff,
                 isUnlocked = isUnlocked,
                 progress = progress,
-                pointsNeededToUnlock = pointsNeeded
+                pointsNeededToUnlock = pointsNeeded,
+                resourceBonus = res
             )
         }
     }
@@ -102,6 +106,9 @@ object AffinityMilestoneCalculator {
         val buffHpRegen = activeBuff.hpRegenPerTurn
         val buffDarkEnergy = activeBuff.darkEnergyRegenPerTurn
 
+        // Passive Resource Generation bonuses from unlocked milestones
+        val resBonuses = com.example.haremdark.data.AffinityMilestoneBonusCatalog.getCumulativeResourceBonuses(character)
+
         return CumulativeAffinityCombatBonuses(
             totalHp = tierHp + buffHp,
             totalAttackPercent = tierAtkPercent + buffAtkPercent,
@@ -112,7 +119,13 @@ object AffinityMilestoneCalculator {
             activeBuffName = activeBuff.name,
             activeBuffIcon = activeBuff.icon,
             activeBuffSummary = activeBuff.perkEffectSummary,
-            specialEffectTag = activeBuff.specialEffectTag
+            specialEffectTag = activeBuff.specialEffectTag,
+            totalDailyGold = resBonuses.totalDailyGold,
+            totalDailyMana = resBonuses.totalDailyMana,
+            totalDailyManaEssence = resBonuses.totalDailyManaEssence,
+            totalDailyMaterials = resBonuses.totalDailyMaterials,
+            totalDailyPopulationGrowth = resBonuses.totalDailyPopulationGrowth,
+            activeResourcePerks = resBonuses.activePerks
         )
     }
 }
@@ -127,7 +140,13 @@ data class CumulativeAffinityCombatBonuses(
     val activeBuffName: String,
     val activeBuffIcon: String,
     val activeBuffSummary: String,
-    val specialEffectTag: String
+    val specialEffectTag: String,
+    val totalDailyGold: Int = 0,
+    val totalDailyMana: Int = 0,
+    val totalDailyManaEssence: Int = 0,
+    val totalDailyMaterials: Int = 0,
+    val totalDailyPopulationGrowth: Int = 0,
+    val activeResourcePerks: List<String> = emptyList()
 )
 
 /**
@@ -138,7 +157,8 @@ data class CumulativeAffinityCombatBonuses(
 fun CharacterAffinityCombatBuffsCard(
     character: Character,
     modifier: Modifier = Modifier,
-    onOpenMilestonesList: (() -> Unit)? = null
+    onOpenMilestonesList: (() -> Unit)? = null,
+    onPlayMilestoneAnimation: ((Int) -> Unit)? = null
 ) {
     val currentPoints = character.affinityPoints
     val currentTierLevel = remember(currentPoints) { AffinityData.getLevelForPoints(currentPoints) }
@@ -353,6 +373,58 @@ fun CharacterAffinityCombatBuffsCard(
                 }
             }
 
+            // --- PASSIVE RESOURCE GENERATION ROW ---
+            if (cumulativeBonuses.totalDailyGold > 0 || cumulativeBonuses.totalDailyMana > 0 || cumulativeBonuses.totalDailyMaterials > 0) {
+                Text(
+                    text = "Denní produkce panství z milníků (pasivní zisk):",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.LightGray.copy(alpha = 0.9f)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (cumulativeBonuses.totalDailyGold > 0) {
+                        PassiveStatBadge(
+                            icon = "🪙",
+                            label = "Zlato/den",
+                            value = "+${cumulativeBonuses.totalDailyGold}",
+                            color = Color(0xFFFFD54F),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (cumulativeBonuses.totalDailyMana > 0) {
+                        PassiveStatBadge(
+                            icon = "🔮",
+                            label = "Mana/den",
+                            value = "+${cumulativeBonuses.totalDailyMana}",
+                            color = Color(0xFFCE93D8),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (cumulativeBonuses.totalDailyMaterials > 0) {
+                        PassiveStatBadge(
+                            icon = "🪵",
+                            label = "Materiál/den",
+                            value = "+${cumulativeBonuses.totalDailyMaterials}",
+                            color = Color(0xFFA1887F),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (cumulativeBonuses.totalDailyManaEssence > 0) {
+                        PassiveStatBadge(
+                            icon = "✨",
+                            label = "Esence/den",
+                            value = "+${cumulativeBonuses.totalDailyManaEssence}",
+                            color = Color(0xFF80DEEA),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
             // --- MILESTONE TIMELINE / NODES ROW ---
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -429,7 +501,12 @@ fun CharacterAffinityCombatBuffsCard(
     if (selectedMilestoneForDetail != null) {
         MilestoneDetailDialog(
             milestone = selectedMilestoneForDetail!!,
-            onDismiss = { selectedMilestoneForDetail = null }
+            onDismiss = { selectedMilestoneForDetail = null },
+            onPlayAnimation = {
+                val minPts = selectedMilestoneForDetail!!.tierInfo.minPoints
+                selectedMilestoneForDetail = null
+                onPlayMilestoneAnimation?.invoke(if (minPts <= 0) 30 else minPts)
+            }
         )
     }
 }
@@ -648,6 +725,14 @@ private fun MilestoneDetailedRow(
                     fontSize = 9.sp,
                     color = if (milestone.isUnlocked) Color(0xFFFF80AB) else Color.Gray
                 )
+
+                if (milestone.resourceBonus != null && (milestone.resourceBonus.dailyGold > 0 || milestone.resourceBonus.dailyMana > 0 || milestone.resourceBonus.dailyMaterials > 0)) {
+                    Text(
+                        text = "💎 Produkce: +${milestone.resourceBonus.dailyGold} Zlato, +${milestone.resourceBonus.dailyMana} Mana/den ${if (milestone.resourceBonus.resourcePerkSummary.isNotBlank()) "• ${milestone.resourceBonus.resourcePerkSummary}" else ""}",
+                        fontSize = 9.sp,
+                        color = if (milestone.isUnlocked) Color(0xFFFFD54F) else Color.DarkGray
+                    )
+                }
             }
         }
     }
@@ -659,7 +744,8 @@ private fun MilestoneDetailedRow(
 @Composable
 private fun MilestoneDetailDialog(
     milestone: AffinityMilestoneReward,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onPlayAnimation: (() -> Unit)? = null
 ) {
     val tierColor = Color(milestone.tierInfo.colorHex)
     val buff = milestone.characterSpecificBuff
@@ -720,7 +806,7 @@ private fun MilestoneDetailDialog(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = if (milestone.isUnlocked) "✓ Tento milník je aktivní v boji!" else "🔒 Vyžaduje ${milestone.tierInfo.minPoints} bodů náklonnosti",
+                            text = if (milestone.isUnlocked) "✓ Tento milník je aktivní v boji a ekonomice!" else "🔒 Vyžaduje ${milestone.tierInfo.minPoints} bodů náklonnosti",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (milestone.isUnlocked) Color(0xFF69F0AE) else Color(0xFFFF8A80)
@@ -754,6 +840,57 @@ private fun MilestoneDetailDialog(
                         Text("🛡️ Pasivní bonus: ${milestone.tierInfo.combatBonusDescription}", fontSize = 10.sp, color = Color(0xFFFF80AB))
                         if (buff.specialEffectTag.isNotBlank()) {
                             Text("⚡ Značka účinku: ${buff.specialEffectTag}", fontSize = 10.sp, color = Color(0xFFE040FB))
+                        }
+                    }
+                }
+
+                // Passive Resource Generation Card
+                if (milestone.resourceBonus != null && (milestone.resourceBonus.dailyGold > 0 || milestone.resourceBonus.dailyMana > 0 || milestone.resourceBonus.dailyMaterials > 0)) {
+                    val res = milestone.resourceBonus
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF1A1A2E),
+                        border = BorderStroke(0.8.dp, Color(0xFF80DEEA).copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text("💎 Pasivní produkce surovin:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF80DEEA))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                if (res.dailyGold > 0) Text("🪙 +${res.dailyGold} Zlato/den", fontSize = 10.sp, color = Color(0xFFFFD54F), fontWeight = FontWeight.Bold)
+                                if (res.dailyMana > 0) Text("🔮 +${res.dailyMana} Mana/den", fontSize = 10.sp, color = Color(0xFFCE93D8), fontWeight = FontWeight.Bold)
+                                if (res.dailyMaterials > 0) Text("🪵 +${res.dailyMaterials} Materiál/den", fontSize = 10.sp, color = Color(0xFFA1887F), fontWeight = FontWeight.Bold)
+                            }
+                            if (res.resourcePerkSummary.isNotBlank()) {
+                                Text("✨ Efekt podpory: ${res.resourcePerkSummary}", fontSize = 10.sp, color = Color.LightGray)
+                            }
+                        }
+                    }
+                }
+
+                if (onPlayAnimation != null) {
+                    OutlinedButton(
+                        onClick = onPlayAnimation,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("play_milestone_lottie_animation_button"),
+                        border = BorderStroke(1.dp, tierColor)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text("🎬", fontSize = 14.sp)
+                            Text(
+                                "Přehrát animaci milníku (${if (milestone.tierInfo.minPoints <= 0) 30 else milestone.tierInfo.minPoints} pts)",
+                                color = tierColor,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }

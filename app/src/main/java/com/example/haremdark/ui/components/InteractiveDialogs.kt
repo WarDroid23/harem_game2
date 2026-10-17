@@ -39,6 +39,7 @@ import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.animation.*
@@ -53,6 +54,7 @@ import kotlin.math.*
 import kotlin.random.Random
 import com.example.haremdark.data.AffinityData
 import com.example.haremdark.domain.HapticManager
+import com.example.haremdark.domain.SoundEffectManager
 import com.example.haremdark.data.AffinityTierInfo
 import com.example.haremdark.data.BondTierCatalog
 import com.example.haremdark.ui.components.BondTierCustomizerModal
@@ -125,6 +127,7 @@ fun CharacterDetailDialog(
     val sectionTabs = listOf("📖 Životopis", "📊 Profil", "🎨 Vizuál Pouta", "🛡️ Výbava", "💖 Náklonnost & Trend", "📖 Příběhy Pouta", "🎙️ Archiv & Hlasy", "🎁 Dary", "📦 Sklad & Inventář", "⚡ Akce", "✨ Dovednosti", "🎯 Výcvik", "📋 Úkoly", "🕰️ Klíčové Momenty", "🖼️ Galerie", "🏆 Milníky", "📜 Historie", "📈 Progrese Statistik")
     var activeEmote by remember { mutableStateOf<String?>(null) }
     var emoteKey by remember { mutableLongStateOf(0L) }
+    var showComparisonDialog by remember { mutableStateOf(false) }
 
     // Lottie Animated Emotion Reactions (Blushing, Cheering, Love, Shy, Sparkle)
     var emotionTriggerKey by remember(character.id) { mutableLongStateOf(0L) }
@@ -163,6 +166,12 @@ fun CharacterDetailDialog(
         )
     }
 
+    var activeMilestoneLottieThreshold by remember(currentActiveCharacter.id) {
+        mutableStateOf<Int?>(
+            if (isMilestoneCelebration && crossedMilestone != null) crossedMilestone else null
+        )
+    }
+
     var currentBubbleDialogue by remember(currentActiveCharacter.id, currentActiveCharacter.affinityPoints) {
         mutableStateOf(
             if (isMilestoneCelebration && crossedMilestone != null) {
@@ -178,7 +187,9 @@ fun CharacterDetailDialog(
     }
 
     val triggerCycleDialogue: () -> Unit = {
-        HapticManager.vibrateClick()
+        val currentTier = AffinityData.getLevelForPoints(currentActiveCharacter.affinityPoints)
+        HapticManager.vibrateDialogueCycle()
+        SoundEffectManager.playFlavorDialogueChime(currentTier)
         val unlockedDialogues = AffinityData.getAllUnlockedFlavorDialogues(currentActiveCharacter)
         val remaining = unlockedDialogues.filter { it != currentBubbleDialogue }
         val next = remaining.randomOrNull() ?: unlockedDialogues.randomOrNull() ?: "„Můj pane, má oddanost patří jen tobě.“"
@@ -207,9 +218,11 @@ fun CharacterDetailDialog(
             if (highestCrossed != null && highestCrossed > currentActiveCharacter.lastAcknowledgedAffinityMilestone) {
                 isMilestoneCelebration = true
                 currentBubbleDialogue = AffinityData.getCelebratoryMilestoneLine(currentActiveCharacter, highestCrossed)
+                activeMilestoneLottieThreshold = highestCrossed
                 triggerAffinityEffect(AffinityBurstType.DEVOTION_GOLD, 1.5f)
                 triggerEmotionReaction(CharacterEmotionType.SPARKLE)
-                HapticManager.vibrateHeavy()
+                HapticManager.vibrateMilestoneCelebration()
+                SoundEffectManager.playMilestoneCelebration(highestCrossed)
             }
         }
         previousAffinityPoints = currentActiveCharacter.affinityPoints
@@ -285,6 +298,7 @@ fun CharacterDetailDialog(
                         .fillMaxWidth()
                         .height(138.dp)
                         .clickable { triggerCycleDialogue() }
+                        .testTag("character_profile_avatar")
                 ) {
                     // Dynamic Mood Background Asset Layer
                     Image(
@@ -507,6 +521,18 @@ fun CharacterDetailDialog(
                                     Text("👑 Jmenovat favoritkou", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
+
+                            Button(
+                                onClick = { showComparisonDialog = true },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6A1B9A)),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier
+                                    .height(26.dp)
+                                    .testTag("profile_compare_characters_button")
+                            ) {
+                                Text("⚖️ Porovnat", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            }
                         }
                         Spacer(modifier = Modifier.height(4.dp))
 
@@ -525,7 +551,16 @@ fun CharacterDetailDialog(
                     currentDialogue = currentBubbleDialogue,
                     isMilestoneCelebration = isMilestoneCelebration,
                     milestoneTitle = milestoneBadgeInfo.first,
-                    onBubbleTap = triggerCycleDialogue
+                    onBubbleTap = triggerCycleDialogue,
+                    onCelebrationBadgeTap = {
+                        activeMilestoneLottieThreshold = crossedMilestone ?: 30
+                    }
+                )
+
+                // --- VISUAL PROGRESS BAR TO NEXT AFFINITY MILESTONE ---
+                CompactAffinityMilestoneProgressBar(
+                    character = currentActiveCharacter,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
                 )
 
                 // --- VISUAL PROGRESS BARS FOR ALL PARTY MEMBERS (Health, Mana, Affinity) ---
@@ -711,7 +746,12 @@ fun CharacterDetailDialog(
                             character = currentActiveCharacter
                         )
                         14 -> MemoryGalleryTab(character = currentActiveCharacter)
-                        15 -> MilestonesTab(character = currentActiveCharacter)
+                        15 -> MilestonesTab(
+                            character = currentActiveCharacter,
+                            onPlayMilestoneAnimation = { threshold ->
+                                activeMilestoneLottieThreshold = threshold
+                            }
+                        )
                         16 -> SlaveInteractionLogTab(
                             character = currentActiveCharacter,
                             engine = engine
@@ -728,6 +768,32 @@ fun CharacterDetailDialog(
                 }
             }
         }
+    }
+
+    // --- CELEBRATORY AFFINITY MILESTONE LOTTIE OVERLAY ---
+    if (activeMilestoneLottieThreshold != null) {
+        AffinityMilestoneLottieOverlay(
+            milestoneThreshold = activeMilestoneLottieThreshold!!,
+            character = currentActiveCharacter,
+            onDismiss = {
+                val threshold = activeMilestoneLottieThreshold
+                if (threshold != null && threshold > currentActiveCharacter.lastAcknowledgedAffinityMilestone) {
+                    currentActiveCharacter.lastAcknowledgedAffinityMilestone = threshold
+                }
+                isMilestoneCelebration = false
+                activeMilestoneLottieThreshold = null
+            }
+        )
+    }
+
+    // --- SIDE-BY-SIDE CHARACTER COMPARISON MODAL ---
+    if (showComparisonDialog) {
+        val allChars = engine?.gameState?.value?.characters ?: listOf(currentActiveCharacter)
+        CharacterComparisonDialog(
+            characters = allChars,
+            initialChar1 = currentActiveCharacter,
+            onDismiss = { showComparisonDialog = false }
+        )
     }
 }
 
@@ -2098,134 +2164,114 @@ fun AffinityAndDialogueTab(
         // Dynamic Mood Atmosphere Banner
         MoodAtmosphereBanner(character = character)
 
-        // Sub-Tab Switcher between Vico Progression Dashboard and Dialogue/Perks
+        // Sub-Tab Switcher between Vico Progression Dashboard, Dialogue/Perks, and Gain History Log
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Button(
-                onClick = { subTabSection = 0 },
+                onClick = {
+                    subTabSection = 0
+                    HapticManager.vibrateDialogueCycle()
+                },
                 modifier = Modifier
                     .weight(1f)
-                    .height(38.dp),
-                shape = RoundedCornerShape(10.dp),
+                    .height(36.dp),
+                shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (subTabSection == 0) Color(tier.colorHex) else MaterialTheme.colorScheme.surfaceVariant,
                     contentColor = if (subTabSection == 0) Color.White else MaterialTheme.colorScheme.onSurface
                 ),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Icon(Icons.Default.ShowChart, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Text("📈 Vico Dashboard", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(Icons.Default.ShowChart, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Text("📈 Graf", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
             Button(
-                onClick = { subTabSection = 1 },
+                onClick = {
+                    subTabSection = 1
+                    HapticManager.vibrateDialogueCycle()
+                },
                 modifier = Modifier
                     .weight(1f)
-                    .height(38.dp),
-                shape = RoundedCornerShape(10.dp),
+                    .height(36.dp),
+                shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (subTabSection == 1) Color(tier.colorHex) else MaterialTheme.colorScheme.surfaceVariant,
                     contentColor = if (subTabSection == 1) Color.White else MaterialTheme.colorScheme.onSurface
                 ),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Icon(Icons.Default.Favorite, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Text("💖 Pouto & Dialogy", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(Icons.Default.Favorite, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Text("💖 Dialogy", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Button(
+                onClick = {
+                    subTabSection = 2
+                    HapticManager.vibrateDialogueCycle()
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(36.dp),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (subTabSection == 2) Color(tier.colorHex) else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (subTabSection == 2) Color.White else MaterialTheme.colorScheme.onSurface
+                ),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Text("📜 Přírůstky", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
 
-        // Main Affinity Level Status Card
-        Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, Color(tier.colorHex).copy(alpha = 0.4f))
-        ) {
-            Column(
-                modifier = Modifier.padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(tier.icon, fontSize = 24.sp)
-                        Column {
-                            Text(
-                                text = "Úroveň vztahu ${tier.level}: ${tier.title}",
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = Color(tier.colorHex)
-                            )
-                            Text(
-                                text = "Celkem bodů náklonnosti: ${character.affinityPoints} pts",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
-                }
+        // Visual Progress Bar Component toward next affinity milestone with dynamic current/next threshold values
+        AffinityMilestoneProgressBar(
+            character = character,
+            modifier = Modifier.fillMaxWidth()
+        )
 
-                LinearProgressIndicator(
-                    progress = { animatedAffinityProgress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(8.dp)
-                        .clip(RoundedCornerShape(4.dp)),
-                    color = Color(tier.colorHex)
+        when (subTabSection) {
+            0 -> {
+                // Affinity Progression Dashboard with Vico charts
+                AffinityProgressionDashboard(
+                    character = character,
+                    currentDay = engine?.gameState?.value?.player?.day ?: 1,
+                    engine = engine,
+                    onTriggerAffinityEffect = onTriggerAffinityEffect,
+                    modifier = Modifier.fillMaxWidth()
                 )
 
-                if (nextTier != null) {
-                    val ptsNeeded = nextTier.minPoints - character.affinityPoints
-                    Text(
-                        text = "Do další úrovně (${nextTier.title}): zbývá $ptsNeeded bodů (daruj dary)",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                    )
-                } else {
-                    Text(
-                        text = "👑 Dosažena maximální úroveň absolutní oddanosti!",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFFFD700)
-                    )
-                }
+                // Direct Interaction Actions so player can test affinity gains in real-time
+                QuickAffinityInteractionsCard(
+                    character = character,
+                    engine = engine,
+                    onTriggerAffinityEffect = onTriggerAffinityEffect
+                )
+
+                RelationshipMilestoneSystem(character = character)
             }
-        }
-
-        if (subTabSection == 0) {
-            // Affinity Progression Dashboard with Vico charts
-            AffinityProgressionDashboard(
-                character = character,
-                currentDay = engine?.gameState?.value?.player?.day ?: 1,
-                engine = engine,
-                onTriggerAffinityEffect = onTriggerAffinityEffect,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            // Direct Interaction Actions so player can test affinity gains in real-time
-            QuickAffinityInteractionsCard(
-                character = character,
-                engine = engine,
-                onTriggerAffinityEffect = onTriggerAffinityEffect
-            )
-
-            RelationshipMilestoneSystem(character = character)
-        } else {
-            // Active Speech Dialogue Card
-            val activeLine = AffinityData.getRandomActiveDialogue(character)
-            
-            RelationshipMilestoneSystem(character = character)
+            2 -> {
+                // Visual Log Component tracking history of affinity gains with date and amount increased
+                AffinityGainHistoryLog(
+                    character = character,
+                    currentDay = engine?.gameState?.value?.player?.day ?: 1,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            else -> {
+                // Active Speech Dialogue Card
+                val activeLine = AffinityData.getRandomActiveDialogue(character)
+                
+                RelationshipMilestoneSystem(character = character)
 
         Card(
             colors = CardDefaults.cardColors(
@@ -3015,6 +3061,7 @@ fun AffinityAndDialogueTab(
                 }
             }
         }
+    }
     }
     }
 }
@@ -3964,110 +4011,10 @@ fun CharacterEquipmentTab(character: Character, player: Player, engine: GameEngi
 
 @Composable
 fun AffinityProgressBarComponent(character: Character, modifier: Modifier = Modifier) {
-    val tier = AffinityData.getTierForPoints(character.affinityPoints)
-    val nextTier = AffinityData.TIERS.firstOrNull { it.level == tier.level + 1 }
-    
-    val progressInTier = if (nextTier != null) {
-        val currentSpan = (character.affinityPoints - tier.minPoints).toFloat()
-        val totalSpan = (nextTier.minPoints - tier.minPoints).toFloat()
-        (currentSpan / totalSpan).coerceIn(0f, 1f)
-    } else 1.0f
-
-    val pointsNeeded = if (nextTier != null) nextTier.minPoints - character.affinityPoints else 0
-
-    val scaleAnim = remember { androidx.compose.animation.core.Animatable(1f) }
-    LaunchedEffect(character.affinityPoints) {
-        scaleAnim.animateTo(1.15f, animationSpec = androidx.compose.animation.core.tween(150))
-        scaleAnim.animateTo(0.95f, animationSpec = androidx.compose.animation.core.tween(100))
-        scaleAnim.animateTo(1f, animationSpec = androidx.compose.animation.core.tween(100))
-    }
-
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(tier.icon, fontSize = 18.sp)
-                    Column {
-                        Text(
-                            text = "Úr. ${tier.level} • ${tier.title}",
-                            fontWeight = FontWeight.Bold,
-                            color = Color(tier.colorHex),
-                            fontSize = 13.sp
-                        )
-                        Text(
-                            text = "${character.affinityPoints} bodů náklonnosti",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
-                    }
-                }
-                if (nextTier != null) {
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            text = "Do Úr. ${nextTier.level}",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Zbývá $pointsNeeded pts",
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
-                    }
-                } else {
-                    Text(
-                        text = "👑 Max",
-                        fontSize = 12.sp,
-                        color = Color(0xFFFFD700),
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-            
-            // Custom Visual Progress Bar
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .graphicsLayer {
-                        scaleX = scaleAnim.value
-                        scaleY = scaleAnim.value
-                    }
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(progressInTier)
-                        .fillMaxHeight()
-                        .background(Color(tier.colorHex))
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = "💭 \"${AffinityData.getRandomActiveDialogue(character.affinityPoints, character.archetypeId)}\"", 
-                style = MaterialTheme.typography.bodySmall, 
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f), 
-                fontWeight = FontWeight.Medium
-            )
-        }
-    }
+    AffinityMilestoneProgressBar(
+        character = character,
+        modifier = modifier
+    )
 }
 
 
@@ -5306,7 +5253,10 @@ fun portraitResFor(archetypeId: String): Int {
 }
 
 @Composable
-fun MilestonesTab(character: Character) {
+fun MilestonesTab(
+    character: Character,
+    onPlayMilestoneAnimation: ((Int) -> Unit)? = null
+) {
     val thresholds = listOf(
         25 to "Začátek oddanosti: +5 Síla",
         50 to "Věrné srdce: +10 Max HP",
@@ -5323,7 +5273,8 @@ fun MilestonesTab(character: Character) {
         // --- UNIQUE CHARACTER AFFINITY COMBAT BUFFS & MILESTONES ---
         CharacterAffinityCombatBuffsCard(
             character = character,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            onPlayMilestoneAnimation = onPlayMilestoneAnimation
         )
 
         // --- LOYALTY THRESHOLDS ---

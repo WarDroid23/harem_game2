@@ -491,49 +491,11 @@ fun AffinityProgressionDashboard(
                 }
             }
 
-            // Next Tier Target Progression Banner
-            if (nextTier != null) {
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = Color(nextTier.colorHex).copy(alpha = 0.12f),
-                    border = BorderStroke(1.dp, Color(nextTier.colorHex).copy(alpha = 0.45f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(nextTier.icon, fontSize = 16.sp)
-                            Column {
-                                Text(
-                                    text = "Další milník: ${nextTier.title}",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(nextTier.colorHex)
-                                )
-                                Text(
-                                    text = "Odemkne nový bojový buff & intimní dialog",
-                                    fontSize = 9.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                )
-                            }
-                        }
-                        Text(
-                            text = "Zbývá $pointsToNextTier pts",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color(nextTier.colorHex)
-                        )
-                    }
-                }
-            }
+            // Next Tier Target Progression Banner with Visual Milestone Progress Bar
+            CompactAffinityMilestoneProgressBar(
+                character = character,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             // Interactive Milestone History Timeline
             Row(

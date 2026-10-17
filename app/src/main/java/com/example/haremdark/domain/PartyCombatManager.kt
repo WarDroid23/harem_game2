@@ -209,12 +209,21 @@ object PartyCombatManager {
                 val assignedRoom = rooms.find { it.assignedCharacterId == char.id }
                 val roomStatBonus = assignedRoom?.getCumulativeStatBonus() ?: com.example.haremdark.models.RoomStatBonus()
                 val loyaltyBonus = com.example.haremdark.data.LoyaltyCombatData.getBonusForLoyalty(char.loajalita)
+                
+                // Affinity Milestone passive combat bonuses
+                val unlockedMilestones = com.example.haremdark.data.AffinityMilestoneBonusCatalog.getUnlockedMilestones(char)
+                val milestoneHp = unlockedMilestones.sumOf { it.hpBonus }
+                val milestoneAtkMult = unlockedMilestones.map { it.attackBonusPercent }.sum()
+                val milestoneDef = unlockedMilestones.sumOf { it.defenseBonus }
+                val milestoneCrit = unlockedMilestones.sumOf { it.critBonusPercent }
+                val milestoneHpRegen = unlockedMilestones.sumOf { it.hpRegenPerTurn }
+
                 val baseAtk = 18 + combatSkill * 2 + eqBonusAtk + char.fazeZkazenosti * 3 + passiveBonuses.attackBonus + roomStatBonus.attackBonus
-                val multAtk = 1.0f + combatBonuses.dmgMultiplierBonus + charSpecificBuff.attackBonusPercent
+                val multAtk = 1.0f + combatBonuses.dmgMultiplierBonus + charSpecificBuff.attackBonusPercent + milestoneAtkMult
                 val finalAtk = (baseAtk.toFloat() * multAtk * loyaltyBonus.attackMultiplier).toInt()
-                val baseDef = 10 + (char.skills["defense"] ?: 3) + (if (role == CombatRole.TANK_GUARDIAN) 8 else 0) + passiveBonuses.defenseBonus + combatBonuses.defenseBonus + charSpecificBuff.defenseBonus + roomStatBonus.defenseBonus
+                val baseDef = 10 + (char.skills["defense"] ?: 3) + (if (role == CombatRole.TANK_GUARDIAN) 8 else 0) + passiveBonuses.defenseBonus + combatBonuses.defenseBonus + charSpecificBuff.defenseBonus + roomStatBonus.defenseBonus + milestoneDef
                 val finalDef = (baseDef.toFloat() * loyaltyBonus.defenseMultiplier).toInt()
-                val finalCrit = 10 + (if (role == CombatRole.PHYSICAL_DPS || role == CombatRole.ASSASSIN_BLADE) 15 else 0) + passiveBonuses.critBonus + combatBonuses.critBonus + charSpecificBuff.critBonusPercent + loyaltyBonus.critBonusPercent
+                val finalCrit = 10 + (if (role == CombatRole.PHYSICAL_DPS || role == CombatRole.ASSASSIN_BLADE) 15 else 0) + passiveBonuses.critBonus + combatBonuses.critBonus + charSpecificBuff.critBonusPercent + loyaltyBonus.critBonusPercent + milestoneCrit
 
                 // Determine formation position
                 val chosenFormation = if (player.partyFormationMap.containsKey(char.id)) {
@@ -236,8 +245,8 @@ object PartyCombatManager {
                     archetypeId = char.archetype,
                     role = role,
                     formationPosition = chosenFormation,
-                    hp = char.hp + eqBonusHp + passiveBonuses.hpBonus + combatBonuses.hpBonus + charSpecificBuff.hpBonus,
-                    maxHp = char.maxHp + eqBonusHp + passiveBonuses.hpBonus + combatBonuses.hpBonus + charSpecificBuff.hpBonus,
+                    hp = char.hp + eqBonusHp + passiveBonuses.hpBonus + combatBonuses.hpBonus + charSpecificBuff.hpBonus + milestoneHp,
+                    maxHp = char.maxHp + eqBonusHp + passiveBonuses.hpBonus + combatBonuses.hpBonus + charSpecificBuff.hpBonus + milestoneHp,
                     mana = 50 + char.fazeZkazenosti * 5,
                     maxMana = 50 + char.fazeZkazenosti * 5,
                     attack = finalAtk,
@@ -270,7 +279,7 @@ object PartyCombatManager {
                     relationshipTierLevel = affinityTier.level,
                     relationshipStageName = "${affinityTier.icon} ${affinityTier.stageName}",
                     relationshipCombatDescription = "${affinityTier.combatBonusDescription} | ${charSpecificBuff.icon} ${charSpecificBuff.name}: ${charSpecificBuff.perkEffectSummary}",
-                    combatRegenBonus = combatBonuses.regenBonus + charSpecificBuff.hpRegenPerTurn + loyaltyBonus.hpRegenPerTurn,
+                    combatRegenBonus = combatBonuses.regenBonus + charSpecificBuff.hpRegenPerTurn + loyaltyBonus.hpRegenPerTurn + milestoneHpRegen,
                     characterSpecificBuffName = charSpecificBuff.name,
                     characterSpecificBuffIcon = charSpecificBuff.icon,
                     characterSpecificBuffSummary = charSpecificBuff.perkEffectSummary,

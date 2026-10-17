@@ -41,6 +41,7 @@ fun CharacterMilestoneSpeechBubble(
     isMilestoneCelebration: Boolean,
     milestoneTitle: String,
     onBubbleTap: () -> Unit,
+    onCelebrationBadgeTap: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     // Bounce / Pop animation on dialogue change or milestone trigger
@@ -139,7 +140,10 @@ fun CharacterMilestoneSpeechBubble(
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = Color(0xFFFFD700).copy(alpha = 0.25f),
-                            border = BorderStroke(1.dp, Color(0xFFFFD700))
+                            border = BorderStroke(1.dp, Color(0xFFFFD700)),
+                            modifier = Modifier
+                                .clickable { onCelebrationBadgeTap?.invoke() ?: onBubbleTap() }
+                                .testTag("milestone_celebration_badge")
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
@@ -153,7 +157,7 @@ fun CharacterMilestoneSpeechBubble(
                                     modifier = Modifier.size(13.dp)
                                 )
                                 Text(
-                                    text = "🌟 MILNÍK ODEMČEN: $milestoneTitle",
+                                    text = "🌟 MILNÍK: $milestoneTitle (Animace)",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color(0xFFFFD700)
@@ -164,7 +168,10 @@ fun CharacterMilestoneSpeechBubble(
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = Color(tierInfo.colorHex).copy(alpha = 0.2f),
-                            border = BorderStroke(1.dp, Color(tierInfo.colorHex).copy(alpha = 0.5f))
+                            border = BorderStroke(1.dp, Color(tierInfo.colorHex).copy(alpha = 0.5f)),
+                            modifier = Modifier
+                                .clickable { onCelebrationBadgeTap?.invoke() ?: onBubbleTap() }
+                                .testTag("character_tier_badge")
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),

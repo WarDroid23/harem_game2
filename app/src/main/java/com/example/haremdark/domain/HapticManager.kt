@@ -191,6 +191,52 @@ object HapticManager {
         }
     }
 
+    /**
+     * Subtle, tactile haptic feedback when tapping the avatar to cycle through unlocked flavor dialogue lines.
+     */
+    fun vibrateDialogueCycle() {
+        if (!isHapticsEnabled) return
+        try {
+            val ctx = appContext ?: return
+            val vibrator = getVibrator(ctx) ?: return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(20)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error vibrating dialogue cycle", e)
+        }
+    }
+
+    /**
+     * Multi-stage celebratory haptic ripple when an affinity milestone is achieved.
+     */
+    fun vibrateMilestoneCelebration() {
+        if (!isHapticsEnabled) return
+        try {
+            val ctx = appContext ?: return
+            val vibrator = getVibrator(ctx) ?: return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(
+                    VibrationEffect.createWaveform(
+                        longArrayOf(0, 40, 50, 80, 60, 140),
+                        intArrayOf(0, 150, 0, 210, 0, 255),
+                        -1
+                    )
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(280)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error vibrating milestone celebration", e)
+        }
+    }
+
     private fun getVibrator(context: Context): Vibrator? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager

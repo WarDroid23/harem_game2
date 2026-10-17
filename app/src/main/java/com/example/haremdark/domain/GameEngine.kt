@@ -1457,6 +1457,9 @@ class GameEngine(private val context: Context) {
             if (yield.wood > 0 || yield.stone > 0 || yield.iron > 0 || yield.mana > 0 || yield.manaEssence > 0) {
                 addLog("🏘️ Dominium vyprodukovalo: +${yield.wood} dřeva, +${yield.stone} kamení, +${yield.iron} železa, +${yield.mana} many, +${yield.manaEssence} esence many. Populace vzrostla o ${yield.populationGrowth}.")
             }
+            if (yield.affinityBonusGold > 0 || yield.affinityBonusMana > 0 || yield.affinityBonusMaterials > 0) {
+                addLog("💖 Pouto harému (Milníky náklonnosti) přineslo: +${yield.affinityBonusGold} 💰 zlata, +${yield.affinityBonusMana} 🔮 many, +${yield.affinityBonusManaEssence} 💎 esence, +${yield.affinityBonusMaterials} 📦 surovin.")
+            }
             p.day = newDay
             p.maxSexEnergy = newMaxSex
             p.maxDarkEnergy = newMaxDark

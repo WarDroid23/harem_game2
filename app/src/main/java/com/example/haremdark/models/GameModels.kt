@@ -335,6 +335,20 @@ data class Character(
         if (calculatedLevel > affinityLevel) {
             affinityLevel = calculatedLevel
         }
+
+        // Reaching specific affinity milestones provides passive combat or resource generation bonuses
+        val milestoneThresholds = listOf(30, 70, 120, 180, 250, 350)
+        milestoneThresholds.forEach { threshold ->
+            if (affinityPoints >= threshold) {
+                if (!milestoneRewardsUnlocked.contains(threshold)) {
+                    milestoneRewardsUnlocked.add(threshold)
+                }
+                val perkTag = "AFFINITY_M_${threshold}_${archetypeId.uppercase()}"
+                if (!unlockedPassives.contains(perkTag)) {
+                    unlockedPassives.add(perkTag)
+                }
+            }
+        }
     }
 
     var loyalty: Int
@@ -575,8 +589,21 @@ fun Character.getSafeInteractionLogs(currentDay: Int = 1): List<InteractionLogEn
 data class AffinityPointRecord(
     val day: Int,
     val points: Int,
-    val source: String = "Interakce"
-)
+    val source: String = "Interakce",
+    val amountIncreased: Int = 0,
+    val dateText: String = ""
+) {
+    val effectiveGain: Int
+        get() {
+            if (amountIncreased > 0) return amountIncreased
+            val regex = Regex("""\+(\d+)\s*(?:pts|bod|náklonnost|Affinity)""", RegexOption.IGNORE_CASE)
+            val match = regex.find(source)
+            return match?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+        }
+
+    val displayDate: String
+        get() = if (dateText.isNotBlank()) dateText else "Den $day"
+}
 
 fun Character.getSafeAffinityTrend(currentDay: Int = 1): List<AffinityPointRecord> {
     if (affinityHistory.size >= 2) {
@@ -587,9 +614,11 @@ fun Character.getSafeAffinityTrend(currentDay: Int = 1): List<AffinityPointRecor
         val startDay = (single.day - 2).coerceAtLeast(1)
         val initialPoints = (single.points * 0.4f).toInt().coerceAtLeast(0)
         val baseline = listOf(
-            AffinityPointRecord(startDay, initialPoints, "Počátek pouta"),
-            single
+            AffinityPointRecord(startDay, initialPoints, "Počátek pouta", initialPoints, "Den $startDay"),
+            if (single.amountIncreased == 0) single.copy(amountIncreased = (single.points - initialPoints).coerceAtLeast(1)) else single
         )
+        affinityHistory.clear()
+        affinityHistory.addAll(baseline)
         return baseline
     }
     // Provide realistic baseline affinity progression curve up to current points
@@ -599,10 +628,10 @@ fun Character.getSafeAffinityTrend(currentDay: Int = 1): List<AffinityPointRecor
     val startDay = (currentDay - 3).coerceAtLeast(1)
     
     val generated = mutableListOf(
-        AffinityPointRecord(startDay, baseline, "Příchod do komnat"),
-        AffinityPointRecord(startDay + 1, step1, "Pozornost & Dary"),
-        AffinityPointRecord(startDay + 2, step2, "Důvěrný rozhovor"),
-        AffinityPointRecord(currentDay.coerceAtLeast(startDay + 3), affinityPoints, "Aktuální pouto")
+        AffinityPointRecord(startDay, baseline, "Příchod do komnat", baseline, "Den $startDay"),
+        AffinityPointRecord(startDay + 1, step1, "Pozornost & Dary", (step1 - baseline).coerceAtLeast(1), "Den ${startDay + 1}"),
+        AffinityPointRecord(startDay + 2, step2, "Důvěrný rozhovor", (step2 - step1).coerceAtLeast(1), "Den ${startDay + 2}"),
+        AffinityPointRecord(currentDay.coerceAtLeast(startDay + 3), affinityPoints, "Aktuální pouto", (affinityPoints - step2).coerceAtLeast(1), "Den ${currentDay.coerceAtLeast(startDay + 3)}")
     )
     
     // Save generated baseline to history so it persists
@@ -612,17 +641,41 @@ fun Character.getSafeAffinityTrend(currentDay: Int = 1): List<AffinityPointRecor
     return generated
 }
 
-fun Character.addAffinityHistory(day: Int, source: String = "Interakce") {
-    // Avoid adding duplicate records for the same day if points haven't changed much
+fun Character.addAffinityHistory(
+    day: Int,
+    source: String = "Interakce",
+    amountIncreased: Int = 0,
+    dateText: String = ""
+) {
     val lastRecord = affinityHistory.lastOrNull()
-    if (lastRecord != null && lastRecord.day == day && lastRecord.points == affinityPoints) {
+    val calculatedGain = if (amountIncreased > 0) {
+        amountIncreased
+    } else if (lastRecord != null) {
+        (affinityPoints - lastRecord.points).coerceAtLeast(0)
+    } else {
+        affinityPoints
+    }
+
+    val display = if (dateText.isNotBlank()) dateText else "Den $day"
+    val newRecord = AffinityPointRecord(
+        day = day,
+        points = affinityPoints,
+        source = source,
+        amountIncreased = calculatedGain,
+        dateText = display
+    )
+
+    // Avoid duplicate records if same day, same points and same source
+    if (lastRecord != null && lastRecord.day == day && lastRecord.points == affinityPoints && lastRecord.source == source) {
         return
     }
-    affinityHistory.add(AffinityPointRecord(day, affinityPoints, source))
-    // Keep only last 20 records in memory
-    if (affinityHistory.size > 20) {
+
+    affinityHistory.add(newRecord)
+    // Keep up to 50 records in memory
+    if (affinityHistory.size > 50) {
         affinityHistory.removeAt(0)
     }
+    checkAffinityMilestones()
 }
 
 fun Character.getSafeStatTrend(currentDay: Int = 1): List<StatRecord> {

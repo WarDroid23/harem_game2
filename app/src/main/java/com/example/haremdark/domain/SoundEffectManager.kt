@@ -459,6 +459,46 @@ object SoundEffectManager {
         playHarem(HaremSound.AFFINITY_UP)
     }
 
+    /**
+     * Subtle melodic chime / emotional acoustic cue when tapping the avatar
+     * or speech bubble to cycle through unlocked flavor dialogue lines.
+     * Tonal pitch and timbre subtly resonate with the heroine's current affinity tier.
+     */
+    fun playFlavorDialogueChime(tier: Int = 1) {
+        if (_isMuted.value) return
+        scope.launch {
+            try {
+                val notes = when (tier.coerceIn(1, 6)) {
+                    1 -> listOf(783.99, 1046.50) // G5 -> C6: Subtle, innocent chime
+                    2 -> listOf(659.25, 880.00, 1174.66) // E5 -> A5 -> D6: Friendly warm bell
+                    3 -> listOf(587.33, 880.00, 1046.50, 1318.51) // D5 -> A5 -> C6 -> E6: Soft romantic chime
+                    4 -> listOf(659.25, 830.61, 1046.50, 1318.51) // Passionate harmonic chime
+                    5 -> listOf(523.25, 783.99, 1046.50, 1567.98) // Ethereal starlight chime
+                    else -> listOf(659.25, 987.77, 1318.51, 1975.53) // Celestial sovereign crystalline flourish
+                }
+                playPcmTrack(synthesizeArpeggio(notes, 0.08, 0.50f))
+            } catch (e: Exception) {
+                fallbackTone(ToneGenerator.TONE_PROP_BEEP, 80)
+            }
+        }
+    }
+
+    /**
+     * Triumphant celebration fanfare and musical flourish when unlocking an affinity milestone.
+     */
+    fun playMilestoneCelebration(milestoneThreshold: Int) {
+        val tier = when (milestoneThreshold) {
+            30 -> 2
+            70 -> 3
+            120 -> 4
+            180 -> 5
+            250 -> 6
+            350 -> 6
+            else -> 2
+        }
+        playRelationshipTier(tier)
+    }
+
     fun playIntimacyFx() {
         playHarem(HaremSound.SEDUCE)
     }

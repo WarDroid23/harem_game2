@@ -1,5 +1,7 @@
 package com.example.haremdark.domain
 
+import com.example.haremdark.data.AffinityMilestoneBonusCatalog
+import com.example.haremdark.data.HaremAffinityResourceSummary
 import com.example.haremdark.models.GameSave
 import com.example.haremdark.models.Player
 
@@ -12,7 +14,13 @@ class DomainResourceManager {
         val iron: Int,
         val mana: Int,
         val manaEssence: Int,
-        val populationGrowth: Int
+        val populationGrowth: Int,
+        val affinityBonusGold: Int = 0,
+        val affinityBonusMana: Int = 0,
+        val affinityBonusManaEssence: Int = 0,
+        val affinityBonusMaterials: Int = 0,
+        val affinityBonusPopulation: Int = 0,
+        val affinitySummary: HaremAffinityResourceSummary? = null
     )
 
     fun calculateDailyYield(state: GameSave): DailyYield {
@@ -49,7 +57,33 @@ class DomainResourceManager {
             populationGrowth += 1 // Natural growth
         }
 
-        return DailyYield(gold, wood, stone, iron, mana, manaEssence, populationGrowth)
+        // --- PASSIVE RESOURCE GENERATION FROM HAREM AFFINITY MILESTONES ---
+        val affinityYield = AffinityMilestoneBonusCatalog.calculateTotalHaremYield(state.characters)
+        gold += affinityYield.totalGold
+        wood += affinityYield.totalWood
+        stone += affinityYield.totalStone
+        iron += affinityYield.totalIron
+        mana += affinityYield.totalMana
+        manaEssence += affinityYield.totalManaEssence
+        populationGrowth += affinityYield.totalPopulationGrowth
+
+        val totalAffinityMaterials = affinityYield.totalWood + affinityYield.totalStone + affinityYield.totalIron
+
+        return DailyYield(
+            gold = gold,
+            wood = wood,
+            stone = stone,
+            iron = iron,
+            mana = mana,
+            manaEssence = manaEssence,
+            populationGrowth = populationGrowth,
+            affinityBonusGold = affinityYield.totalGold,
+            affinityBonusMana = affinityYield.totalMana,
+            affinityBonusManaEssence = affinityYield.totalManaEssence,
+            affinityBonusMaterials = totalAffinityMaterials,
+            affinityBonusPopulation = affinityYield.totalPopulationGrowth,
+            affinitySummary = affinityYield
+        )
     }
 
     fun applyYield(player: Player, yield: DailyYield) {
