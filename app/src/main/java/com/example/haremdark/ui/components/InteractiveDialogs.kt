@@ -53,11 +53,17 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import kotlin.math.*
 import kotlin.random.Random
 import com.example.haremdark.data.AffinityData
+import com.example.haremdark.data.AffinityMilestoneBonus
+import com.example.haremdark.data.AffinityMilestoneBonusCatalog
 import com.example.haremdark.domain.HapticManager
 import com.example.haremdark.domain.SoundEffectManager
 import com.example.haremdark.data.AffinityTierInfo
 import com.example.haremdark.data.BondTierCatalog
 import com.example.haremdark.ui.components.BondTierCustomizerModal
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import com.airbnb.lottie.compose.*
 import com.example.haremdark.data.CharacterSkillCatalog
 import com.example.haremdark.data.CharacterSkillNode
@@ -388,6 +394,14 @@ fun CharacterDetailDialog(
                         modifier = Modifier.fillMaxSize()
                     )
 
+                    // Dynamic Mood Indicator with Tabbed View (Heat Map / 24h Log / Trends) next to avatar
+                    MoodIndicatorWithTrendsTabbedView(
+                        character = currentActiveCharacter,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp)
+                    )
+
                     // Close Button
                     IconButton(
                         onClick = onDismiss,
@@ -414,6 +428,10 @@ fun CharacterDetailDialog(
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
+                            )
+                            DynamicMoodAvatarCornerBadge(
+                                character = currentActiveCharacter,
+                                badgeSize = 24.dp
                             )
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
@@ -560,7 +578,11 @@ fun CharacterDetailDialog(
                 // --- VISUAL PROGRESS BAR TO NEXT AFFINITY MILESTONE ---
                 CompactAffinityMilestoneProgressBar(
                     character = currentActiveCharacter,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+                    onMilestoneCrossed = { threshold ->
+                        triggerAffinityEffect(AffinityBurstType.DEVOTION_GOLD, 1.5f)
+                        triggerEmotionReaction(CharacterEmotionType.SPARKLE)
+                    }
                 )
 
                 // --- VISUAL PROGRESS BARS FOR ALL PARTY MEMBERS (Health, Mana, Affinity) ---
@@ -1363,15 +1385,32 @@ fun CharacterRadarChart(character: Character, modifier: Modifier = Modifier) {
     val tier = AffinityData.getTierForPoints(character.affinityPoints)
     val color = Color(tier.colorHex)
 
-    val traits = remember(character) {
-        listOf(
-            RadarTraitInfo("Důvěra", "🤝", character.duvera, 100, "Vzájemné bezpečí, otevřenost a citová vazba s pánem."),
-            RadarTraitInfo("Loajalita", "🛡️", character.loajalita, 100, "Ochota bránit svého pána a obětovat se v boji."),
-            RadarTraitInfo("Poslušnost", "⚡", character.poslusnost, 100, "Míra ukázněnosti, respektu a plnění rozkazů bez váhání."),
-            RadarTraitInfo("Touha", "🔥", character.touha, 100, "Fyzická a romantická přitažlivost k pánovi."),
-            RadarTraitInfo("Submise", "⛓️", character.submisivita, 100, "Přijetí podřízené role a přirozené odevzdání."),
-            RadarTraitInfo("Morálka", "✨", character.morale, 100, "Psychická síla, optimismus a vyrovnanost otrokyně.")
-        )
+    var chartMode by remember { mutableIntStateOf(0) } // 0 = Sub-statistiky Náklonnosti, 1 = Osobnostní Rysy
+
+    val traits = remember(character, chartMode) {
+        if (chartMode == 0) {
+            val combatSynergy = ((character.loajalita * 0.35f + (character.affinityPoints.coerceAtMost(250) / 2.5f) * 0.40f + character.strength * 0.25f)).toInt().coerceIn(0, 100)
+            val domainInfluence = (((character.affinityPoints.coerceAtMost(250) / 2.5f) * 0.45f + character.poslusnost * 0.30f + character.duvera * 0.25f)).toInt().coerceIn(0, 100)
+            val devotion = (((character.affinityPoints.coerceAtMost(350) / 3.5f) * 0.50f + character.loajalita * 0.30f + character.morale * 0.20f)).toInt().coerceIn(0, 100)
+
+            listOf(
+                RadarTraitInfo("Důvěra", "🤝", character.duvera, 100, "Vzájemné bezpečí, otevřenost a citová vazba s pánem. Posiluje účinek interakcí a dárků."),
+                RadarTraitInfo("Bojová synergie", "⚔️", combatSynergy, 100, "Bojová harmonie a taktická synchronizace s pánem v kobkách. Zvyšuje útočné poškození a kritické údery."),
+                RadarTraitInfo("Vliv na dominium", "🏰", domainInfluence, 100, "Vliv dívky na ekonomiku a správu panství. Zvyšuje denní produkci surovin, zlata a poslušnost ostatních."),
+                RadarTraitInfo("Pouto & Oddanost", "💖", devotion, 100, "Hluboké magické propojení duší. Poskytuje odolnost proti zlomení a zvyšuje zisky temné a sexuální energie."),
+                RadarTraitInfo("Taktická loajalita", "🛡️", character.loajalita, 100, "Ochota bránit svého pána a obětovat se v boji. Poskytuje defenzivní bonusy a pasivní ochranu."),
+                RadarTraitInfo("Intimní touha", "🔥", character.touha, 100, "Fyzická a romantická přitažlivost k pánovi. Generuje temnou energii a odemyká speciální dialogy.")
+            )
+        } else {
+            listOf(
+                RadarTraitInfo("Důvěra", "🤝", character.duvera, 100, "Vzájemné bezpečí, otevřenost a citová vazba s pánem."),
+                RadarTraitInfo("Loajalita", "🛡️", character.loajalita, 100, "Ochota bránit svého pána a obětovat se v boji."),
+                RadarTraitInfo("Poslušnost", "⚡", character.poslusnost, 100, "Míra ukázněnosti, respektu a plnění rozkazů bez váhání."),
+                RadarTraitInfo("Touha", "🔥", character.touha, 100, "Fyzická a romantická přitažlivost k pánovi."),
+                RadarTraitInfo("Submise", "⛓️", character.submisivita, 100, "Přijetí podřízené role a přirozené odevzdání."),
+                RadarTraitInfo("Morálka", "✨", character.morale, 100, "Psychická síla, optimismus a vyrovnanost otrokyně.")
+            )
+        }
     }
 
     val synergyPerks = remember(character) {
@@ -1407,7 +1446,7 @@ fun CharacterRadarChart(character: Character, modifier: Modifier = Modifier) {
         )
     }
 
-    var selectedIndex by remember { mutableIntStateOf(0) }
+    var selectedIndex by remember(chartMode) { mutableIntStateOf(0) }
     val selectedTrait = traits.getOrNull(selectedIndex) ?: traits.first()
 
     Card(
@@ -1428,9 +1467,35 @@ fun CharacterRadarChart(character: Character, modifier: Modifier = Modifier) {
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("🕸️", fontSize = 16.sp)
-                    Text("Radarový graf vlastností (Klepni na bod)", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = color)
+                    Text(
+                        text = if (chartMode == 0) "Radarový graf sub-statistik náklonnosti" else "Radarový graf osobnostních rysů",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        color = color
+                    )
                 }
                 Text("Stupeň ${tier.level} (${tier.stageName})", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+            }
+
+            // Mode Toggle Chips
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                FilterChip(
+                    selected = chartMode == 0,
+                    onClick = { chartMode = 0 },
+                    label = { Text("Sub-statistiky Náklonnosti", fontSize = 10.sp, fontWeight = if (chartMode == 0) FontWeight.Bold else FontWeight.Normal) },
+                    leadingIcon = { Text("💖", fontSize = 12.sp) },
+                    modifier = Modifier.weight(1f)
+                )
+                FilterChip(
+                    selected = chartMode == 1,
+                    onClick = { chartMode = 1 },
+                    label = { Text("Osobnostní Rysy", fontSize = 10.sp, fontWeight = if (chartMode == 1) FontWeight.Bold else FontWeight.Normal) },
+                    leadingIcon = { Text("🎭", fontSize = 12.sp) },
+                    modifier = Modifier.weight(1f)
+                )
             }
 
             Box(
@@ -1766,6 +1831,492 @@ fun CharacterTraitVicoChart(character: Character, modifier: Modifier = Modifier)
     }
 }
 
+/**
+ * Dedicated section in the character profile listing unlocked passive combat
+ * and resource generation bonuses, using distinct iconography to represent the active effect type:
+ *  - ⚔️ Sword for combat stats, offensive/defensive perks, and battle bonuses
+ *  - 🪙 Coin for economy, daily gold, mana, materials, and domain growth
+ */
+@Composable
+fun UnlockedAffinityPassivesSection(
+    character: Character,
+    modifier: Modifier = Modifier
+) {
+    val unlockedMilestones = remember(character.affinityPoints, character.archetypeId) {
+        AffinityMilestoneBonusCatalog.getUnlockedMilestones(character)
+    }
+    val allMilestones = remember(character.archetypeId) {
+        AffinityMilestoneBonusCatalog.getMilestonesForArchetype(character.archetypeId)
+    }
+    val cumulativeResourceBonuses = remember(character.affinityPoints, character.archetypeId) {
+        AffinityMilestoneBonusCatalog.getCumulativeResourceBonuses(character)
+    }
+
+    var selectedFilter by remember { mutableIntStateOf(0) } // 0 = Všechny, 1 = Bojové (⚔️), 2 = Ekonomické (🪙)
+
+    val totalHpBonus = unlockedMilestones.sumOf { it.hpBonus }
+    val totalAtkBonus = unlockedMilestones.sumOf { it.attackBonusPercent.toDouble() }.toFloat()
+    val totalDefBonus = unlockedMilestones.sumOf { it.defenseBonus }
+    val totalCritBonus = unlockedMilestones.sumOf { it.critBonusPercent }
+    val totalRegenBonus = unlockedMilestones.sumOf { it.hpRegenPerTurn }
+    val totalDarkEnergyBonus = unlockedMilestones.sumOf { it.darkEnergyPerTurn }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("unlocked_affinity_passives_section"),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.2.dp, Color(0xFFFFD700).copy(alpha = 0.5f))
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("✨", fontSize = 16.sp)
+                    Text("Odemčené Pasivní Bonusy Pouta", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFFFFD700))
+                }
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (unlockedMilestones.isNotEmpty()) Color(0xFF2E7D32).copy(alpha = 0.25f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, if (unlockedMilestones.isNotEmpty()) Color(0xFF4CAF50) else Color.Gray.copy(alpha = 0.3f))
+                ) {
+                    Text(
+                        text = "${unlockedMilestones.size} / ${allMilestones.size} Milníků",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (unlockedMilestones.isNotEmpty()) Color(0xFF81C784) else Color.Gray,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
+            // Category filter chips
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                val tabs = listOf("Všechny (✨)", "Bojové (⚔️)", "Ekonomické (🪙)")
+                tabs.forEachIndexed { idx, title ->
+                    val isSelected = selectedFilter == idx
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { selectedFilter = idx },
+                        label = { Text(title, fontSize = 10.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            if (unlockedMilestones.isNotEmpty()) {
+                // ⚔️ Combat Passives Summary
+                if (selectedFilter == 0 || selectedFilter == 1) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF381010).copy(alpha = 0.4f),
+                        border = BorderStroke(1.dp, Color(0xFFFF5252).copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("⚔️", fontSize = 14.sp)
+                                Text("Aktivní Bojové Pasivy (⚔️)", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFFFF8A80))
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceAround
+                            ) {
+                                if (totalHpBonus > 0) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("❤️ HP", fontSize = 9.sp, color = Color.Gray)
+                                        Text("+$totalHpBonus", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF81C784))
+                                    }
+                                }
+                                if (totalAtkBonus > 0f) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("⚔️ Útok", fontSize = 9.sp, color = Color.Gray)
+                                        Text("+${totalAtkBonus.toInt()}%", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF8A80))
+                                    }
+                                }
+                                if (totalDefBonus > 0) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("🛡️ Obrana", fontSize = 9.sp, color = Color.Gray)
+                                        Text("+$totalDefBonus", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF64B5F6))
+                                    }
+                                }
+                                if (totalCritBonus > 0) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("💥 Crit", fontSize = 9.sp, color = Color.Gray)
+                                        Text("+$totalCritBonus%", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFD54F))
+                                    }
+                                }
+                                if (totalRegenBonus > 0) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("🩸 Regen", fontSize = 9.sp, color = Color.Gray)
+                                        Text("+$totalRegenBonus/kolo", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF81C784))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 🪙 Resource Passives Summary
+                if (selectedFilter == 0 || selectedFilter == 2) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF332600).copy(alpha = 0.4f),
+                        border = BorderStroke(1.dp, Color(0xFFFFD700).copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("🪙", fontSize = 14.sp)
+                                Text("Aktivní Zdroje a Ekonomika (🪙)", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFFFFD54F))
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceAround
+                            ) {
+                                if (cumulativeResourceBonuses.totalDailyGold > 0) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("🪙 Zlato", fontSize = 9.sp, color = Color.Gray)
+                                        Text("+${cumulativeResourceBonuses.totalDailyGold}/d", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFD700))
+                                    }
+                                }
+                                if (cumulativeResourceBonuses.totalDailyMana > 0) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("🔮 Mana", fontSize = 9.sp, color = Color.Gray)
+                                        Text("+${cumulativeResourceBonuses.totalDailyMana}/d", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFBA68C8))
+                                    }
+                                }
+                                if (cumulativeResourceBonuses.totalDailyMaterials > 0) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("🪵 Suroviny", fontSize = 9.sp, color = Color.Gray)
+                                        Text("+${cumulativeResourceBonuses.totalDailyMaterials}/d", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFB74D))
+                                    }
+                                }
+                                if (cumulativeResourceBonuses.totalDailyPopulationGrowth > 0) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("👥 Lidé", fontSize = 9.sp, color = Color.Gray)
+                                        Text("+${cumulativeResourceBonuses.totalDailyPopulationGrowth}/d", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4FC3F7))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Individual Milestone Unlocks
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    unlockedMilestones.forEach { bonus ->
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                            border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.35f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text(bonus.badgeIcon, fontSize = 15.sp)
+                                        Text("${bonus.title} (${bonus.milestoneThreshold} pts)", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFF81C784))
+                                    }
+                                    Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFF2E7D32).copy(alpha = 0.3f)) {
+                                        Text("AKTIVNÍ", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF81C784), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                    }
+                                }
+
+                                if ((selectedFilter == 0 || selectedFilter == 1) && bonus.combatPerkSummary.isNotBlank()) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text("⚔️", fontSize = 12.sp)
+                                        Text(
+                                            text = bonus.combatPerkSummary,
+                                            fontSize = 10.sp,
+                                            color = Color(0xFFFF8A80),
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+
+                                if ((selectedFilter == 0 || selectedFilter == 2) && bonus.resourcePerkSummary.isNotBlank()) {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text("🪙", fontSize = 12.sp)
+                                        Text(
+                                            text = bonus.resourcePerkSummary,
+                                            fontSize = 10.sp,
+                                            color = Color(0xFFFFD54F),
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text("🔒 Žádné odemčené pasivy", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.Gray)
+                        Text(
+                            "Dosáhni 30 bodů náklonnosti (Bronzový rám 🥉) pro odemčení prvních pasivních bonusů pro boj (⚔️) a denní generování surovin (🪙)!",
+                            fontSize = 10.sp,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Dedicated comparison view in the character profile that highlights
+ * stat differences between the character's current affinity level and the upcoming milestone level.
+ */
+@Composable
+fun AffinityMilestoneComparisonCard(
+    character: Character,
+    modifier: Modifier = Modifier
+) {
+    val progress = remember(character.affinityPoints, character.archetypeId) {
+        AffinityMilestoneProgressCalculator.calculate(character.affinityPoints, character.archetypeId)
+    }
+    val currentRank = progress.currentRank
+    val nextBonus = progress.nextMilestoneBonus
+    val currentUnlocked = remember(character.affinityPoints, character.archetypeId) {
+        AffinityMilestoneBonusCatalog.getUnlockedMilestones(character)
+    }
+
+    val currentHpBonus = currentUnlocked.sumOf { it.hpBonus }
+    val currentAtkBonus = currentUnlocked.sumOf { it.attackBonusPercent.toDouble() }.toFloat()
+    val currentDefBonus = currentUnlocked.sumOf { it.defenseBonus }
+    val currentCritBonus = currentUnlocked.sumOf { it.critBonusPercent }
+    val currentDailyGold = currentUnlocked.sumOf { it.dailyGold }
+    val currentDailyMana = currentUnlocked.sumOf { it.dailyMana }
+    val currentDailyMaterials = currentUnlocked.sumOf { it.dailyMaterials }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("affinity_milestone_comparison_card"),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.2.dp, Color(0xFF64B5F6).copy(alpha = 0.5f))
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("⚖️", fontSize = 16.sp)
+                    Text("Porovnání: Současný vs. Příští Milník", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF64B5F6))
+                }
+                if (!progress.isMaxMilestone) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFF0D47A1).copy(alpha = 0.35f),
+                        border = BorderStroke(1.dp, Color(0xFF42A5F5))
+                    ) {
+                        Text(
+                            text = "Zbývá ${progress.pointsNeeded} pts",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF90CAF9),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+
+            if (progress.isMaxMilestone) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF4A148C).copy(alpha = 0.4f),
+                    border = BorderStroke(1.dp, Color(0xFFFFD700)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("👑", fontSize = 22.sp)
+                        Column {
+                            Text("Nejvyšší Milník Dosažen!", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFFFFD700))
+                            Text(
+                                "Tato společnice dosáhla absolutního suverénního pouta (${character.affinityPoints} pts). Všechny pasivní bojové i ekonomické bonusy jsou na maximální úrovni.",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+                }
+            } else if (nextBonus != null) {
+                // Side-by-side comparison columns
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                        border = BorderStroke(1.dp, currentRank.primaryColor.copy(alpha = 0.4f)),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Text("SOUČASNÝ STAV", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                            Text(
+                                text = "${currentRank.rankBadgeIcon} ${currentRank.title}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = currentRank.primaryColor
+                            )
+                            Text("${progress.currentPoints} pts", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+                        }
+                    }
+
+                    Column(
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("➔", fontSize = 16.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFF1B3A24).copy(alpha = 0.45f),
+                        border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.6f)),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Text("PŘÍŠTÍ MILNÍK", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF81C784))
+                            Text(
+                                text = "${nextBonus.badgeIcon} ${nextBonus.title}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF81C784)
+                            )
+                            Text("${nextBonus.milestoneThreshold} pts", fontSize = 10.sp, color = Color(0xFFC8E6C9))
+                        }
+                    }
+                }
+
+                // Stat Differences Table with green deltas ▲ +X
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text("Rozdíl statistik při dosažení milníku:", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
+
+                    MilestoneStatDeltaRow("❤️ Max HP", currentHpBonus, currentHpBonus + nextBonus.hpBonus, "+${nextBonus.hpBonus} HP", Color(0xFF81C784))
+                    MilestoneStatDeltaRow("⚔️ Útok %", currentAtkBonus.toInt(), (currentAtkBonus + nextBonus.attackBonusPercent).toInt(), "+${nextBonus.attackBonusPercent.toInt()}%", Color(0xFFFF8A80))
+                    MilestoneStatDeltaRow("🛡️ Obrana", currentDefBonus, currentDefBonus + nextBonus.defenseBonus, "+${nextBonus.defenseBonus}", Color(0xFF64B5F6))
+                    MilestoneStatDeltaRow("💥 Kritický zásah", currentCritBonus, currentCritBonus + nextBonus.critBonusPercent, "+${nextBonus.critBonusPercent}%", Color(0xFFFFD54F))
+                    MilestoneStatDeltaRow("🪙 Denní zlato", currentDailyGold, currentDailyGold + nextBonus.dailyGold, "+${nextBonus.dailyGold} 🪙/den", Color(0xFFFFD700))
+                    MilestoneStatDeltaRow("🔮 Denní mana", currentDailyMana, currentDailyMana + nextBonus.dailyMana, "+${nextBonus.dailyMana} 🔮/den", Color(0xFFBA68C8))
+                    if (nextBonus.dailyMaterials > 0) {
+                        MilestoneStatDeltaRow("🪵 Denní suroviny", currentDailyMaterials, currentDailyMaterials + nextBonus.dailyMaterials, "+${nextBonus.dailyMaterials} 🪵/den", Color(0xFFFFB74D))
+                    }
+
+                    if (nextBonus.combatPerkSummary.isNotBlank() || nextBonus.resourcePerkSummary.isNotBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF003314).copy(alpha = 0.35f),
+                            border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.3f)),
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("✨ Nový odemčený perk:", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF81C784))
+                                if (nextBonus.combatPerkSummary.isNotBlank()) {
+                                    Text("⚔️ ${nextBonus.combatPerkSummary}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f))
+                                }
+                                if (nextBonus.resourcePerkSummary.isNotBlank()) {
+                                    Text("🪙 ${nextBonus.resourcePerkSummary}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MilestoneStatDeltaRow(
+    label: String,
+    currentVal: Int,
+    nextVal: Int,
+    deltaText: String,
+    accentColor: Color
+) {
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.35f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(label, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("$currentVal ➔ $nextVal", fontSize = 10.sp, color = Color.Gray)
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = Color(0xFF2E7D32).copy(alpha = 0.3f),
+                    border = BorderStroke(1.dp, Color(0xFF4CAF50).copy(alpha = 0.4f))
+                ) {
+                    Text(
+                        text = "▲ $deltaText",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF81C784),
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun ProfileAndStatsTab(
     character: Character,
@@ -2025,6 +2576,12 @@ fun ProfileAndStatsTab(
             }
         }
 
+        // Comparison View of Current vs Upcoming Milestone
+        AffinityMilestoneComparisonCard(character = character)
+
+        // Dedicated Section for Unlocked Passive Combat and Resource Generation Bonuses (with ⚔️ and 🪙)
+        UnlockedAffinityPassivesSection(character = character)
+
         // Unlocked Unique Affinity Combat Buffs & Cumulative Passive Bonuses
         CharacterAffinityCombatBuffsCard(
             character = character,
@@ -2032,7 +2589,7 @@ fun ProfileAndStatsTab(
             onOpenMilestonesList = onOpenAffinityTrend
         )
 
-        // Radar Chart of Character Stats & Affinity Tier Growth
+        // Radar Chart of Character Stats & Affinity Sub-Stats
         CharacterRadarChart(character = character)
 
         // Vico Column Chart for Trait Balance & Influence Tracking
@@ -2231,12 +2788,35 @@ fun AffinityAndDialogueTab(
                     Text("📜 Přírůstky", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
+
+            Button(
+                onClick = {
+                    subTabSection = 3
+                    HapticManager.vibrateDialogueCycle()
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(36.dp),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (subTabSection == 3) Color(tier.colorHex) else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (subTabSection == 3) Color.White else MaterialTheme.colorScheme.onSurface
+                ),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("🔥 24h Emoce", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
         }
 
         // Visual Progress Bar Component toward next affinity milestone with dynamic current/next threshold values
         AffinityMilestoneProgressBar(
             character = character,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            onMilestoneCrossed = { threshold ->
+                onTriggerAffinityEffect?.invoke(AffinityBurstType.DEVOTION_GOLD, 1.5f)
+            }
         )
 
         when (subTabSection) {
@@ -2266,6 +2846,15 @@ fun AffinityAndDialogueTab(
                     currentDay = engine?.gameState?.value?.player?.day ?: 1,
                     modifier = Modifier.fillMaxWidth()
                 )
+            }
+            3 -> {
+                // 24-Hour Interaction Heat Map, Log, and Emotional Trends
+                val trendSummary = remember(character.affinityPoints, character.interactionLogs.size) {
+                    DynamicMood24hEvaluator.evaluate24Hours(character)
+                }
+                DynamicMood24hHeatMap(trendSummary = trendSummary)
+                DynamicMood24hTrendAnalysis(trendSummary = trendSummary)
+                DynamicMood24hLogView(trendSummary = trendSummary)
             }
             else -> {
                 // Active Speech Dialogue Card
@@ -3297,6 +3886,7 @@ fun InteractionDialog(
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun InteractionList(
     interactions: List<GameInteraction>,
@@ -3304,6 +3894,9 @@ fun InteractionList(
     character: Character,
     onExecute: (GameInteraction) -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
+    var previewInteractionId by remember { mutableStateOf<String?>(null) }
+
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.fillMaxSize()
@@ -3316,12 +3909,28 @@ fun InteractionList(
             val favOk = !interaction.requiresFavorite || character.oblibena
             val wifeOk = !interaction.requiresWife || character.jeManzelkou
             val enabled = canAffordEnergy && canAffordDark && canAffordGold && phaseOk && favOk && wifeOk
+            val isPreviewExpanded = previewInteractionId == interaction.id
 
             Card(
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
                 ),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .combinedClickable(
+                        onClick = {
+                            if (enabled) {
+                                HapticManager.vibrateClick()
+                                onExecute(interaction)
+                            }
+                        },
+                        onLongClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            HapticManager.vibrateHeavy()
+                            previewInteractionId = if (isPreviewExpanded) null else interaction.id
+                        }
+                    )
             ) {
                 Column(
                     modifier = Modifier
@@ -3378,6 +3987,20 @@ fun InteractionList(
                         )
                     }
 
+                    if (isPreviewExpanded) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFF221530),
+                            border = BorderStroke(1.dp, Color(0xFFCE93D8).copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("🔍 Taktický náhled akce (Dlouhé podržení)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFCE93D8))
+                                Text("Klepnutím na tlačítko akci potvrdíš a spustíš haptickou odezvu. Všechny změny nálady, poslušnosti a náklonnosti se okamžitě projeví na ukazatelích.", fontSize = 9.sp, color = Color.LightGray)
+                            }
+                        }
+                    }
+
                     if (interaction.minPhase > 0) {
                         Text(
                             text = "Vyžaduje Fázi ${interaction.minPhase} (dívka má ${character.fazeZkazenosti})",
@@ -3387,9 +4010,14 @@ fun InteractionList(
                     }
 
                     Button(
-                        onClick = { onExecute(interaction) },
+                        onClick = {
+                            HapticManager.vibrateClick()
+                            onExecute(interaction)
+                        },
                         enabled = enabled,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("execute_interaction_${interaction.id}"),
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(vertical = 6.dp)
                     ) {
@@ -3408,6 +4036,8 @@ fun RelationshipsTab(
     onCourt: () -> Unit,
     onMarry: () -> Unit
 ) {
+    val haptic = LocalHapticFeedback.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -3439,7 +4069,10 @@ fun RelationshipsTab(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
                 Button(
-                    onClick = onCourt,
+                    onClick = {
+                        HapticManager.vibrateClick()
+                        onCourt()
+                    },
                     enabled = player.gold >= 50 && character.romanceBody < 100,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -3462,7 +4095,11 @@ fun RelationshipsTab(
                 )
                 if (!character.jeManzelkou) {
                     Button(
-                        onClick = onMarry,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            HapticManager.vibrateMilestoneCelebration()
+                            onMarry()
+                        },
                         enabled = character.romanceBody >= 80 && character.loajalita >= 70 && player.gold >= 300,
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9C27B0)),
                         modifier = Modifier.fillMaxWidth()

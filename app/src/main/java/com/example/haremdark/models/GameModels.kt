@@ -468,7 +468,10 @@ data class InteractionLogEntry(
     val title: String,
     val description: String,
     val statChanges: String = "",
-    val rank: String? = null
+    val rank: String? = null,
+    val timestampMillis: Long = System.currentTimeMillis(),
+    val emotionalResponse: String = "",
+    val hourOffset: Int = 0
 )
 
 @Serializable

@@ -167,49 +167,60 @@ fun CharacterCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Avatar with Coil
+                    // Avatar with Coil and Dynamic Mood Indicator
                     val portraitRes = StaticData.getPortraitForCharacter(character)
-                    SubcomposeAsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(portraitRes)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = character.name,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape),
-                        loading = {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    strokeWidth = 2.dp
-                                )
+                    Box(
+                        modifier = Modifier.size(46.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        SubcomposeAsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(portraitRes)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = character.name,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .border(1.5.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                            loading = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        strokeWidth = 2.dp
+                                    )
+                                }
+                            },
+                            error = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = character.name.take(1),
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
-                        },
-                        error = {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = character.name.take(1),
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    )
+                        )
+
+                        // Dynamic Mood Indicator on avatar corner
+                        DynamicMoodAvatarCornerBadge(
+                            character = character,
+                            modifier = Modifier.align(Alignment.BottomEnd)
+                        )
+                    }
 
                     Column {
                         Row(
@@ -221,6 +232,10 @@ fun CharacterCard(
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
+                            )
+                            DynamicMoodAvatarHeaderBadge(
+                                character = character,
+                                compact = true
                             )
                             val isBuffStatus = character.nalada in listOf("Extatická", "Nadšená", "Šťastná", "Poddajná", "Zamilovaná", "Soustředěná", "Pozorná") || character.loajalita >= 80 || character.breakthroughActive
                             val isDebuffStatus = character.nalada in listOf("Ponížená", "Zmatená", "Zlomená", "Vzpurná", "Vystrašená", "Vyčerpaná") || (character.maxHp > 0 && character.hp < character.maxHp * 0.35f) || character.loajalita < 25

@@ -19,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -79,13 +80,24 @@ fun HaremRelationshipProgressIndicator(
         label = "ArcProgressAnimation"
     )
 
+    val milestoneRank = AffinityMilestoneRank.getRankForPoints(affinityPoints)
+    val rankBorderBrush = remember(milestoneRank) {
+        Brush.linearGradient(milestoneRank.gradientColors)
+    }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp),
+            .padding(vertical = 6.dp)
+            .shadow(
+                elevation = milestoneRank.borderShadowElevation,
+                shape = RoundedCornerShape(20.dp),
+                ambientColor = milestoneRank.glowColor,
+                spotColor = milestoneRank.glowColor
+            ),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF0F0814)),
-        border = BorderStroke(1.5.dp, primaryColor.copy(alpha = 0.6f)),
+        border = BorderStroke(milestoneRank.borderWidth, rankBorderBrush),
         elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
     ) {
         Column(
@@ -112,12 +124,36 @@ fun HaremRelationshipProgressIndicator(
                             fontWeight = FontWeight.ExtraBold,
                             color = Color(0xFFFFD700)
                         )
-                        Text(
-                            text = bondTier.stageTitle,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = primaryColor
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = bondTier.stageTitle,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = primaryColor
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(5.dp),
+                                color = milestoneRank.badgeBackgroundColor,
+                                border = BorderStroke(0.8.dp, milestoneRank.primaryColor)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    Text(milestoneRank.rankBadgeIcon, fontSize = 8.sp)
+                                    Text(
+                                        text = milestoneRank.rankLabel,
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = milestoneRank.badgeTextColor
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
